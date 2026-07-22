@@ -1,0 +1,58 @@
+---
+title: "개요"
+sidebarTitle: 개요
+---
+
+import { IntegrationCategory } from "@/components/integrations/IntegrationIndex";
+import { AskAiLink } from "@/components/inkeep/AskAiLink";
+
+# 개요
+
+Langfuse는 모든 주요 LLM 제공업체, 프레임워크, 도구와 통합되는 가장 개방적이고 유연한 LLM 엔지니어링 플랫폼을 지향합니다.
+아래에서 전체 인테그레이션 목록을 확인하세요.
+
+Langfuse는 OpenTelemetry를 기반으로 합니다. Python SDK 또는 JS/TS SDK를 사용해 Langfuse에 트레이스를 기록하세요. 또는 어떤 언어에서든 [OpenTelemetry 엔드포인트](/integrations/kr/native/opentelemetry)를 직접 사용할 수도 있습니다.
+
+어떤 인테그레이션을 사용해야 할지 모르시겠나요? <AskAiLink />를 통해 옵션을 논의해 보세요.
+
+찾으시는 인테그레이션이 없나요? [아래에서 GitHub Discussions를 통해 인테그레이션을 요청하세요.](#request-integration)
+
+## 네이티브 [#native]
+
+<IntegrationCategory category="native" lang="ko" />
+
+## 프레임워크 [#frameworks]
+
+<IntegrationCategory category="frameworks" lang="ko" />
+
+## 모델 제공업체 [#model-providers]
+
+<IntegrationCategory category="model-providers" lang="ko" />
+
+## 게이트웨이 [#gateways]
+
+<IntegrationCategory category="gateways" lang="ko" />
+
+## 노코드 [#no-code]
+
+<IntegrationCategory category="no-code" lang="ko" />
+
+## 애널리틱스 [#analytics]
+
+<IntegrationCategory category="analytics" lang="ko" />
+
+## 개발자 도구 [#developer-tools]
+
+<IntegrationCategory category="developer-tools" lang="ko" />
+
+## 기타 [#other]
+
+<IntegrationCategory category="other" lang="ko" />
+
+## 새로운 인테그레이션 요청하기 [#request-integration]
+
+새로운 인테그레이션에 대한 관심을 파악하기 위해 GitHub Discussions를 사용합니다. 원하시는 인테그레이션이 있다면 아래 목록에 추천하거나 추가해 주세요.
+
+import { GhDiscussionsPreview } from "@/components/gh-discussions/GhDiscussionsPreview";
+
+<GhDiscussionsPreview labels={["integrations"]} filterCategory="Ideas" />

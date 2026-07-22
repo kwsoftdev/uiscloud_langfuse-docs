@@ -1,0 +1,77 @@
+---
+source: ⚠️ Jupyter Notebook
+title: Langfuse로 Z.ai 옵저버빌리티 확보하기
+sidebarTitle: Z.ai
+logo: /images/integrations/z-ai_icon.svg
+description: OpenAI SDK를 통해 Z.ai의 GLM 모델을 Langfuse와 함께 사용하여 LLM 애플리케이션을 트레이싱, 디버깅, 평가하는 가이드입니다.
+category: Integrations
+---
+
+# Langfuse로 Z.ai 옵저버빌리티 확보하기
+
+이 가이드는 Langfuse를 Z.ai와 통합하는 방법을 보여줍니다. Z.ai의 API 엔드포인트는 OpenAI SDK와 완전히 호환되어, AI 애플리케이션을 원활하게 트레이싱하고 모니터링할 수 있습니다.
+
+> **Z.ai란 무엇인가요?** [Z.ai](https://z.ai/)는 OpenAI 호환 엔드포인트를 통해 GLM 계열의 대규모 언어 모델(예: GLM-4.6)에 대한 API 접근을 제공합니다.
+
+> **Langfuse란 무엇인가요?** [Langfuse](https://langfuse.com)는 팀이 API 호출을 트레이싱하고, 성능을 모니터링하고, AI 애플리케이션의 문제를 디버깅할 수 있도록 돕는 오픈소스 LLM 엔지니어링 플랫폼입니다.
+
+<Steps>
+## 1단계: 의존성 설치
+
+```python
+%pip install openai langfuse
+```
+
+## 2단계: 환경 변수 설정
+
+[Langfuse Cloud](https://langfuse.com/cloud)의 프로젝트 설정에서 Langfuse 키를 가져오거나 [셀프 호스팅](https://langfuse.com/self-hosting)을 설정하세요.
+
+```python
+import os
+
+# Get keys for your project from the project settings page: https://langfuse.com/cloud
+os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-lf-...")
+os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-lf-...")
+os.environ.setdefault("LANGFUSE_BASE_URL", "https://cloud.langfuse.com") # 🇪🇺 EU region (API host)
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+
+os.environ.setdefault("ZAI_API_BASE", "https://api.z.ai/api/paas/v4/")
+os.environ.setdefault("ZAI_API_KEY", "...")
+```
+
+## 3단계: Langfuse OpenAI 드롭인 대체재 사용하기
+
+`openai`를 직접 임포트하는 대신 `langfuse.openai`에서 임포트하세요. 이 클라이언트를 통한 요청은 자동으로 Langfuse에 트레이싱됩니다. 클라이언트를 Z.ai 기본 URL로 지정하고 Z.ai API 키로 인증하세요.
+
+```python
+from langfuse.openai import openai
+
+client = openai.OpenAI(
+  api_key=os.environ.get("ZAI_API_KEY"),
+  base_url=os.environ.get("ZAI_API_BASE")
+)
+```
+
+## 4단계: 예제 실행
+
+```python
+response = client.chat.completions.create(
+  model="glm-4.6",
+  messages=[
+    {"role": "system", "content": "You are a helpful assistant."},
+    {"role": "user", "content": "Why is open source important?"},
+  ],
+  name="Z-ai-Trace" # name of the trace
+)
+print(response.choices[0].message.content)
+```
+
+## 5단계: Langfuse에서 트레이스 확인하기
+
+예제를 실행한 후 [Langfuse Cloud](https://langfuse.com/cloud)를 열어 프롬프트, 완료, 도구 호출, 토큰 사용량, 지연 시간을 포함한 전체 트레이스를 확인하세요.
+
+</Steps>
+
+import LearnMore from "@/components-mdx/integration-learn-more.mdx";
+
+<LearnMore />

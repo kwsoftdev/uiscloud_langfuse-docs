@@ -1,0 +1,106 @@
+---
+source: ⚠️ Jupyter Notebook
+title: Langfuse와 X.ai(Grok) 통합하기
+sidebarTitle: xAI Grok
+logo: /images/integrations/xai_icon.svg
+logoAppearance: dark
+description: 옵저버빌리티를 위해 xAI의 Grok 모델을 Langfuse와 통합하는 가이드입니다.
+category: Integrations
+---
+
+# Langfuse로 xAI / Grok 옵저버빌리티 확보하기
+
+이 가이드는 OpenAI SDK를 사용하여 Grok을 Langfuse와 통합하는 방법을 보여줍니다.
+
+> **Grok이란 무엇인가요?** Grok은 지능형 애플리케이션 통합을 위해 자연어 처리를 간소화하는 X.ai의 고급 AI 플랫폼입니다. 자세한 내용은 [Grok 문서](https://docs.x.ai/docs)에서 확인하세요.
+
+> **Langfuse란 무엇인가요?** [Langfuse](https://langfuse.com)는 팀이 API 호출을 트레이싱하고, 성능을 모니터링하고, LLM 애플리케이션의 문제를 디버깅할 수 있도록 돕는 오픈소스 AI 엔지니어링 플랫폼입니다.
+
+<Steps>
+## 1단계: 의존성 설치
+
+필요한 Python 패키지가 설치되어 있는지 확인하세요.
+
+```python
+%pip install openai langfuse
+```
+
+## 2단계: 환경 변수 설정
+
+```python
+import os
+
+# Get keys for your project from the project settings page
+# https://cloud.langfuse.com
+
+os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-lf-...")
+os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-lf-...")
+os.environ.setdefault("LANGFUSE_BASE_URL", "https://cloud.langfuse.com") # 🇪🇺 EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+
+
+# Get your Grok API key from your Grok account settings
+os.environ.setdefault("GROK_API_KEY", "xai-...")
+```
+
+## 3단계: OpenAI SDK로 Grok 사용하기
+
+OpenAI SDK를 통해 Grok을 활용하려면, OpenAI용 Langfuse 드롭인 대체재를 사용합니다. 기본 URL을 Grok의 엔드포인트로 교체하세요.
+
+```python
+# Instead of importing openai directly:
+from langfuse.openai import openai
+
+client = openai.OpenAI(
+  api_key=os.environ.get("GROK_API_KEY"),
+  base_url="https://api.x.ai/v1"  # Grok's endpoint
+)
+```
+
+## 4단계: 예제 실행
+
+다음 예제는 Grok의 API를 사용하여 간단한 요청을 하는 방법을 보여줍니다. 모든 API 호출은 Langfuse에 의해 자동으로 트레이싱됩니다.
+
+```python
+response = client.chat.completions.create(
+  model="grok-2-latest",
+  messages=[
+    {"role": "system", "content": "You are an assistant."},
+    {"role": "user", "content": "What is Langfuse?"}
+  ],
+  name = "Grok-2-Trace"
+)
+
+print(response.choices[0].message.content)
+```
+
+## 5단계: 트레이싱 강화하기 (선택 사항)
+
+Grok 트레이스를 다음과 같이 강화할 수 있습니다.
+
+- 트레이스에 [메타데이터](https://langfuse.com/docs/tracing-features/metadata), [태그](https://langfuse.com/docs/tracing-features/tags), [로그 레벨](https://langfuse.com/docs/tracing-features/log-levels), [사용자 ID](https://langfuse.com/docs/tracing-features/users) 추가하기
+- [세션](https://langfuse.com/docs/tracing-features/sessions)별로 트레이스 그룹화하기
+- 추가적인 애플리케이션 로직을 트레이싱하기 위한 [`@observe()` 데코레이터](https://langfuse.com/docs/sdk/python/decorators)
+- [Langfuse 프롬프트 관리](https://langfuse.com/docs/prompts/get-started)를 사용하여 프롬프트를 트레이스에 연결하기
+- 트레이스에 [점수](https://langfuse.com/docs/scores/custom) 추가하기
+
+추가 파라미터를 전달하는 더 많은 예제는 [OpenAI SDK 쿡북](https://langfuse.com/guides/cookbook/integration_openai_sdk)을 참고하세요.
+Langfuse 평가와 프롬프트 관리에 대해 더 알아보려면 [Langfuse 문서](https://langfuse.com/docs)를 확인하세요.
+
+## 6단계: Langfuse에서 트레이스 확인하기
+
+예제를 실행한 후 Langfuse에 로그인하여 다음과 같은 상세 트레이스를 확인하세요.
+
+- 요청 파라미터
+- 응답 내용
+- 토큰 사용량 및 지연 시간 지표
+
+![Langfuse Trace Example](https://langfuse.com/images/cookbook/integration-grok/grok-example-trace.png)
+
+_[Langfuse의 공개 예제 트레이스 링크](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/9178205e-2cb4-4952-8ec0-5244a1105263?timestamp=2025-03-05T11%3A07%3A46.600Z)_
+
+</Steps>
+
+import LearnMore from "@/components-mdx/integration-learn-more.mdx";
+
+<LearnMore />

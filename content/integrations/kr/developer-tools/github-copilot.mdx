@@ -1,0 +1,141 @@
+---
+title: "Trace GitHub Copilot with Langfuse"
+sidebarTitle: GitHub Copilot
+logo: /images/integrations/github_copilot_icon.svg
+logoAppearance: dark
+description: "Trace GitHub Copilot agent sessions in VS Code and the Copilot CLI with Langfuse using Copilot's native OpenTelemetry export — LLM calls, tool executions, and token usage."
+category: Integrations
+---
+
+# Trace GitHub Copilot with Langfuse
+
+> **GitHub Copilot이란 무엇인가요?** [GitHub Copilot](https://github.com/features/copilot)은 GitHub의 AI 코딩 어시스턴트입니다. [VS Code](https://code.visualstudio.com/docs/copilot/overview)의 에이전트 모드와 [Copilot CLI](https://github.com/github/copilot-cli)는 여러분의 코드베이스를 이해하고, 파일을 편집하고, 명령을 실행하며, 여러 단계로 이루어진 코딩 작업을 자율적으로 완료할 수 있습니다.
+
+> **Langfuse란 무엇인가요?** [Langfuse](https://langfuse.com/)는 오픈소스 AI 엔지니어링 플랫폼입니다. 팀이 에이전틱 애플리케이션을 추적하고, 문제를 디버깅하고, 품질을 평가하고, 프로덕션에서 비용을 모니터링할 수 있도록 돕습니다.
+
+## 이 인테그레이션으로 무엇을 추적할 수 있나요?
+
+GitHub Copilot에는 내장 [OpenTelemetry 내보내기](https://code.visualstudio.com/docs/agents/guides/monitoring-agents)가 있으며, Langfuse는 [OpenTelemetry 백엔드](/integrations/kr/native/opentelemetry)입니다. Copilot의 익스포터를 Langfuse의 OTLP 엔드포인트로 지정하면 SDK, 프록시, 코드 변경 없이 트레이스가 유입됩니다. 다음을 모니터링할 수 있습니다:
+
+- **에이전트 실행**: 채팅 또는 에이전트 모드 상호작용마다 전체 오케스트레이션을 감싸는 `invoke_agent` 스팬 하나
+- **LLM 호출**: 모델 API 호출마다 모델 이름, 제공업체, 종료 사유가 담긴 `chat` 스팬 하나
+- **도구 호출**: 도구 호출(터미널 명령, 파일 편집, MCP 도구)마다 `execute_tool` 스팬 하나, 그리고 훅에 대한 `execute_hook` 스팬
+- **토큰 사용량**: 모델 호출당 입력, 출력, 캐시 읽기, 캐시 생성, 추론 토큰으로 비용을 모니터링할 수 있습니다
+- **프롬프트와 응답**: 콘텐츠 캡처가 활성화된 경우(아래 참고) 전체 메시지 콘텐츠와 도구 인자
+- **컨텍스트**: 대화 및 세션 ID와, 저장소 또는 팀별로 트레이스를 필터링하기 위한 git 컨텍스트(저장소 URL, 브랜치, 커밋 SHA)
+
+모든 스팬은 [OpenTelemetry GenAI 시맨틱 컨벤션](https://opentelemetry.io/docs/specs/semconv/gen-ai/)을 따르며, Langfuse는 이를 트레이스, 생성, 도구 관찰로 네이티브하게 매핑합니다.
+
+<Callout type="warning" title="Content capture is off by default">
+  기본적으로 Copilot은 스팬 구조, 타이밍, 토큰 수를 내보내지만 **프롬프트 콘텐츠, 모델 응답, 도구 인자는 내보내지 않습니다**. Langfuse에서 입력과 출력을 보려면 콘텐츠 캡처(VS Code에서는 `github.copilot.chat.otel.captureContent`, Copilot CLI에서는 `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=true`)를 활성화하세요. 이 콘텐츠를 Langfuse에 저장해도 괜찮다고 판단될 때만 활성화하세요.
+</Callout>
+
+<Callout type="info">
+  Copilot은 **OTLP over HTTP**를 내보냅니다: VS Code 확장은 기본적으로 `http/protobuf`를 사용하고 Copilot CLI는 `http/json`을 사용합니다. Langfuse의 OTLP 엔드포인트는 둘 다 수용하므로 별도의 컬렉터나 프록시가 필요 없습니다. Langfuse는 gRPC를 지원하지 않지만, Copilot도 이를 요구하지 않습니다.
+</Callout>
+
+<Steps>
+
+### Langfuse 설정하기
+
+[Langfuse Cloud](https://cloud.langfuse.com)에 가입하거나 [Langfuse를 직접 호스팅](/self-hosting)하세요. 프로젝트를 생성하고 프로젝트 설정에서 공개 및 비밀 API 키를 복사하세요.
+
+### Basic Auth 헤더 만들기
+
+Langfuse는 [Basic Auth](https://en.wikipedia.org/wiki/Basic_access_authentication)로 OTLP 요청을 인증합니다. 키를 `public_key:secret_key` 형식으로 base64 인코딩해 헤더 값을 생성하세요:
+
+```bash
+# macOS / BSD
+echo -n "pk-lf-1234567890:sk-lf-1234567890" | base64
+# Linux / GNU (disable line wrapping)
+echo -n "pk-lf-1234567890:sk-lf-1234567890" | base64 -w 0
+```
+
+결과는 다음 단계에서 `<AUTH_STRING>`으로 표기됩니다.
+
+### VS Code 구성하기
+
+VS Code의 `settings.json`에 OpenTelemetry 설정을 추가하세요:
+
+```jsonc
+{
+  "github.copilot.chat.otel.enabled": true,
+  "github.copilot.chat.otel.otlpEndpoint": "https://cloud.langfuse.com/api/public/otel", // 🇪🇺 EU data region
+  // Other Langfuse data regions: 🇺🇸 US https://us.cloud.langfuse.com/api/public/otel,
+  // 🇯🇵 Japan https://jp.cloud.langfuse.com/api/public/otel, ⚕️ HIPAA https://hipaa.cloud.langfuse.com/api/public/otel
+  // 🏠 Local deployment: http://localhost:3000/api/public/otel
+  "github.copilot.chat.otel.exporterType": "otlp-http",
+  "github.copilot.chat.otel.captureContent": true, // opt-in: include prompts, responses, and tool arguments
+}
+```
+
+인증 헤더는 `OTEL_EXPORTER_OTLP_HEADERS` 환경 변수를 통해서만 구성할 수 있습니다 — VS Code 설정에는 이를 위한 항목이 없습니다. 셸 프로필(`~/.zshrc`, `~/.bashrc`, 또는 `~/.bash_profile`)에 추가하세요:
+
+```bash
+export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic <AUTH_STRING>,x-langfuse-ingestion-version=4"
+```
+
+이 환경 변수는 VS Code 프로세스에서 보여야 합니다. 설정한 뒤, 변수가 설정된 터미널에서 VS Code를 완전히 재시작하거나(`code .`), 시스템 전체에 설정하고 로그아웃 후 다시 로그인하세요.
+
+### Copilot CLI 구성하기(선택 사항)
+
+독립형 [Copilot CLI](https://github.com/github/copilot-cli)는 전적으로 환경 변수로 구성됩니다. 셸 프로필에 다음을 추가하세요:
+
+```bash
+export COPILOT_OTEL_ENABLED=true
+export OTEL_EXPORTER_OTLP_ENDPOINT="https://cloud.langfuse.com/api/public/otel" # 🇪🇺 EU data region
+export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic <AUTH_STRING>,x-langfuse-ingestion-version=4"
+export OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=true # opt-in: include prompts, responses, and tool arguments
+```
+
+OpenTelemetry가 활성화된 상태로 VS Code에서 터미널 CLI 세션을 실행하면, 확장이 `COPILOT_OTEL_ENABLED`와 엔드포인트를 자동으로 전달합니다 — 하지만 콘텐츠 캡처 플래그는 **전달하지 않으므로**, CLI 세션에서 프롬프트와 응답을 받고 싶다면 직접 `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT`를 설정하세요.
+
+### Copilot 사용하고 Langfuse에서 트레이스 확인하기
+
+평소처럼 Copilot 채팅 또는 에이전트 모드를 사용하세요. Langfuse 프로젝트를 열어 캡처된 트레이스를 확인하세요:
+
+- **에이전트 트레이스** (`invoke_agent`): 여러분의 프롬프트부터 최종 답변까지, 턴당 하나의 트레이스
+- **생성** (`chat`): 모델 호출마다 하나씩이며, 입력 메시지, 응답, 모델 이름, 토큰 사용량을 포함
+- **도구 스팬** (`bash`, `view`, `grep`, …): 에이전트 스팬 아래 중첩되며, 콘텐츠 캡처가 활성화된 경우 인자와 결과를 포함
+- **세션**: 같은 Copilot 대화를 공유하는 턴은 세션 ID로 그룹화됩니다 — Sessions 뷰를 열어 여러 턴에 걸친 전체 실행을 리플레이하세요
+
+![GitHub Copilot CLI trace in Langfuse showing the invoke_agent span, model calls, and a bash tool call with its arguments and result](/images/docs/github-copilot/github-copilot-example-trace.png)
+
+[Langfuse의 예시 트레이스](https://cloud.langfuse.com/project/cmpy5u3fb06o5ad0j04xohhmz/traces/3c52df03622a6327ea8893f465bebbe1?observation=3e4ecedc1e42b364&timestamp=2026-06-15T09%3A09%3A54.208Z)
+
+</Steps>
+
+## 참고 사항 및 제약
+
+- **Langfuse는 트레이스만 수집합니다.** Copilot은 OTel 메트릭과 이벤트도 내보내지만, Langfuse의 OTLP 엔드포인트는 이런 신호를 저장하지 않습니다. 스팬의 토큰 사용량을 포함한 트레이스 데이터는 영향받지 않습니다.
+- **큰 속성은 잘립니다** — VS Code의 `github.copilot.chat.otel.maxAttributeSizeChars` 설정에 따릅니다. 잘림을 비활성화하려면 `0`으로 설정하세요.
+- **데이터 프라이버시.** 콘텐츠 캡처가 활성화되면 프롬프트, 모델 응답, 도구 입력/출력이 Langfuse에 저장됩니다. 지속적으로 저장하고 싶지 않은 데이터를 다루는 세션에서는 `captureContent`를 꺼두세요.
+- **비활성화 시 오버헤드 없음.** 익스포트가 활성화되지 않으면 Copilot은 OTel SDK를 로드하지 않습니다.
+
+## 문제 해결
+
+### Langfuse에 트레이스가 나타나지 않음
+
+1. **OpenTelemetry가 활성화되지 않았습니다.** `github.copilot.chat.otel.enabled`가 `true`인지(VS Code), 또는 `COPILOT_OTEL_ENABLED=true`인지(CLI) 확인하세요.
+2. **헤더 변수가 프로세스에 보이지 않습니다.** VS Code는 `OTEL_EXPORTER_OTLP_HEADERS`가 설정된 환경에서 실행되어야 합니다 — 이를 확인하는 가장 신뢰할 수 있는 방법은 설정된 터미널에서 `code .`로 재시작하는 것입니다.
+3. **먼저 로컬에서 디버깅하세요.** Langfuse로 익스포터를 지정하기 전에, `github.copilot.chat.otel.exporterType`을 `"console"`로(또는 CLI의 경우 `COPILOT_OTEL_EXPORTER_TYPE=file`로) 설정해 스팬이 생성되고 있는지 확인하세요.
+
+### 인증 오류
+
+API 키가 올바른지, base64 문자열이 줄바꿈 없이 생성되었는지, 엔드포인트가 여러분의 키가 속한 리전과 일치하는지 확인하세요:
+
+- **EU 리전**: `https://cloud.langfuse.com/api/public/otel`
+- **US 리전**: `https://us.cloud.langfuse.com/api/public/otel`
+- **Japan 리전**: `https://jp.cloud.langfuse.com/api/public/otel`
+- **HIPAA 리전**: `https://hipaa.cloud.langfuse.com/api/public/otel`
+
+### 트레이스에 입력/출력 콘텐츠가 없음
+
+콘텐츠 캡처는 기본적으로 꺼져 있습니다 — 스팬에는 여전히 모델 이름과 토큰 사용량이 담기지만, 프롬프트, 응답, 도구 인자는 제외됩니다. `github.copilot.chat.otel.captureContent`(VS Code) 또는 `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=true`(Copilot CLI)를 활성화하고 새 Copilot 세션을 시작하세요.
+
+## 더 알아보기
+
+- [Langfuse OpenTelemetry 엔드포인트](/integrations/kr/native/opentelemetry): 엔드포인트, 인증, 지원되는 프로토콜
+- [VS Code: OpenTelemetry로 에이전트 사용 모니터링하기](https://code.visualstudio.com/docs/agents/guides/monitoring-agents): 전체 설정, 신호, 속성 목록
+- [Copilot SDK OpenTelemetry 계측](https://docs.github.com/en/copilot/how-tos/copilot-sdk/observability/opentelemetry): Copilot SDK로 만든 에이전트 트레이싱
+- [VS Code에서 MCP로 Langfuse 사용하기](/integrations/kr/developer-tools/vscode): 반대 방향 — Copilot이 여러분의 Langfuse 프롬프트, 트레이스, 데이터셋을 조회하게 하기

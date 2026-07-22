@@ -1,0 +1,156 @@
+---
+title: "Promptfoo Integration with Langfuse Prompt Management"
+sidebarTitle: Promptfoo
+logo: /images/integrations/promptfoo_icon.svg
+description: "LLM 테스트, 레드팀 활동, 프롬프트 관리를 위해 Promptfoo를 Langfuse와 통합하세요. Langfuse가 관리하는 프롬프트로 Promptfoo 평가를 사용합니다."
+---
+
+# Promptfoo Integration with Langfuse Prompt Management
+
+[Promptfoo](https://www.promptfoo.dev/)는 오픈 소스 LLM 테스트 플랫폼입니다. 레드팀 활동, 취약점 스캐닝, LLM 평가를 위한 도구를 제공하여 팀이 LLM 애플리케이션의 보안과 안정성을 확보할 수 있도록 돕습니다.
+
+Promptfoo를 Langfuse와 통합하면 Promptfoo 평가 시 Langfuse의 프롬프트 관리 기능을 활용할 수 있습니다. 이 통합을 사용하면 Langfuse 내에서 직접 [프롬프트를 참조하고 관리](/docs/prompts/get-started)할 수 있어 LLM 테스트 프로세스를 더 효율적이고 체계적으로 만들 수 있습니다.
+
+Langfuse Prompt Management를 사용하면 다음을 할 수 있습니다.
+
+- 애플리케이션을 재배포하지 않고도 프롬프트 업데이트
+- 이전 프롬프트 버전 추적 및 롤백
+- 프롬프트 성능 모니터링 및 최적화
+- 도구와 애플리케이션에 프롬프트를 원활하게 통합
+- 최소한의 지연 시간으로 UI, SDK, API를 통한 프롬프트 관리
+
+자세한 내용은 [Langfuse Prompt Management 문서](/docs/prompt-management/get-started)를 방문하세요.
+
+이 통합을 개발해 준 Promptfoo 팀에게 감사드립니다([문서](https://www.promptfoo.dev/docs/integrations/langfuse)).
+
+## 빠른 시작 가이드
+
+<Steps>
+
+### Step 1: Langfuse 설정하기
+
+1. Promptfoo의 Langfuse 제공업체가 내부적으로 사용하는 `langfuse` npm 패키지를 설치합니다: `npm install langfuse`
+2. [Langfuse](https://cloud.langfuse.com)를 방문하여 계정을 생성합니다.
+3. 새 프로젝트를 생성하고 Langfuse API 키를 복사합니다.
+4. 원하는 대로 `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` 환경 변수를 설정합니다.
+
+### Step 2: Langfuse 프롬프트 생성하기
+
+Langfuse UI, SDK, API를 통해 프롬프트를 생성, 편집, 관리할 수 있습니다.
+
+<LangTabs items={["Langfuse UI", "Python SDK", "JS/TS SDK"]}>
+<Tab>
+
+<Video
+  src="https://static.langfuse.com/docs-videos/langfuse-ui-prompt-create.mp4"
+  aspectRatio={1.24}
+  gifStyle
+  className="max-w-xl"
+/>
+
+</Tab>
+<Tab>
+
+```python
+# Create a text prompt
+langfuse.create_prompt(
+    name="movie-critic",
+    type="text",
+    prompt="As a {{criticlevel}} movie critic, do you like {{movie}}?",
+    labels=["production"],  # directly promote to production
+    config={
+        "model": "gpt-3.5-turbo",
+        "temperature": 0.7,
+        "supported_languages": ["en", "fr"],
+    },  # optionally, add configs (e.g. model parameters or model tools) or tags
+)
+
+# Create a chat prompt
+langfuse.create_prompt(
+    name="movie-critic-chat",
+    type="chat",
+    prompt=[
+      { role: "system", content: "You are an {{criticlevel}} movie critic" },
+      { role: "user", content: "Do you like {{movie}}?" },
+    ],
+    labels=["production"],  # directly promote to production
+    config={
+        "model": "gpt-3.5-turbo",
+        "temperature": 0.7,
+        "supported_languages": ["en", "fr"],
+    },  # optionally, add configs (e.g. model parameters or model tools) or tags
+)
+```
+
+동일한 이름의 프롬프트가 이미 있으면 새 버전으로 추가됩니다.
+
+</Tab>
+
+<Tab>
+
+이 스니펫은 `@langfuse/client` 패키지(`npm install @langfuse/client`)를 사용하며, 이는 Promptfoo 자체가 필요로 하는 `langfuse` 패키지와는 별도입니다.
+
+```typescript
+import { LangfuseClient } from "@langfuse/client";
+
+const langfuse = new LangfuseClient();
+
+// Create a text prompt
+await langfuse.prompt.create({
+  name: "movie-critic",
+  type: "text",
+  prompt: "As a {{criticlevel}} critic, do you like {{movie}}?",
+  labels: ["production"], // directly promote to production
+  config: {
+    model: "gpt-3.5-turbo",
+    temperature: 0.7,
+    supported_languages: ["en", "fr"],
+  }, // optionally, add configs (e.g. model parameters or model tools) or tags
+});
+
+// Create a chat prompt
+await langfuse.prompt.create({
+  name: "movie-critic-chat",
+  type: "chat",
+  prompt: [
+    { role: "system", content: "You are an {{criticlevel}} movie critic" },
+    { role: "user", content: "Do you like {{movie}}?" },
+  ],
+  labels: ["production"], // directly promote to production
+  config: {
+    model: "gpt-3.5-turbo",
+    temperature: 0.7,
+    supported_languages: ["en", "fr"],
+  }, // optionally, add configs (e.g. model parameters or model tools) or tags
+});
+```
+
+동일한 이름의 프롬프트가 이미 있으면 새 버전으로 추가됩니다.
+
+</Tab>
+
+</LangTabs>
+
+### Step 3: Promptfoo에서 프롬프트 참조하기
+
+이제 Langfuse에서 생성한 프롬프트를 Promptfoo와 함께 사용할 수 있습니다. Promptfoo 구성 파일에서 프롬프트에 `langfuse://` 접두사를 사용하고 그 뒤에 Langfuse 프롬프트 ID와 버전을 붙이세요. 예시:
+
+```yaml
+prompts:
+  - "langfuse://foo-bar-prompt:3"
+providers:
+  - openai:gpt-4o-mini
+tests:
+  - vars:
+      # ...
+```
+
+Promptfoo 테스트 케이스의 변수는 Langfuse 프롬프트에 변수로 자동으로 대입됩니다.
+
+</Steps>
+
+## GitHub Discussions
+
+import { GhDiscussionsPreview } from "@/components/gh-discussions/GhDiscussionsPreview";
+
+<GhDiscussionsPreview labels={["integration-promptfoo"]} />

@@ -1,0 +1,143 @@
+---
+source: ⚠️ Jupyter Notebook
+title: Langfuse 통합을 통한 Semantic Kernel 옵저버빌리티
+sidebarTitle: Semantic Kernel
+logo: /images/integrations/microsoft_icon.svg
+description: Langfuse를 Semantic Kernel과 통합하여 LLM 애플리케이션 모니터링, 디버깅, 트레이싱을 개선하는 방법을 알아보세요. AI 개발 워크플로우를 오늘 바로 향상시켜 보세요.
+category: Integrations
+---
+
+# Langfuse와 Semantic Kernel 통합하기
+
+이 노트북은 LLM 애플리케이션의 옵저버빌리티와 디버깅을 달성하기 위해 **Langfuse**를 **Semantic Kernel**과 통합하는 방법을 단계별로 안내합니다. 이 튜토리얼을 따라가면서 Langfuse를 사용하여 Semantic Kernel 애플리케이션을 트레이싱하고, 프롬프트를 한 곳에서 관리하고, 프로덕션에 적합하도록 애플리케이션을 평가하는 방법을 배우게 됩니다.
+
+> **Semantic Kernel이란 무엇인가요?** [Semantic Kernel](https://learn.microsoft.com/en-us/semantic-kernel/overview/)([GitHub](https://github.com/microsoft/semantic-kernel))은 Microsoft가 제공하는 강력한 오픈소스 SDK입니다. C#, Python, Java와 같은 인기 있는 프로그래밍 언어와 LLM을 결합하는 것을 용이하게 합니다. Semantic Kernel은 AI 서비스, 데이터 소스, 커스텀 로직을 매끄럽게 통합하여 개발자가 정교한 AI 애플리케이션을 구축하고 엔터프라이즈급 AI 솔루션을 더 빠르게 제공할 수 있도록 지원합니다.
+
+> **Langfuse란 무엇인가요?** [Langfuse](https://langfuse.com)는 LLM 옵저버빌리티에 특화된 오픈소스 플랫폼입니다. AI 애플리케이션에 맞춘 강력한 트레이싱과 모니터링 기능을 제공합니다. Langfuse는 네이티브 통합, OpenTelemetry, 전용 SDK를 통해 다양한 도구 및 프레임워크와 통합하여 개발자가 AI 시스템을 디버깅, 분석, 최적화할 수 있도록 상세한 인사이트를 제공합니다.
+
+<Callout type="info" emoji="ℹ️">
+_**참고:** 이 가이드는 Python 구현에 중점을 둡니다. 하지만 이 Langfuse 통합의 원칙은 [C#](https://learn.microsoft.com/en-us/semantic-kernel/concepts/enterprise-readiness/observability/?pivots=programming-language-csharp)과 [Java](https://learn.microsoft.com/en-us/semantic-kernel/concepts/enterprise-readiness/observability/?pivots=programming-language-java)를 포함하여 Semantic Kernel이 지원하는 다른 언어에도 적용됩니다._
+
+</Callout>
+
+## 시작하기
+
+Semantic Kernel을 사용하고 이를 포괄적인 트레이싱을 위해 Langfuse와 통합하는 실용적인 예제를 살펴보겠습니다.
+
+<Steps>
+### 1단계: 종속성 설치
+
+```python
+%pip install langfuse openlit semantic-kernel
+```
+
+### 2단계: Langfuse SDK 구성
+
+다음으로 Langfuse API 키를 설정합니다. 무료 [Langfuse Cloud](https://langfuse.com/cloud) 계정에 가입하거나 [Langfuse를 셀프 호스팅](https://langfuse.com/self-hosting)하여 이 키를 얻을 수 있습니다. 이 환경 변수들은 Langfuse 클라이언트가 인증하고 Langfuse 프로젝트로 데이터를 전송하는 데 필수적입니다.
+
+```python
+import os
+
+# Get keys for your project from the project settings page: https://cloud.langfuse.com
+
+os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-lf-...")
+os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-lf-...")
+os.environ.setdefault("LANGFUSE_BASE_URL", "https://cloud.langfuse.com") # 🇪🇺 EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+
+
+# Your OpenAI key
+os.environ.setdefault("OPENAI_API_KEY", "sk-proj-...")
+os.environ.setdefault("OPENAI_CHAT_MODEL_ID", "gpt-4o")
+```
+
+환경 변수를 설정했으니 이제 Langfuse 클라이언트를 초기화할 수 있습니다. `get_client()`는 환경 변수에 제공된 자격 증명을 사용하여 Langfuse 클라이언트를 초기화합니다.
+
+```python
+from langfuse import get_client
+
+langfuse = get_client()
+
+# Verify connection
+if langfuse.auth_check():
+    print("Langfuse client is authenticated and ready!")
+else:
+    print("Authentication failed. Please check your credentials and host.")
+```
+
+    Langfuse client is authenticated and ready!
+
+### 3단계: 계측을 위한 OpenLit 초기화
+
+이제 [OpenLit 계측 SDK](https://docs.openlit.io/latest/sdk-configuration)를 초기화합니다. OpenLit은 Semantic Kernel을 자동으로 계측하고 OpenTelemetry(OTel) 스팬을 Langfuse로 내보냅니다.
+
+```python
+import openlit
+
+# Initialize OpenLIT instrumentation. The disable_batch flag is set to true to process traces immediately. Also set the langfuse tracer to use the langfuse tracer.
+openlit.init(tracer=langfuse._otel_tracer, disable_batch=True)
+```
+
+### 4단계: 기본 Semantic Kernel 애플리케이션
+
+간단한 Semantic Kernel 애플리케이션을 만들어 보겠습니다. 이 예제에서는 어시스턴트 에이전트가 사용자의 질문에 답변합니다. 이는 Langfuse 트레이싱을 시연하는 토대가 될 것입니다.
+
+```python
+from semantic_kernel import Kernel
+from semantic_kernel.connectors.ai.open_ai import OpenAIChatCompletion
+
+kernel = Kernel()
+
+kernel.add_service(
+    OpenAIChatCompletion(),
+)
+```
+
+```python
+from semantic_kernel.prompt_template import InputVariable, PromptTemplateConfig
+
+prompt = """{{$input}}
+Answer the question above.
+"""
+
+prompt_template_config = PromptTemplateConfig(
+    template=prompt,
+    name="summarize",
+    template_format="semantic-kernel",
+    input_variables=[
+        InputVariable(name="input", description="The user input", is_required=True),
+    ]
+)
+
+summarize = kernel.add_function(
+    function_name="summarizeFunc",
+    plugin_name="summarizePlugin",
+    prompt_template_config=prompt_template_config,
+)
+```
+
+### 5단계: 애플리케이션 실행하기
+
+Semantic Kernel 애플리케이션 설정이 완료되었으니 샘플 질문으로 호출하고 응답을 출력해 보겠습니다. OpenLit은 이 상호작용을 자동으로 캡처하여 트레이스 데이터를 Langfuse로 전송합니다.
+
+```python
+input_text = "What is Langfuse?"
+
+summary = await kernel.invoke(summarize, input=input_text)
+
+print(summary)
+```
+
+### 6단계: Langfuse에서 트레이스 보기
+
+애플리케이션을 실행한 후 Langfuse Trace Table로 이동하세요. 애플리케이션 실행에 대한 상세한 트레이스를 확인할 수 있으며, LLM 호출, 입력, 출력, 성능 메트릭에 대한 인사이트를 얻을 수 있습니다. 아래는 Langfuse에서 트레이스가 어떻게 보이는지 보여주는 예시 스크린샷입니다:
+
+![Semantic Kernel 애플리케이션의 Langfuse 트레이스](https://langfuse.com/images/cookbook/integration-semantic-kernel/sematric-kernel-example-trace.png)
+
+실제 예제를 보려면 다음 공개 트레이스를 살펴보세요: [Langfuse Semantic Kernel 트레이스 예제](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/51d7ea51af5cf9048f607ac6abb79b4f?timestamp=2025-06-04T08:17:14.026Z&display=details)
+
+</Steps>
+
+import LearnMore from "@/components-mdx/integration-learn-more.mdx";
+
+<LearnMore />

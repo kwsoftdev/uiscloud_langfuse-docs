@@ -184,7 +184,14 @@ export const integrations = defineDocs({
   dir: "content/integrations",
   docs: {
     schema: integrationsFrontmatterSchema,
+    files: ["**/*.mdx", "**/*.md", "!kr/**"],
   },
+  meta: { files: ["**/*.json", "!kr/**"] },
+});
+
+export const integrationsKr = defineDocs({
+  dir: "content/integrations/kr",
+  docs: { schema: integrationsFrontmatterSchema },
 });
 
 export const security = defineDocs({

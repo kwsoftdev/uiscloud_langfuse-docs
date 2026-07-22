@@ -1,0 +1,119 @@
+---
+source: ⚠️ Jupyter Notebook
+title: Langfuse를 통한 smolagents 옵저버빌리티
+sidebarTitle: SmolAgents
+logo: /images/integrations/huggingface_icon.svg
+description: OpenTelemetry를 사용하여 Langfuse를 Hugging Face smolagents와 통합하는 방법을 알아보세요. 이를 통해 AI 에이전트를 트레이싱하고 디버깅할 수 있습니다.
+category: Integrations
+---
+
+# Langfuse와 smolagents 통합하기
+
+이 노트북은 `SmolagentsInstrumentor`를 사용하여 **Langfuse**로 Hugging Face **smolagents**를 모니터링하고 디버깅하는 방법을 보여줍니다. 이 가이드를 마치면 Langfuse로 smolagents 애플리케이션을 트레이싱할 수 있게 됩니다.
+
+> **smolagents란 무엇인가요?** [smolagents](https://github.com/huggingface/smolagents)는 Hugging Face가 개발한 미니멀하고 오픈소스인 AI 에이전트 프레임워크로, 몇 줄의 코드만으로 강력한 에이전트를 만들고 배포할 수 있도록 단순화하는 것을 목표로 합니다. 단순성과 효율성에 중점을 두어 개발자가 다양한 애플리케이션에 LLM을 활용하기 쉽게 만듭니다.
+
+> **Langfuse란 무엇인가요?** [Langfuse](https://langfuse.com)는 LLM 엔지니어링을 위한 오픈소스 플랫폼입니다. AI 에이전트를 위한 트레이싱과 모니터링 기능을 제공하여 개발자가 제품을 디버깅, 분석, 최적화할 수 있도록 돕습니다. Langfuse는 네이티브 통합, OpenTelemetry, SDK를 통해 다양한 도구 및 프레임워크와 통합됩니다.
+
+## 시작하기
+
+smolagents를 사용하고 이를 Langfuse와 통합하는 간단한 예제를 살펴보겠습니다.
+
+<Steps>
+### 1단계: 종속성 설치
+
+```python
+%pip install langfuse 'smolagents[telemetry]' opentelemetry-sdk opentelemetry-exporter-otlp openinference-instrumentation-smolagents ddgs
+```
+
+### 2단계: 환경 변수 설정
+
+[Langfuse Cloud](https://cloud.langfuse.com)에 가입하거나 [Langfuse를 셀프 호스팅](https://langfuse.com/self-hosting)하여 Langfuse API 키를 얻으세요.
+
+또한 [Hugging Face 토큰](https://huggingface.co/settings/tokens)(`HF_TOKEN`)을 환경 변수로 추가하세요.
+
+```python
+import os
+# Get keys for your project from the project settings page: https://cloud.langfuse.com
+os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-lf-...")
+os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-lf-...")
+os.environ.setdefault("LANGFUSE_BASE_URL", "https://cloud.langfuse.com") # 🇪🇺 EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+
+# your Hugging Face token
+os.environ.setdefault("HF_TOKEN", "hf_...")
+```
+
+환경 변수를 설정했으니 이제 Langfuse 클라이언트를 초기화할 수 있습니다. `get_client()`는 환경 변수에 제공된 자격 증명을 사용하여 Langfuse 클라이언트를 초기화합니다.
+
+```python
+from langfuse import get_client
+
+langfuse = get_client()
+
+# Verify connection
+if langfuse.auth_check():
+    print("Langfuse client is authenticated and ready!")
+else:
+    print("Authentication failed. Please check your credentials and host.")
+```
+
+    Langfuse client is authenticated and ready!
+
+### 3단계: `SmolagentsInstrumentor` 초기화
+
+애플리케이션 코드 이전에 `[SmolagentsInstrumentor](https://pypi.org/project/openinference-instrumentation-smolagents/)`를 초기화합니다.
+
+```python
+from openinference.instrumentation.smolagents import SmolagentsInstrumentor
+
+SmolagentsInstrumentor().instrument()
+```
+
+### 4단계: smolagent 실행하기
+
+이 smolagent 예제에는 데이터를 수집하기 위해 웹 검색을 수행할 수 있는 `managed_agent`를 조율하는 관리자 `CodeAgent`가 있습니다. `DuckDuckGoSearchTool`과 `VisitWebpageTool`과 같은 도구를 사용하여 미국의 2024년 성장률을 가져오고 GDP가 두 배가 되는 데 걸리는 연수를 계산합니다.
+
+```python
+from smolagents import (
+    CodeAgent,
+    ToolCallingAgent,
+    DuckDuckGoSearchTool,
+    VisitWebpageTool,
+    InferenceClientModel,
+)
+
+model = InferenceClientModel(
+    model_id="deepseek-ai/DeepSeek-R1-Distill-Qwen-32B"
+)
+
+search_agent = ToolCallingAgent(
+    tools=[DuckDuckGoSearchTool(), VisitWebpageTool()],
+    model=model,
+    name="search_agent",
+    description="This is an agent that can do web search.",
+)
+
+manager_agent = CodeAgent(
+    tools=[],
+    model=model,
+    managed_agents=[search_agent],
+)
+manager_agent.run(
+    "How can Langfuse be used to monitor and improve the reasoning and decision-making of smolagents when they execute multi-step tasks, like dynamically adjusting a recipe based on user feedback or available ingredients?"
+)
+```
+
+### 5단계: Langfuse에서 트레이스 보기
+
+에이전트를 실행한 후 [Langfuse](https://cloud.langfuse.com)에서 smolagents 애플리케이션이 생성한 트레이스를 확인할 수 있습니다. LLM 상호작용의 상세한 단계를 확인할 수 있으며, 이는 AI 에이전트를 디버깅하고 최적화하는 데 도움이 됩니다.
+
+![smolagents 예시 트레이스](https://langfuse.com/images/cookbook/integration-smolagents/smolagent_example_trace.png)
+
+_[Langfuse의 공개 예시 트레이스](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/ce5160f9bfd5a6cd63b07d2bfcec6f54?timestamp=2025-02-11T09%3A25%3A45.163Z&display=details)_
+
+</Steps>
+
+import LearnMore from "@/components-mdx/integration-learn-more.mdx";
+
+<LearnMore />

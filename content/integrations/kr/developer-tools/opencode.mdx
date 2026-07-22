@@ -1,0 +1,163 @@
+---
+title: "Trace OpenCode with Langfuse"
+sidebarTitle: OpenCode
+logo: /images/integrations/opencode_icon.svg
+logoAppearance: multicolor
+description: "Trace OpenCode coding sessions — user turns, assistant generations, tool calls, retries, and reasoning — with Langfuse for comprehensive observability."
+category: Integrations
+---
+
+# OpenCode tracing with Langfuse
+
+> **OpenCode란 무엇인가요?** [OpenCode](https://opencode.ai)는 터미널에서 실행되는(데스크톱과 IDE 클라이언트도 있음) 오픈소스 AI 코딩 에이전트입니다. 여러분의 코드베이스를 이해하고, 코드를 편집하고, 명령을 실행하며, 서로 다른 모델 제공업체 간에도 동작합니다.
+
+> **Langfuse란 무엇인가요?** [Langfuse](https://langfuse.com/)는 오픈소스 AI 엔지니어링 플랫폼입니다. 팀이 에이전틱 애플리케이션을 추적하고, 문제를 디버깅하고, 품질을 평가하고, 프로덕션에서 비용을 모니터링할 수 있도록 돕습니다.
+
+<Callout type="info" title="Install via the OpenCode plugin">
+이를 설정하는 가장 쉬운 방법은 [Langfuse OpenCode Observability Plugin](https://github.com/langfuse/opencode-observability-plugin)입니다. OpenCode의 OpenTelemetry 지원을 활성화하고 OpenCode 설정에 플러그인을 추가하세요:
+
+```json
+{
+  "experimental": {
+    "openTelemetry": true
+  },
+  "plugin": ["@langfuse/opencode-observability-plugin@latest"]
+}
+```
+
+그런 다음 Langfuse 키를 추가하고 OpenCode를 재시작하세요(전체 단계는 아래에 있습니다).
+
+</Callout>
+
+## 이 인테그레이션으로 무엇을 추적할 수 있나요?
+
+플러그인은 OpenCode의 OpenTelemetry 지원을 통해 OpenCode의 세션 텔레메트리를 읽어 Langfuse로 전송합니다. 다음을 모니터링할 수 있습니다:
+
+- **사용자 턴**: OpenCode로 보내는 모든 프롬프트
+- **어시스턴트 생성**: 턴 내 각 모델 응답
+- **도구 호출**: OpenCode가 호출하는 도구들과 그 입력 및 출력
+- **재시도**: 재시도된 생성 단계
+- **추론 출력**: 응답과 함께 캡처된 모델의 추론 과정
+- **압축(Compaction)**: 컨텍스트 압축 출력으로, 세션이 언제 어떻게 요약되었는지 확인할 수 있습니다
+- **실패한 단계**: 디버깅할 수 있도록 노출되는 실패한 생성 단계
+
+## 작동 방식
+
+OpenCode는 실험적인 [OpenTelemetry](https://opencode.ai/docs) 지원을 갖추고 있습니다. 이것이 활성화되면 플러그인은 OpenCode가 세션에 대해 내보내는 텔레메트리를 받을 수 있습니다.
+
+1. `experimental.openTelemetry`를 활성화하고 OpenCode 설정의 `plugin` 배열에 `@langfuse/opencode-observability-plugin`을 추가합니다.
+2. 시작 시, OpenCode는 플러그인을 로드하고 세션 텔레메트리를 스트리밍합니다.
+3. 플러그인은 턴, 생성, 도구 호출, 추론을 Langfuse 트레이스로 변환해 [Langfuse SDK](/docs/observability/sdk/overview)를 사용해 여러분의 프로젝트로 전송합니다.
+4. 자격 증명과 옵션(`environment`, `userId`)은 설정 파일이나 환경 변수에서 해석됩니다.
+
+## 빠른 시작
+
+<Steps>
+
+### Langfuse 설정하기
+
+1. [Langfuse Cloud](https://cloud.langfuse.com)에 가입하거나 [Langfuse를 직접 호스팅](/self-hosting)하세요.
+2. 새 프로젝트를 생성하고 프로젝트 설정에서 API 키를 복사하세요.
+
+### 플러그인 활성화하기
+
+`opencode.json` 또는 `opencode.jsonc`에서 OpenTelemetry를 활성화하고 플러그인을 추가하세요:
+
+```json
+{
+  "experimental": {
+    "openTelemetry": true
+  },
+  "plugin": ["@langfuse/opencode-observability-plugin@latest"]
+}
+```
+
+설정을 변경한 뒤 OpenCode를 재시작하세요.
+
+### Langfuse 자격 증명 추가하기 [#set-credentials]
+
+`~/.config/opencode/opencode-langfuse.json`에 자격 증명 파일을 생성하세요:
+
+```json
+{
+  "publicKey": "pk-lf-...",
+  "secretKey": "sk-lf-...",
+  "baseUrl": "https://cloud.langfuse.com",
+  "environment": "development",
+  "userId": "your-user-id"
+}
+```
+
+`publicKey`와 `secretKey`만 필수입니다. `baseUrl`을 생략하면 플러그인은 `https://cloud.langfuse.com`(EU 리전)을 사용하고, `environment`를 생략하면 `development`를 사용합니다.
+
+또는 환경 변수로 자격 증명을 설정할 수 있습니다:
+
+```bash
+export LANGFUSE_PUBLIC_KEY="pk-lf-..."
+export LANGFUSE_SECRET_KEY="sk-lf-..."
+export LANGFUSE_BASEURL="https://cloud.langfuse.com"
+export LANGFUSE_ENVIRONMENT="development"
+export LANGFUSE_USER_ID="your-user-id"
+```
+
+`LANGFUSE_PUBLIC_KEY`와 `LANGFUSE_SECRET_KEY`가 모두 설정되어 있으면, 플러그인은 설정 파일을 읽는 대신 환경 변수를 사용합니다. 선택적 값은 두 방식 중 어느 쪽으로도 제공할 수 있습니다.
+
+### OpenCode 사용하기
+
+평소처럼 OpenCode를 실행하세요. 작업하는 동안 세션이 Langfuse로 전송됩니다:
+
+```bash
+cd your-project
+opencode
+```
+
+### Langfuse에서 트레이스 확인하기
+
+Langfuse 프로젝트를 열어 캡처된 트레이스를 확인하세요. 구조는 OpenCode가 실제로 동작하는 방식을 그대로 반영합니다:
+
+- **턴 트레이스**: 여러분의 프롬프트부터 최종 답변까지, 턴당 하나의 트레이스입니다.
+- **생성**: 턴 내 모델 응답마다 하나씩이며, 모델의 추론, 텍스트 응답, 요청한 도구 호출을 포함합니다.
+- **도구 스팬**: 트리거한 생성 아래 중첩되며, 입력, 출력, 오류 상태를 포함합니다. 실패한 단계와 재시도가 노출되어 턴이 어디서 잘못되었는지 파악할 수 있습니다.
+- **환경과 사용자**: 트레이스는 구성된 [`environment`](/docs/observability/features/environments)와 [`userId`](/docs/observability/features/users)로 라벨링되어, 여러분 자신의 세션을 필터링하거나 개발과 프로덕션을 분리할 수 있습니다.
+
+</Steps>
+
+## 환경 변수
+
+| 변수                   | 설명                                                                                                                                                                      | 필수 여부                       |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| `LANGFUSE_PUBLIC_KEY`  | Langfuse 공개 키(`pk-lf-...`)                                                                                                                                             | 예                              |
+| `LANGFUSE_SECRET_KEY`  | Langfuse 비밀 키(`sk-lf-...`)                                                                                                                                             | 예                              |
+| `LANGFUSE_BASEURL`     | Langfuse 호스트. EU: `https://cloud.langfuse.com`, US: `https://us.cloud.langfuse.com`, Japan: `https://jp.cloud.langfuse.com`, HIPAA: `https://hipaa.cloud.langfuse.com` | 아니요 (기본값은 EU)            |
+| `LANGFUSE_ENVIRONMENT` | 트레이스에 사용할 환경 라벨(예: `production`)                                                                                                                             | 아니요 (기본값은 `development`) |
+| `LANGFUSE_USER_ID`     | 모든 트레이스에 첨부할 사용자 ID                                                                                                                                          | 아니요                          |
+
+`LANGFUSE_PUBLIC_KEY`와 `LANGFUSE_SECRET_KEY`를 모두 설정하면, 플러그인은 `opencode-langfuse.json` 설정 파일 대신 환경 변수를 사용합니다.
+
+## 문제 해결
+
+### Langfuse에 트레이스가 나타나지 않음
+
+1. **OpenTelemetry가 활성화되지 않았습니다.** `experimental.openTelemetry`가 `true`이고 `@langfuse/opencode-observability-plugin`이 `opencode.json`의 `plugin` 배열에 있는지 확인한 뒤 OpenCode를 재시작하세요.
+2. **자격 증명이 누락되었습니다.** `~/.config/opencode/opencode-langfuse.json`이나 환경 변수를 통해 `publicKey`/`secretKey`가 설정되어 있는지 확인하세요. 공개 키가 `pk-lf-`로 시작하는지도 확인하세요.
+3. **리전이 일치하지 않습니다.** `baseUrl`(또는 `LANGFUSE_BASEURL`)이 여러분의 키가 속한 리전과 일치해야 합니다.
+
+### 인증 오류
+
+API 키가 올바른지, `baseUrl`이 여러분의 키가 속한 리전과 일치하는지 확인하세요:
+
+- **EU 리전**: `https://cloud.langfuse.com`
+- **US 리전**: `https://us.cloud.langfuse.com`
+- **Japan 리전**: `https://jp.cloud.langfuse.com`
+- **HIPAA 리전**: `https://hipaa.cloud.langfuse.com`
+
+### 데이터 프라이버시
+
+활성화되면, 플러그인은 완료된 OpenCode 세션 텔레메트리를 Langfuse로 전송합니다. 여기에는 프롬프트, 어시스턴트 메시지, 추론 출력, 도구 입력 및 출력이 포함됩니다. Langfuse에 저장하고 싶지 않은 데이터가 포함된 세션에서는 트레이싱을 활성화하지 마세요.
+
+## 리소스
+
+- [Langfuse OpenCode Observability Plugin (GitHub)](https://github.com/langfuse/opencode-observability-plugin)
+- [OpenCode 문서](https://opencode.ai/docs)
+- [OpenCode GitHub 저장소](https://github.com/anomalyco/opencode)
+- [Langfuse TypeScript SDK](/docs/observability/sdk/overview)

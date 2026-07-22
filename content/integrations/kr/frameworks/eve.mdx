@@ -1,0 +1,196 @@
+---
+title: Langfuse로 eve 관찰하기
+sidebarTitle: Eve
+logo: /images/integrations/vercel_ai_sdk_icon.png
+description: OpenTelemetry를 통해 Langfuse로 eve 에이전트를 트레이싱하세요. 토큰 사용량과 비용을 포함하여 모델 호출, 도구 호출, 전체 에이전트 실행을 캡처합니다.
+---
+
+# Langfuse로 eve 관찰하기
+
+이 가이드는 에이전트를 트레이싱하고 디버깅하기 위해 **Langfuse**를 **eve**와 통합하는 방법을 보여줍니다. eve는 모든 실행에 대해 OpenTelemetry 스팬을 발생시키므로, Langfuse를 연결하는 것은 해당 스팬을 여러분의 Langfuse 프로젝트로 향하게 하는 문제일 뿐입니다.
+
+> **eve란 무엇인가요?** [eve](https://eve.dev)는 프로젝트 내 일반 파일로 지속 가능한(durable) 에이전트를 구축하기 위한 Vercel의 오픈 소스 TypeScript 프레임워크입니다. 지속 실행, 샌드박스, 도구, 서브 에이전트, 스케줄, 내장 OpenTelemetry 트레이싱을 함께 제공합니다.
+
+> **Langfuse란 무엇인가요?** [Langfuse](https://langfuse.com)는 AI 에이전트와 LLM 애플리케이션을 위한 오픈 소스 관찰 가능성 플랫폼입니다. 모델 호출, 도구 사용, 비용, 지연 시간 등을 시각화하고 모니터링하는 데 도움을 줍니다.
+
+[모든 eve 실행은 트레이스를 생성](https://eve.dev/docs/guides/instrumentation)하며, 스팬은 [Vercel AI SDK](/integrations/kr/frameworks/vercel-ai-sdk) 텔레메트리 규칙을 기반으로 하는 표준 OpenTelemetry입니다. eve는 `registerOTel`을 통해 `agent/instrumentation.ts`에 트레이서를 등록합니다. `LangfuseSpanProcessor`를 추가하면 모든 모델 호출과 도구 호출이 Langfuse로 흘러가며, Langfuse는 이를 트레이스, generation, 도구 observation으로 매핑합니다.
+
+## 시작하기
+
+<Steps>
+
+### eve 에이전트 생성하기
+
+아직 eve 에이전트가 없다면 eve CLI로 하나를 스캐폴딩하세요:
+
+```bash
+npx eve@latest init my-agent
+cd my-agent
+```
+
+자세한 내용은 전체 [eve 퀵스타트](https://eve.dev/docs/getting-started)를 참조하세요.
+
+### Langfuse OpenTelemetry 패키지 설치하기
+
+Langfuse 스팬 프로세서와 eve의 인스트루멘테이션이 사용하는 Vercel OpenTelemetry 헬퍼를 추가하세요:
+
+```bash
+npm install @langfuse/otel @vercel/otel
+```
+
+### Langfuse 자격 증명 추가하기
+
+[Langfuse 프로젝트 설정](https://cloud.langfuse.com)에서 API 키를 받아 에이전트의 `.env` 파일에 추가하세요. [Langfuse Cloud](https://langfuse.com/cloud)에 가입하거나 [Langfuse를 셀프 호스팅](https://langfuse.com/self-hosting)할 수 있습니다.
+
+```bash filename=".env"
+LANGFUSE_PUBLIC_KEY="pk-lf-..."
+LANGFUSE_SECRET_KEY="sk-lf-..."
+LANGFUSE_BASE_URL="https://cloud.langfuse.com" # 🇪🇺 EU region
+# LANGFUSE_BASE_URL="https://us.cloud.langfuse.com" # 🇺🇸 US region
+```
+
+### Langfuse 스팬 프로세서 등록하기
+
+eve는 `agent/instrumentation.ts`에서 텔레메트리를 구성합니다. eve의 스팬이 Langfuse로 내보내지도록 `registerOTel` 호출에 `LangfuseSpanProcessor`를 등록하세요.
+
+eve의 모델 턴 스팬은 [OpenTelemetry GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/)를 따르므로, Langfuse는 이를 모델, 토큰 사용량, 비용이 포함된 generation으로 자동 매핑합니다. 다른 eve 스팬(workflow, operation, tool, task)은 `@flue/opentelemetry` 인스트루멘테이션 스코프 아래에서 발생하므로, 기본 Langfuse 스팬 필터를 확장하여 [해당 스코프를 포함](https://langfuse.com/docs/observability/sdk/advanced-features#filtering-by-instrumentation-scope)합니다.
+
+```typescript
+// src/app.ts
+import { NodeSDK } from "@opentelemetry/sdk-node";
+import { LangfuseSpanProcessor, isDefaultExportSpan } from "@langfuse/otel";
+import { createOpenTelemetryObserver } from "@flue/opentelemetry";
+import { observe } from "@flue/runtime";
+import { flue } from "@flue/runtime/routing";
+import { Hono } from "hono";
+
+const sdk = new NodeSDK({
+  spanProcessors: [
+    new LangfuseSpanProcessor({
+      // Export Langfuse's default LLM spans plus the full Flue span tree
+      // (workflow / operation / tool / task) emitted by @flue/opentelemetry.
+      shouldExportSpan: ({ otelSpan }) =>
+        isDefaultExportSpan(otelSpan) ||
+        otelSpan.instrumentationScope.name === "@flue/opentelemetry",
+    }),
+  ],
+});
+
+sdk.start();
+
+// Flush buffered spans on exit: the one-shot `flue run` path (the event
+// loop drains) and Ctrl+C on the long-running `flue dev` server (signals).
+for (const signal of ["beforeExit", "SIGINT", "SIGTERM"] as const) {
+  process.once(signal, async () => {
+    await sdk.shutdown();
+    if (signal !== "beforeExit") process.exit(0);
+  });
+}
+
+// Register the observer after sdk.start() so it uses the configured tracer.
+// exportContent forwards prompts/responses/tool payloads so they appear in
+// each observation's Input/Output; return a sanitized event in production.
+observe(createOpenTelemetryObserver({ exportContent: (event) => event }));
+
+const app = new Hono();
+app.route("/", flue());
+
+export default app;
+```
+
+`LangfuseSpanProcessor`는 환경 변수에서 `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL`을 읽습니다.
+
+<Callout type="info">
+  `registerOTel`을 통해 `LangfuseSpanProcessor`를 등록하려면 `@langfuse/otel`과
+  동일한 OpenTelemetry JS SDK v2를 기반으로 하는 `@vercel/otel` v2 이상이 필요합니다
+  ([vercel/otel#154](https://github.com/vercel/otel/issues/154)). 위의 설치 명령어는
+  이미 호환되는 버전을 가져옵니다. 대신 커스텀 OpenTelemetry 설정에 Langfuse를
+  연결하는 경우, [`NodeSDK`](/docs/observability/sdk/overview)에도 프로세서를 등록할 수 있습니다.
+</Callout>
+
+<Callout type="info">
+  eve는 매 턴을 지속 가능한 워크플로로 실행하므로, 모델 및 도구 호출(스코프
+  `gen_ai`)과 실행 스팬(스코프 `eve`)과 함께 많은 저수준 오케스트레이션 스팬(인스트루멘테이션
+  스코프 `workflow`)을 발생시킵니다. `shouldExportSpan`은 Langfuse의 기본 필터를
+  대체하므로, 위 스니펫은 `isDefaultExportSpan`과 조합되어 해당 기본 동작 —
+  Langfuse SDK 스팬(`langfuse-sdk`), GenAI 스팬, 알려진 LLM 인스트루멘터 — 을
+  유지하고, 그 다음 eve의 `gen_ai`와 `eve` 스코프도 유지합니다. 그 결과 하나의
+  깔끔한 트레이스가 만들어집니다: 에이전트 호출, generation, 도구 호출이 eve의 실행
+  스팬 아래에 중첩되고, Langfuse SDK로 추가한 모든 observation(아래 "JS/TS SDK와의
+  상호운용성" 섹션 참조)이 포함되지만 워크플로 배관은 포함되지 않습니다. `eve` 스코프를
+  유지하는 것이 중요합니다 — 이것이 GenAI 스팬을 함께 묶어주는
+  부모이므로, 이를 제거하면 [고아 스팬](/docs/observability/sdk/advanced-features#filtering-by-instrumentation-scope)으로
+  남게 됩니다. 워크플로 스팬을 포함한 eve의 전체 실행 트리를 유지하려면
+  `({ otelSpan }) => otelSpan.instrumentationScope.name !== "@vercel/otel/fetch"`로
+  HTTP 노이즈만 제거하거나, 모든 것을 내보내려면 `() => true`를 사용하세요. 자세한 내용은
+  [인스트루멘테이션 스코프별 필터링](/docs/observability/sdk/advanced-features#filtering-by-instrumentation-scope)을
+  참조하세요.
+</Callout>
+
+### 간단한 에이전트 정의하기
+
+최소한의 eve 에이전트는 도구 하나와 시스템 프롬프트로 구성됩니다. 아래의 날씨 에이전트 — 단일 `getWeather` 도구와 짧은 지시문 — 는 아래 예제 트레이스에 표시된 것과 같은 종류의 실행을 생성합니다:
+
+```ts filename="agent/tools/getWeather.ts"
+import { defineTool } from "eve/tools";
+import { z } from "zod";
+
+export default defineTool({
+  description: "Return mock weather data for a city.",
+  inputSchema: z.object({ city: z.string().min(1) }),
+  async execute({ city }) {
+    return { city, condition: "cloudy", temperatureC: 18 };
+  },
+});
+```
+
+```ts filename="agent/agent.ts"
+import { defineAgent } from "eve";
+
+export default defineAgent({
+  model: "openai/gpt-4o-mini",
+});
+```
+
+```markdown filename="agent/instructions.md"
+You are a concise weather assistant. When asked about the weather, call the
+getWeather tool, then answer in one sentence. Mention that the data is mocked.
+```
+
+eve는 이 파일들을 자동으로 검색합니다. 모델 공급자 인증(Vercel AI Gateway 또는 `OPENAI_API_KEY`)은 [eve 퀵스타트](https://eve.dev/docs/getting-started)를 따릅니다.
+
+### 에이전트 실행하기
+
+에이전트를 시작하고 메시지를 보내세요. 예를 들어 _"베를린 날씨는 어때? getWeather 도구를 사용해서 한 문장으로 답해줘."_:
+
+```bash
+npm run dev
+```
+
+이제 각 실행은 Langfuse로 내보내집니다.
+
+### Langfuse에서 트레이스 보기
+
+[Langfuse 대시보드](https://cloud.langfuse.com)를 열어 각 실행에 대한 트레이스를 확인하세요. 위의 스코프 필터를 사용하면 eve의 스팬은 Langfuse 데이터 모델에 다음과 같이 매핑됩니다:
+
+- **eve 실행**이 나머지가 중첩되는 **루트 스팬**이 됩니다.
+- **에이전트 호출**이 **에이전트 observation**이 됩니다.
+- **모델 호출**이 모델 이름, 토큰 사용량, 비용이 포함된 **generation**이 됩니다.
+- **도구 호출**이 입력과 출력이 포함된 **도구 observation**이 됩니다.
+
+![Langfuse에서 eve 에이전트 실행 트레이스, 중첩된 에이전트 호출, 모델 generation, getWeather 도구 호출이 포함된 eve 실행 스팬을 보여줌](/images/cookbook/integration-eve/eve-example-trace.png)
+
+_[Langfuse에서 이 예제 트레이스 보기 →](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/2db3fca28fc9a5c4fcf0acbd3a5c0a92?observation=8719bc06eb4f1661)_
+
+</Steps>
+
+import LearnMore from "@/components-mdx/integration-learn-more-js.mdx";
+
+<LearnMore />
+
+## 참고 자료
+
+- [eve 인스트루멘테이션 문서](https://eve.dev/docs/guides/instrumentation)
+- [Langfuse OpenTelemetry 엔드포인트](/integrations/kr/native/opentelemetry)
+- [Langfuse + Vercel AI SDK](/integrations/kr/frameworks/vercel-ai-sdk) (eve의 텔레메트리는 동일한 규칙을 기반으로 합니다)
+- [npm의 `@langfuse/otel`](https://www.npmjs.com/package/@langfuse/otel)

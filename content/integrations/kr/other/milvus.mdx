@@ -1,0 +1,115 @@
+---
+title: "Langfuse Integration with Milvus"
+sidebarTitle: Milvus
+logo: /images/integrations/milvus_icon.svg
+description: "LlamaIndex 통합을 사용해 효율적인 AI 모니터링과 벡터 저장을 위해 Langfuse를 Milvus와 통합하세요."
+---
+
+# Use Milvus with Langfuse
+
+이 가이드를 작성해 준 Milvus 팀에게 감사드립니다. 이 문서는 [여기](https://milvus.io/docs/integrate_with_langfuse.md)에서 읽을 수 있는 원본 글을 각색한 것입니다.
+
+## Milvus란 무엇인가요?
+
+[Milvus](https://milvus.io/)는 벡터 임베딩과 유사도 검색으로 AI 애플리케이션을 지원하는 오픈 소스 벡터 데이터베이스입니다. 고차원 벡터를 효율적으로 저장하고 검색할 수 있는 도구를 제공하여 AI와 머신 러닝 애플리케이션에 이상적입니다.
+
+## Langfuse LlamaIndex 통합으로 쿼리 트레이싱하기
+
+이 빠른 시작에서는 [Milvus Lite](https://milvus.io/docs/milvus_lite.md)를 벡터 스토어로 사용하는 LlamaIndex 애플리케이션을 설정하는 방법을 보여드립니다. 또한 [Langfuse LlamaIndex 통합](/integrations/kr/frameworks/llamaindex)을 사용해 애플리케이션을 트레이싱하는 방법도 보여드립니다.
+
+## 빠른 시작 가이드
+
+<Steps>
+
+### Step 1: Langfuse 계정 생성하기
+
+1. [Langfuse](https://cloud.langfuse.com)를 방문하여 계정을 생성합니다.
+2. 새 프로젝트를 생성하고 Langfuse API 키를 복사합니다.
+
+### Step 2: 필요한 패키지 설치하기
+
+`llama-index`와 `langfuse`가 모두 설치되어 있는지 확인하세요.
+
+```bash
+$ pip install llama-index langfuse openinference-instrumentation-llama-index llama-index-vector-stores-milvus --upgrade
+```
+
+### Step 3: Langfuse 초기화하기
+
+[Langfuse](https://cloud.langfuse.com)를 방문하여 계정을 생성하세요. 새 프로젝트를 생성하고 Langfuse API 키를 복사하세요. 이 예제는 임베딩과 채팅 완성에 OpenAI를 사용하므로, 환경 변수에 [OpenAI 키](https://platform.openai.com/)도 지정해야 합니다.
+
+```python
+import os
+
+# Get keys for your project from the project settings page
+os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-...")
+os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-...")
+os.environ.setdefault("LANGFUSE_BASE_URL", "https://cloud.langfuse.com") # 🇪🇺 EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+
+# Your OpenAI key
+os.environ.setdefault("OPENAI_API_KEY", "sk-...")
+```
+
+### Step 4: LlamaIndex 계측 설정하기
+
+Langfuse는 [OpenInference 계측](/integrations/kr/frameworks/llamaindex)을 통해 LlamaIndex를 트레이싱하며, OpenTelemetry 스팬을 Langfuse로 내보냅니다.
+
+```python
+from langfuse import get_client
+from openinference.instrumentation.llama_index import LlamaIndexInstrumentor
+
+langfuse = get_client()
+
+# Instrument LlamaIndex — all subsequent index and query operations are traced
+LlamaIndexInstrumentor().instrument()
+```
+
+### Step 5: Milvus Lite로 인덱싱하기
+
+```python
+from llama_index.core import Document
+from llama_index.core import VectorStoreIndex
+from llama_index.core import StorageContext
+from llama_index.vector_stores.milvus import MilvusVectorStore
+
+# Create documents
+doc1 = Document(text="Your document text here.")
+doc2 = Document(text="Another document text here.")
+
+# Set up Milvus vector store
+vector_store = MilvusVectorStore(
+    uri="tmp/milvus_demo.db", dim=1536, overwrite=False
+)
+storage_context = StorageContext.from_defaults(vector_store=vector_store)
+
+# Create index
+index = VectorStoreIndex.from_documents(
+    [doc1, doc2], storage_context=storage_context
+)
+```
+
+### Step 6: 쿼리 및 채팅하기
+
+```python
+# Query
+response = index.as_query_engine().query("Your query here")
+print(response)
+
+# Chat
+response = index.as_chat_engine().chat("Your chat message here")
+print(response)
+```
+
+### Step 7: Langfuse에서 트레이스 살펴보기
+
+이제 Langfuse 프로젝트에서 인덱스와 쿼리에 대한 트레이스를 확인할 수 있습니다.
+
+Langfuse의 예제 트레이스(공개 링크):
+
+- [Query](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/2b26fc72-044f-4b0b-a3c3-485328975161)
+- [Query (chat)](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/72503163-2b25-4693-9cc9-56190b8e32b9)
+
+![Example traces in Langfuse](/images/docs/milvus-llamaindex-example-trace.png)
+
+</Steps>

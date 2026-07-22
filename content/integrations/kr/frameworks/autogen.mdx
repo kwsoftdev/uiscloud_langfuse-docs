@@ -1,0 +1,112 @@
+---
+source: ⚠️ Jupyter Notebook
+title: Langfuse 통합을 이용한 AutoGen 관찰 가능성
+sidebarTitle: AutoGen
+logo: /images/integrations/autogen_icon.svg
+description: OpenTelemetry를 통해 OpenLit을 사용하여 Langfuse와 AutoGen을 통합하고, AI 에이전트 대화를 포괄적으로 트레이싱하고 디버깅하는 방법을 알아보세요.
+category: Integrations
+---
+
+# Langfuse와 AutoGen 통합하기
+
+이 노트북은 멀티 에이전트 LLM 애플리케이션을 위한 포괄적인 관찰 가능성과 디버깅을 달성하기 위해 **Langfuse**를 **AutoGen**과 통합하는 단계별 가이드를 제공합니다.
+
+> **AutoGen이란 무엇인가요?** [AutoGen](https://microsoft.github.io/autogen/stable/)([GitHub](https://github.com/microsoft/autogen))은 복잡한 추론과 상호작용이 가능한 에이전트를 포함한 LLM 애플리케이션을 구축하기 위해 Microsoft가 개발한 오픈 소스 프레임워크입니다. AutoGen은 작업을 해결하기 위해 협력하거나 경쟁할 수 있는 대화형 에이전트의 생성을 단순화합니다.
+
+> **Langfuse란 무엇인가요?** [Langfuse](https://langfuse.com)는 오픈 소스 AI 엔지니어링 플랫폼입니다. LLM 애플리케이션을 위한 트레이싱 및 모니터링 기능을 제공합니다. Langfuse는 상세한 인사이트를 제공하고 네이티브 통합, OpenTelemetry, 전용 SDK를 통해 다양한 도구 및 프레임워크와 통합함으로써 개발자가 AI 시스템을 디버그, 분석, 최적화할 수 있도록 돕습니다.
+
+## 시작하기
+
+AutoGen을 사용하고 포괄적인 트레이싱을 위해 OpenTelemetry를 통해 Langfuse와 통합하는 실용적인 예제를 살펴보겠습니다.
+
+<Steps>
+### 1단계: 의존성 설치
+
+```python
+%pip install langfuse openlit "autogen-agentchat" "autogen-ext[openai]" -U
+```
+
+### 2단계: Langfuse SDK 구성
+
+다음으로 Langfuse API 키를 설정합니다. 무료 [Langfuse Cloud](https://langfuse.com/cloud) 계정에 가입하거나 [Langfuse를 셀프 호스팅](https://langfuse.com/self-hosting)하여 이 키를 얻을 수 있습니다. 이 환경 변수들은 Langfuse 클라이언트가 인증하고 Langfuse 프로젝트로 데이터를 전송하는 데 필수적입니다.
+
+```python
+import os
+
+# Get keys for your project from the project settings page: https://cloud.langfuse.com
+os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-lf-...")
+os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-lf-...")
+os.environ.setdefault("LANGFUSE_BASE_URL", "https://cloud.langfuse.com") # 🇪🇺 EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+
+# Your openai key
+os.environ.setdefault("OPENAI_API_KEY", "sk-proj-...")
+```
+
+환경 변수를 설정했으니 이제 Langfuse 클라이언트를 초기화할 수 있습니다. `get_client()`는 환경 변수에 제공된 자격 증명을 사용하여 Langfuse 클라이언트를 초기화합니다.
+
+```python
+from langfuse import Langfuse
+from langfuse.span_filter import is_default_export_span
+
+# Filter out AutoGen runtime spans
+blocked_scopes = {"autogen SingleThreadedAgentRuntime"}
+langfuse = Langfuse(
+    should_export_span=lambda span: (
+        is_default_export_span(span)
+        and not (
+            span.instrumentation_scope is not None
+            and span.instrumentation_scope.name in blocked_scopes
+        )
+    )
+)
+
+# Verify connection
+if langfuse.auth_check():
+    print("Langfuse client is authenticated and ready!")
+else:
+    print("Authentication failed. Please check your credentials and host.")
+```
+
+    Langfuse client is authenticated and ready!
+
+### 3단계: OpenLit 인스트루멘테이션 초기화
+
+이제 [OpenLit](https://github.com/openlit/openlit) 인스트루멘테이션을 초기화합니다. OpenLit은 AutoGen 작업을 자동으로 캡처하고 OpenTelemetry(OTel) 스팬을 Langfuse로 내보냅니다.
+
+```python
+import openlit
+
+# Initialize OpenLIT instrumentation. The disable_batch flag is set to true to process traces immediately.
+openlit.init(tracer=langfuse._otel_tracer, disable_batch=True)
+```
+
+### 5단계: 기본 AutoGen 애플리케이션
+
+간단한 AutoGen 애플리케이션을 만들어 보겠습니다. 이 예제에서는 Assistant 에이전트가 사용자의 질문에 답하는 간단한 멀티 에이전트 대화를 만듭니다. 이는 Langfuse 트레이싱을 시연하기 위한 기반이 됩니다.
+
+```python
+from autogen_agentchat.agents import AssistantAgent
+from autogen_ext.models.openai import OpenAIChatCompletionClient
+
+model_client = OpenAIChatCompletionClient(model="gpt-4o")
+agent = AssistantAgent("assistant", model_client=model_client)
+print(await agent.run(task="Say 'Hello World!'"))
+await model_client.close()
+```
+
+    messages=[TextMessage(id='0935120c-2a27-4bb8-ad7f-eb5cb2b4902d', source='user', models_usage=None, metadata={}, created_at=datetime.datetime(2025, 7, 8, 8, 32, 25, 422043, tzinfo=datetime.timezone.utc), content="Say 'Hello World!'", type='TextMessage'), TextMessage(id='2046975a-235c-4e46-be55-719bb79ced95', source='assistant', models_usage=RequestUsage(prompt_tokens=41, completion_tokens=5), metadata={}, created_at=datetime.datetime(2025, 7, 8, 8, 32, 26, 265424, tzinfo=datetime.timezone.utc), content='Hello World! TERMINATE', type='TextMessage')] stop_reason=None
+
+### 6단계: Langfuse에서 트레이스 보기
+
+애플리케이션을 실행한 후 Langfuse 트레이스 테이블로 이동하세요. 애플리케이션 실행에 대한 상세한 트레이스를 확인할 수 있으며, 에이전트 대화, LLM 호출, 입력, 출력, 성능 메트릭에 대한 인사이트를 얻을 수 있습니다. 트레이스는 초기 사용자 쿼리부터 에이전트 상호작용을 거쳐 최종 응답에 이르는 전체 흐름을 보여줍니다.
+
+![Langfuse Trace](https://langfuse.com/images/cookbook/integration-autogen/autogen-example-trace.png)
+
+여기서 공개 트레이스도 확인할 수 있습니다: [Langfuse 트레이스 예제](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/1b72c51fabed12ae7df83bfd4a09f545?timestamp=2025-06-06T11:31:33.965Z&display=details)
+
+</Steps>
+
+import LearnMore from "@/components-mdx/integration-learn-more.mdx";
+
+<LearnMore />

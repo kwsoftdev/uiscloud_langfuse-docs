@@ -1,0 +1,54 @@
+---
+title: Observability and Tracing for Langdock Assistants
+sidebarTitle: Langdock
+logo: /images/integrations/langdock_icon.svg
+description: "Langdock is an enterprise-ready AI platform for creating private assistants in minutes—no code required. Deploy via secure chat, Slack, or API. When connected to Langfuse, every assistant execution is automatically traced and visualized."
+---
+
+# Langdock Integration
+
+> **Langdock**은 코드 없이 몇 분 만에 비공개 어시스턴트를 만들 수 있는 엔터프라이즈급 AI 플랫폼입니다. 보안 채팅, Slack, API를 통해 배포할 수 있습니다.
+
+Langfuse에 연결하면, 모든 Langdock 어시스턴트 실행이 자동으로 추적되고 시각화됩니다.
+
+## 설정
+
+<Steps>
+
+### Langfuse API 키 받기
+
+1. [cloud.langfuse.com](https://cloud.langfuse.com)에 가입하거나 여러분의 인스턴스를 셀프 호스팅하세요
+2. **Project → Settings → API Keys**로 이동해 키를 복사하세요
+
+### Langdock 어시스턴트 설정에 로깅 제공업체로 Langfuse 추가하기
+
+1. Langdock의 `Workspace Settings`를 여세요
+2. `Assistants` 설정으로 이동하세요
+3. `Allow assistant logs`를 활성화하세요
+4. Langfuse 호스트를 `Tracing cloud URL`로 추가하세요. 예: `https://cloud.langfuse.com`(EU), `https://us.cloud.langfuse.com`(US), `https://jp.cloud.langfuse.com`(Japan), 또는 `https://hipaa.cloud.langfuse.com`(HIPAA)
+
+<Frame>
+  ![Enable assistant logs in
+  Langdock](/images/docs/langdock_1_enable_assistant_logs.png)
+</Frame>
+
+### 어시스턴트를 생성할 때 트레이싱 활성화하기
+
+1. Langdock에서 **Assistants** → **New assistant**를 여세요
+2. 어시스턴트를 구성하세요
+3. `Enable Langfuse tracing`을 켜고 Langfuse 키를 추가하세요
+4. `Save`를 클릭하세요
+
+<Frame>
+  ![Enable tracing for assistant in
+  Langdock](/images/docs/langdock_2_enable_tracing_for_assistant.png)
+</Frame>
+
+</Steps>
+
+이제 여러분의 어시스턴트 대화가 자동으로 Langfuse로 트레이스를 스트리밍합니다.
+
+## 리소스
+
+- [Langdock 문서](https://docs.langdock.com)
+- [Langfuse 트레이싱 문서](/docs/tracing)

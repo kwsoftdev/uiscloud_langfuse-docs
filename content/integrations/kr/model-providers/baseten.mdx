@@ -1,0 +1,95 @@
+---
+source: ⚠️ Jupyter Notebook
+title: Langfuse로 Baseten 모니터링하기
+sidebarTitle: Baseten
+logo: /images/integrations/baseten_icon.png
+logoAppearance: dark
+description: OpenAI 드롭인 대체를 사용하여 Baseten을 Langfuse와 통합하는 방법을 알아보세요.
+category: Integrations
+---
+
+# Langfuse로 Baseten 옵저버빌리티 구현하기
+
+이 가이드는 [Baseten](https://www.baseten.co/)을 Langfuse와 통합하는 방법을 보여줍니다. Baseten의 추론 API는 OpenAI의 클라이언트 라이브러리와 완전히 호환되므로, Langfuse OpenAI 드롭인 대체를 사용하여 애플리케이션의 모든 부분을 트레이싱할 수 있습니다.
+
+> **Baseten이란 무엇인가요?** [Baseten](https://docs.baseten.co/overview)은 개발자가 프로덕션 환경에서 머신러닝 모델을 배포하고 확장할 수 있게 해주는 추론 플랫폼입니다. OpenAI 호환 API를 통해 인기 있는 오픈 소스 모델을 지원하는 빠르고 안정적인 모델 추론을 제공합니다.
+
+> **Langfuse란 무엇인가요?** [Langfuse](https://langfuse.com)는 팀이 API 호출을 트레이싱하고, 성능을 모니터링하고, LLM 애플리케이션의 문제를 디버그하는 데 도움을 주는 오픈 소스 AI 엔지니어링 플랫폼입니다.
+
+<Steps>
+## 1단계: 종속성 설치
+
+필요한 Python 패키지가 설치되어 있는지 확인하세요.
+
+```python
+%pip install openai langfuse -q
+
+```
+
+## 2단계: 환경 변수 설정
+
+```python
+import os
+
+# Get keys for your project from the project settings page: https://cloud.langfuse.com
+os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-lf-...")
+os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-lf-...")
+os.environ.setdefault("LANGFUSE_BASE_URL", "https://cloud.langfuse.com") # 🇪🇺 EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+
+# Get your Baseten API key from https://app.baseten.co/settings/api_keys
+os.environ.setdefault("BASETEN_API_KEY", "...")
+
+```
+
+## 3단계: Langfuse OpenAI 드롭인 대체
+
+이 단계에서는 `from langfuse.openai import openai`를 임포트하여 네이티브 [OpenAI 드롭인 대체](https://langfuse.com/docs/observability/sdk/instrumentation)를 사용합니다.
+
+Baseten을 OpenAI의 클라이언트 라이브러리와 함께 사용하려면, `api_key` 옵션에 Baseten API 키를 전달하고 `base_url`을 `https://inference.baseten.co/v1`로 변경하세요:
+
+```python
+# instead of import openai:
+from langfuse.openai import openai
+
+client = openai.OpenAI(
+  api_key=os.environ.get("BASETEN_API_KEY"),
+  base_url="https://inference.baseten.co/v1",
+)
+```
+
+## 4단계: 예시 실행하기
+
+다음 셀은 트레이싱된 OpenAI 클라이언트를 사용하여 Baseten의 채팅 모델을 호출하는 방법을 보여줍니다. 모든 API 호출은 Langfuse에 의해 자동으로 트레이싱됩니다.
+
+```python
+response = client.chat.completions.create(
+  model="zai-org/GLM-4.6",
+  messages=[
+    {"role": "system", "content": "You are a travel agent. Be descriptive and helpful."},
+    {"role": "user", "content": "Tell me the top 3 things to do in San Francisco"},
+  ],
+  name="baseten-example-trace"
+)
+
+print(response.choices[0].message.content)
+```
+
+## 5단계: Langfuse에서 트레이스 확인하기
+
+예시 모델 호출을 실행한 후 Langfuse에서 트레이스를 확인할 수 있습니다. Baseten API 호출에 대한 다음과 같은 상세 정보를 확인할 수 있습니다:
+
+- 요청 매개변수(모델, 메시지, temperature 등)
+- 응답 콘텐츠
+- 토큰 사용량 통계
+- 지연 시간 메트릭
+
+![Langfuse 트레이스 예시](https://langfuse.com/images/cookbook/integration_baseten/baseten-example-trace.png)
+
+_[Langfuse의 공개 예시 트레이스 링크](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/2c070a60-3cb9-43c6-9731-ba2ae3076453?timestamp=2025-12-23T14:38:10.441Z)_
+
+</Steps>
+
+import LearnMore from "@/components-mdx/integration-learn-more.mdx";
+
+<LearnMore />

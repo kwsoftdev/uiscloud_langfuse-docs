@@ -1,0 +1,166 @@
+---
+source: ⚠️ Jupyter Notebook
+title: Langfuse로 Flue 관찰하기
+sidebarTitle: Flue
+logo: /images/integrations/flue_icon.svg
+description: OpenTelemetry를 통해 Langfuse로 Flue 에이전트 및 워크플로를 트레이싱하는 방법을 알아보세요.
+category: Integrations
+---
+
+# Langfuse로 Flue 에이전트 트레이싱하기
+
+이 노트북은 OpenTelemetry를 통해 에이전트와 워크플로를 트레이싱, 디버깅, 평가하기 위해 **Langfuse**를 **[Flue](https://flueframework.com)**와 통합하는 방법을 보여줍니다.
+
+> **Flue란 무엇인가요?**\
+> [Flue](https://flueframework.com)는 지속 가능한(durable) AI 에이전트와 워크플로를 구축하기 위한 오픈 소스 TypeScript 프레임워크입니다. 세션, 도구, 스킬, 샌드박스화된 파일 시스템 및 셸 액세스, 지속 실행 등 어떤 모델에도 하니스 스타일 런타임을 제공하여, 에이전트를 한 번 작성하고 어디서나(Node.js, Cloudflare, CI) 실행할 수 있게 해줍니다.
+
+> **Langfuse란 무엇인가요?**\
+> [Langfuse](https://langfuse.com)는 팀이 LLM 애플리케이션을 트레이싱, 디버깅, 평가할 수 있도록 돕는 오픈 소스 LLM 엔지니어링 플랫폼입니다.
+
+<Steps>
+## 1단계: 의존성 설치
+
+Flue는 공개 `observe(...)` 이벤트 스트림을 OpenTelemetry 스팬으로 변환하는 전용 [`@flue/opentelemetry`](https://github.com/withastro/flue/tree/main/packages/opentelemetry) 어댑터를 제공합니다. 이를 Langfuse OpenTelemetry SDK([`@langfuse/otel`](https://langfuse.com/docs/observability/sdk/overview#setup))와 짝지어 해당 스팬을 Langfuse로 내보내세요.
+
+```bash
+npm install @flue/runtime @flue/opentelemetry @langfuse/otel @opentelemetry/sdk-node @opentelemetry/api hono valibot
+npm install --save-dev @flue/cli
+```
+
+> 아직 Flue 프로젝트가 없다면 `npx flue init --target node`로 먼저 하나를 스캐폴딩하고 [Flue 퀵스타트](https://flueframework.com/docs/getting-started/quickstart/)를 따르세요.
+
+## 2단계: 환경 구성
+
+[Langfuse Cloud](https://langfuse.com/cloud) 또는 [셀프 호스팅](https://langfuse.com/self-hosting) 인스턴스의 프로젝트 설정에서 Langfuse API 키를 받아, 모델 공급자 키와 함께 프로젝트 루트의 `.env` 파일에 추가하세요.
+
+```bash
+# .env
+# Get keys from your project settings: https://langfuse.com/cloud
+LANGFUSE_PUBLIC_KEY="pk-lf-..."
+LANGFUSE_SECRET_KEY="sk-lf-..."
+LANGFUSE_BASE_URL="https://cloud.langfuse.com" # 🇪🇺 EU region
+# LANGFUSE_BASE_URL="https://us.cloud.langfuse.com" # 🇺🇸 US region
+
+# Model provider used by your Flue agents
+OPENAI_API_KEY="sk-proj-..."
+```
+
+## 3단계: Langfuse OpenTelemetry observer 등록하기
+
+`@flue/opentelemetry`는 Flue 이벤트를 스팬으로 변환하기만 합니다 — 애플리케이션이 OpenTelemetry SDK와 exporter를 소유합니다. Langfuse [`LangfuseSpanProcessor`](https://langfuse.com/docs/observability/sdk/overview#setup)로 SDK를 구성하고 Flue 앱의 진입점(`src/app.ts`)에 observer를 등록하세요.
+
+Flue의 모델 턴 스팬은 [OpenTelemetry GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/)를 따르므로, Langfuse는 이를 모델, 토큰 사용량, 비용이 포함된 generation으로 자동 매핑합니다. 다른 Flue 스팬(workflow, operation, tool, task)은 `@flue/opentelemetry` 인스트루멘테이션 스코프 아래에서 발생하므로, 기본 Langfuse 스팬 필터를 확장하여 [해당 스코프를 포함](https://langfuse.com/docs/observability/sdk/advanced-features#filtering-by-instrumentation-scope)합니다.
+
+```typescript
+// src/app.ts
+import { NodeSDK } from "@opentelemetry/sdk-node";
+import { LangfuseSpanProcessor, isDefaultExportSpan } from "@langfuse/otel";
+import { createOpenTelemetryObserver } from "@flue/opentelemetry";
+import { observe } from "@flue/runtime";
+import { flue } from "@flue/runtime/routing";
+import { Hono } from "hono";
+
+const sdk = new NodeSDK({
+  spanProcessors: [
+    new LangfuseSpanProcessor({
+      // Export Langfuse's default LLM spans plus the full Flue span tree
+      // (workflow / operation / tool / task) emitted by @flue/opentelemetry.
+      shouldExportSpan: ({ otelSpan }) =>
+        isDefaultExportSpan(otelSpan) ||
+        otelSpan.instrumentationScope.name === "@flue/opentelemetry",
+    }),
+  ],
+});
+
+sdk.start();
+
+// Flush buffered spans on exit: the one-shot `flue run` path (the event
+// loop drains) and Ctrl+C on the long-running `flue dev` server (signals).
+for (const signal of ["beforeExit", "SIGINT", "SIGTERM"] as const) {
+  process.once(signal, async () => {
+    await sdk.shutdown();
+    if (signal !== "beforeExit") process.exit(0);
+  });
+}
+
+// Register the observer after sdk.start() so it uses the configured tracer.
+// exportContent forwards prompts/responses/tool payloads so they appear in
+// each observation's Input/Output; return a sanitized event in production.
+observe(createOpenTelemetryObserver({ exportContent: (event) => event }));
+
+const app = new Hono();
+app.route("/", flue());
+
+export default app;
+```
+
+> **프롬프트와 응답 캡처하기:** 위 스니펫의 `exportContent` 콜백은 프롬프트, 완료 결과, 도구 페이로드 전체를 전달하며, Langfuse는 이를 해당 observation의 **Input**과 **Output**으로 매핑합니다(모델 턴은 **Generation** observation이 되고, 도구 호출은 **Tool** observation이 되고, 위임된 작업은 **Agent** observation이 됩니다). 콜백을 생략하면 메타데이터(식별자, 지속 시간, 모델, 토큰 사용량, 비용)만 내보냅니다. 프로덕션에서는 앱을 벗어나기 전에 민감한 데이터를 삭제하기 위해 `exportContent`에서 정제된 이벤트를 반환하세요.
+
+## 4단계: 예제 워크플로 추가하기
+
+Flue는 `src/workflows/`에서 워크플로를 검색합니다. 이 워크플로는 도구를 사용하는 에이전트를 실행합니다 — 각 모델 턴과 도구 호출은 트레이스의 스팬이 됩니다.
+
+```typescript
+// src/workflows/weather.ts
+import {
+  createAgent,
+  defineTool,
+  type FlueContext,
+  type WorkflowRouteHandler,
+} from "@flue/runtime";
+import * as v from "valibot";
+
+export const route: WorkflowRouteHandler = async (_c, next) => next();
+
+const agent = createAgent(() => ({ model: "openai/gpt-4o-mini" }));
+
+const lookupWeather = defineTool({
+  name: "lookup_weather",
+  description: "Look up current weather for a city.",
+  parameters: v.object({ city: v.string() }),
+  execute: async ({ city }) => `${city}: sunny, 72 F`,
+});
+
+export async function run({ init, payload }: FlueContext<{ city?: string }>) {
+  const harness = await init(agent);
+  const session = await harness.session();
+  const city = typeof payload.city === "string" ? payload.city : "San Francisco";
+  const response = await session.prompt(
+    `Use the weather tool to report current weather in ${city}.`,
+    { tools: [lookupWeather] },
+  );
+  return { message: response.text };
+}
+```
+
+## 5단계: 에이전트 실행하기
+
+Flue 개발 서버를 시작하세요:
+
+```bash
+npx flue dev --target node
+```
+
+다른 터미널에서 워크플로를 호출하고 결과를 기다리세요:
+
+```bash
+curl -X POST "http://localhost:3583/workflows/weather?wait=result" \
+  -H "content-type: application/json" \
+  -d '{"city":"Berlin"}'
+```
+
+`npx flue run weather --target node --payload '{"city":"Berlin"}'`로 서버 없이 워크플로를 한 번 실행할 수도 있습니다.
+
+## 6단계: Langfuse에서 트레이스 보기
+
+워크플로를 실행한 후, [Langfuse 대시보드](https://langfuse.com/cloud)를 열어 전체 트레이스를 확인하세요: 워크플로 스팬, 각 모델 턴이 매핑된 generation(모델, 토큰 사용량, 비용 포함), 입력과 출력이 포함된 중첩된 **Tool** observation으로 캡처된 도구 호출을 확인할 수 있습니다.
+
+![Flue example trace in Langfuse](https://langfuse.com/images/cookbook/integration-flue/flue-example-trace.png)
+
+[Langfuse에서 예제 트레이스](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/44bd24918fb224f50b88dc23de15cc01)
+
+</Steps>
+
+import LearnMore from "@/components-mdx/integration-learn-more-js.mdx";
+
+<LearnMore />

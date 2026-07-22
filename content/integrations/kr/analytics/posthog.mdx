@@ -1,0 +1,179 @@
+---
+title: Langfuse와 함께하는 LLM 앱용 PostHog (오픈소스)
+sidebarTitle: PostHog
+logo: /images/integrations/posthog_icon.svg
+description: Posthog 대시보드에 Langfuse 메트릭을 표시하세요.
+---
+
+# PostHog 통합
+
+[PostHog](https://posthog.com)는 OSS 제품 분석을 위해 널리 사용되는 도구입니다. Langfuse는 기본적으로 [분석 기능](/docs/analytics)을 제공하지만, 많은 사용자가 **Langfuse로 수집한 LLM 관련 메트릭을 PostHog 대시보드에 통합**하는 방법을 요청해 왔습니다.
+
+다음과 같은 질문에 쉽게 답할 수 있도록 통합 기능을 구축했습니다:
+
+- _"가장 활발한 사용자가 내 LLM 콘텐츠에도 가장 많이 참여하는 사용자인가?"_
+- _"LLM 기능과 상호작용하는 것이 더 높은 리텐션(재방문)율과 관련이 있는가?"_
+- _"LLM 기능이 전환율에 어떤 영향을 미치는가?"_
+- _"Langfuse에서 수집한 사용자 피드백이 PostHog에서 확인하는 사용자 행동과 상관관계가 있는가?"_
+
+<Video
+  src="https://static.langfuse.com/docs-videos/posthog-integration.mp4"
+  aspectRatio={16 / 9.53}
+/>
+
+## 시작하기
+
+<Steps>
+
+### 통합 활성화
+
+Langfuse 프로젝트 설정에서 이 통합을 구성하세요. PostHog Hostname과 API key를 입력해야 합니다.
+
+<Frame className="max-w-lg block">
+  ![Posthog Integration Settings](/images/docs/posthog-settings.png)
+</Frame>
+
+### PostHog에서 대시보드 만들기
+
+통합이 완료되면 PostHog에서 대시보드를 만들어 Langfuse 메트릭을 시각화할 수 있습니다([아래 참조](#details) 참고). Langfuse의 가장 일반적인 메트릭이 포함된 사전 제작 대시보드로 빠르게 시작하려면 _AI Metrics_ 템플릿을 사용하세요.
+
+<Frame className="max-w-xs block">
+  ![PostHog Dashboard Template](/images/docs/posthog-template.png)
+</Frame>
+
+</Steps>
+
+## 내보내기 소스 (Fast Preview, Langfuse v4)
+
+이제 PostHog 통합에는 `Export Source` 선택 기능이 포함됩니다. 새 통합은 기본적으로 `Enriched observations (recommended)`를 사용합니다(트레이스 속성이 관측값에 직접 설정됩니다).
+
+이 소스는 트레이스 속성이 포함된 enriched observation을 사용하며, 훨씬 더 나은 내보내기 성능을 제공합니다. 선택한 소스와 관계없이 `Scores`는 항상 포함됩니다.
+
+사용 가능한 옵션:
+
+- `Traces and observations (legacy)`
+- `Traces and observations (legacy) and enriched observations`
+- `Enriched observations (recommended)`
+
+<Callout type="info">
+**2026-05-20 이후 생성된 Cloud 프로젝트**는 Export Source 선택 기능을 볼 수 없습니다 — 새로운 Cloud 프로젝트는 자동으로 `Enriched observations (recommended)`를 사용합니다. 컷오프 이전 Cloud 프로젝트와 모든 셀프 호스팅 배포는 전체 선택지를 계속 사용할 수 있습니다.
+</Callout>
+
+<Callout type="warning">
+`Traces and observations (legacy)` 소스는 향후 지원이 중단될 수 있습니다. 모든 새 내보내기 작업은 `Enriched observations (recommended)`를 사용해야 하며, 기존 레거시 작업도 업그레이드할 것을 강력히 권장합니다.
+</Callout>
+
+### 기존 설정의 업그레이드 경로
+
+이 마이그레이션 경로는 **컷오프 이전 Cloud 프로젝트와 셀프 호스팅 배포**에 적용됩니다. 컷오프 이후 Cloud 프로젝트는 이미 `Enriched observations (recommended)`를 사용하며 레거시 소스를 선택할 수 없습니다.
+
+기존 통합은 변경하기 전까지 계속 `Traces and observations (legacy)`를 사용합니다.
+
+안전하게 마이그레이션하려면:
+
+1. `Traces and observations (legacy) and enriched observations`로 전환합니다.
+2. 두 소스가 모두 내보내지는 동안 다운스트림 대시보드, 변환, 알림을 검증합니다(이 모드는 설계상 중복 레코드를 생성합니다).
+3. 검증이 완료되면 `Enriched observations (recommended)`로 전환합니다.
+
+롤아웃 세부 사항은 [Simplify for Scale 체인지로그](/changelog/2026-03-10-simplify-for-scale)를 참고하세요.
+
+## PostHog 대시보드 예시
+
+<Video
+  src="https://static.langfuse.com/docs-videos/posthog-intgeration-dashboard.mp4"
+  aspectRatio={16 / 9}
+  gifStyle
+/>
+
+## 통합 세부 정보 [#details]
+
+Langfuse는 매시간 집계된 이벤트와 메트릭을 배치로 묶어 PostHog 인스턴스로 전송합니다.
+
+### 메타데이터 매칭
+
+메타데이터를 매칭하면 Langfuse의 데이터와 PostHog의 데이터를 연결하는 데 도움이 됩니다:
+
+| Langfuse                                                      | PostHog        | 참고                                                                  |
+| ------------------------------------------------------------- | -------------- | --------------------------------------------------------------------- |
+| `user_id`                                                     | `$distinct_id` |                                                                       |
+| `trace.timestamp`, `generation.started_at`, `score.timestamp` | `timestamp`    |                                                                       |
+| `trace.metadata.$posthog_session_id`                          | `$session_id`  | 선택 사항이며, Langfuse 트레이스에 PostHog 세션 ID를 추가해야 합니다. |
+
+### 사용자 속성
+
+다음 사용자 속성을 `'$set'`을 통해 전송합니다:
+
+- `langfuse_user_url`: Langfuse의 [사용자 프로필](/docs/tracing-features/users)로 연결되는 딥링크.
+
+### 이벤트
+
+이 통합은 다음 이벤트를 PostHog로 전송합니다.
+
+추가로 필요한 정보가 있으신가요? [여기](/ideas)에서 더 많은 이벤트나 속성을 요청할 수 있습니다.
+
+#### Event: `langfuse trace`
+
+- `timestamp`: 이벤트가 발생한 시각.
+- `langfuse_trace_name`: 트레이스의 이름.
+- `langfuse_url`: 트레이스의 URL.
+- `langfuse_id`: 트레이스의 고유 식별자.
+- `langfuse_cost_usd`: 트레이스와 관련된 총 비용.
+- `langfuse_count_observations`: 트레이스 내 관측값(observation) 개수.
+- `langfuse_session_id`: 이벤트와 관련된 세션 ID.
+- `langfuse_project_id`: 이벤트와 관련된 프로젝트의 ID.
+- `langfuse_user_id`: 이벤트와 관련된 사용자 ID. null인 경우 langfuse_unknown_user로 표시됩니다.
+- `langfuse_latency`: 이벤트의 지연 시간(latency).
+- `langfuse_release`: 이벤트 릴리스와 관련된 정보.
+- `langfuse_version`: 이벤트의 버전.
+- `langfuse_tags`: 이벤트와 관련된 태그.
+- `langfuse_environment`: 트레이스와 관련된 환경(environment).
+- `langfuse_event_version`: Langfuse 통합 버전.
+
+#### Event: `langfuse generation`
+
+- `timestamp`: 생성(generation)의 시작 시각.
+- `langfuse_generation_name`: 생성(generation)의 이름.
+- `langfuse_trace_name`: 생성과 관련된 트레이스의 이름.
+- `langfuse_trace_id`: 생성과 관련된 트레이스의 고유 식별자.
+- `langfuse_url`: 호스트 플랫폼에서의 생성 URL.
+- `langfuse_id`: 생성의 고유 식별자.
+- `langfuse_cost_usd`: 계산된 생성의 총 비용.
+- `langfuse_input_units`: 생성을 프롬프팅하는 데 사용된 토큰 수.
+- `langfuse_output_units`: 생성으로 산출된 토큰 수.
+- `langfuse_total_units`: 생성 과정에서 소비된 총 토큰 수.
+- `langfuse_session_id`: 생성의 트레이스와 관련된 세션 ID.
+- `langfuse_project_id`: 생성이 발생한 프로젝트의 식별자.
+- `langfuse_user_id`: 생성과 연결된 트레이스를 시작한 사용자 ID. 사용할 수 없는 경우 기본값으로 `langfuse_unknown_user`가 사용됩니다.
+- `langfuse_latency`: 관측된 생성의 지연 시간.
+- `langfuse_time_to_first_token`: 스트리밍 시 첫 토큰을 생성하는 데 걸린 시간.
+- `langfuse_release`: 생성에 연결된 트레이스의 릴리스 정보.
+- `langfuse_version`: 생성에 대한 버전 정보.
+- `langfuse_model`: 이 생성 과정에서 사용된 모델.
+- `langfuse_level`: 생성과 관련된 레벨.
+- `langfuse_tags`: 생성의 트레이스에 첨부된 태그.
+- `langfuse_environment`: 생성과 관련된 환경.
+- `langfuse_event_version`: Langfuse와의 통합 버전.
+
+#### Event `langfuse score`
+
+- `timestamp`: 스코어 이벤트가 발생한 시각.
+- `langfuse_score_name`: 스코어와 관련된 이름.
+- `langfuse_score_value`: 스코어의 값.
+- `langfuse_score_string_value`: 스코어의 문자열 값. BOOLEAN 및 CATEGORICAL 스코어의 경우 값의 문자열 표현입니다.
+- `langfuse_score_data_type`: 스코어의 데이터 타입(NUMERIC, BOOLEAN, CATEGORICAL).
+- `langfuse_score_comment`: 스코어에 첨부된 코멘트.
+- `langfuse_score_metadata`: 스코어에 첨부된 메타데이터.
+- `langfuse_trace_name`: 스코어와 관련된 트레이스의 이름.
+- `langfuse_trace_id`: 스코어와 관련된 트레이스의 고유 식별자.
+- `langfuse_id`: 스코어의 고유 식별자.
+- `langfuse_session_id`: 스코어의 트레이스와 관련된 세션 식별자.
+- `langfuse_project_id`: 스코어의 트레이스와 연결된 프로젝트 식별자.
+- `langfuse_user_id`: 스코어와 연결된 트레이스를 트리거한 사용자 ID. 사용할 수 없는 경우 기본값으로 `langfuse_unknown_user`가 사용됩니다.
+- `langfuse_release`: 스코어와 관련된 트레이스의 릴리스 정보.
+- `langfuse_tags`: 스코어의 트레이스와 관련된 태그.
+- `langfuse_environment`: 스코어와 관련된 환경.
+- `langfuse_event_version`: Langfuse와의 통합 버전.
+
+## 문제 해결
+
+**PostHog에 데이터가 표시되지 않나요?** Langfuse 프로젝트 설정에서 PostHog hostname과 API key를 올바르게 입력했는지 확인하세요. 또한 PostHog 무료 티어를 사용하는 경우, 이벤트 한도를 초과하지 않았는지 확인하세요. 한도에 도달하면 PostHog가 이벤트를 누락시킵니다. 통합에 관해 다른 문제가 발생하면 저희에게 문의해 주세요.

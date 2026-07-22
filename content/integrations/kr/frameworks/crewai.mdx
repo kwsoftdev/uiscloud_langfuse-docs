@@ -1,0 +1,117 @@
+---
+source: Jupyter Notebook
+title: Langfuse 통합을 이용한 CrewAI 관찰 가능성
+sidebarTitle: CrewAI
+logo: /images/integrations/crewai_icon.svg
+description: 향상된 LLM 애플리케이션 모니터링, 디버깅, 트레이싱을 위해 Langfuse와 CrewAI를 통합하는 방법을 알아보세요. 오늘 AI 개발 워크플로를 개선해 보세요.
+category: Integrations
+---
+
+# Langfuse와 CrewAI 통합하기
+
+이 노트북은 LLM 애플리케이션의 관찰 가능성과 디버깅을 달성하기 위해 **Langfuse**를 **CrewAI**와 통합하는 단계별 가이드를 제공합니다.
+
+> **CrewAI란 무엇인가요?** [CrewAI](https://github.com/crewAIInc/crewAI)([GitHub](https://github.com/crewAIInc/crewAI))는 자율 AI 에이전트를 오케스트레이션하기 위한 프레임워크입니다. CrewAI를 사용하면 각 에이전트가 특정 역할, 도구, 목표를 가진 AI 팀을 만들 수 있으며, 이들이 함께 협력하여 복잡한 작업을 수행합니다. 각 멤버(에이전트)는 고유한 기술과 전문성을 가지고 있으며, 목표를 달성하기 위해 원활하게 협력합니다.
+
+> **Langfuse란 무엇인가요?** [Langfuse](https://langfuse.com)는 오픈 소스 AI 엔지니어링 플랫폼입니다. LLM 애플리케이션을 위한 트레이싱 및 모니터링 기능을 제공합니다. Langfuse는 상세한 인사이트를 제공하고 네이티브 통합, OpenTelemetry, 전용 SDK를 통해 다양한 도구 및 프레임워크와 통합함으로써 개발자가 AI 시스템을 디버그, 분석, 최적화할 수 있도록 돕습니다.
+
+## 시작하기
+
+CrewAI를 사용하고 포괄적인 트레이싱을 위해 Langfuse와 통합하는 실용적인 예제를 살펴보겠습니다.
+
+<Steps>
+### 1단계: 의존성 설치
+
+```python
+%pip install langfuse crewai openinference-instrumentation-crewai -q
+```
+
+### 2단계: Langfuse SDK 구성
+
+다음으로 Langfuse API 키를 설정합니다. 무료 [Langfuse Cloud](https://langfuse.com/cloud) 계정에 가입하거나 [Langfuse를 셀프 호스팅](https://langfuse.com/self-hosting)하여 이 키를 얻을 수 있습니다. 이 환경 변수들은 Langfuse 클라이언트가 인증하고 Langfuse 프로젝트로 데이터를 전송하는 데 필수적입니다.
+
+```python
+import os
+
+# Get keys for your project from the project settings page: https://cloud.langfuse.com
+os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-lf-***")
+os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-lf-***")
+os.environ.setdefault("LANGFUSE_BASE_URL", "https://cloud.langfuse.com") # 🇪🇺 EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+
+# Your openai key
+os.environ.setdefault("OPENAI_API_KEY", "sk-proj-***")
+```
+
+환경 변수를 설정했으니 이제 Langfuse 클라이언트를 초기화할 수 있습니다. `get_client()`는 환경 변수에 제공된 자격 증명을 사용하여 Langfuse 클라이언트를 초기화합니다.
+
+```python
+from langfuse import get_client
+
+langfuse = get_client()
+
+# Verify connection
+if langfuse.auth_check():
+    print("Langfuse client is authenticated and ready!")
+else:
+    print("Authentication failed. Please check your credentials and host.")
+
+```
+
+### 3단계: CrewAI 인스트루멘테이션 초기화
+
+이제 [OpenInference 인스트루멘테이션 SDK](https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-crewai)를 초기화하여 CrewAI 작업을 자동으로 캡처하고 OpenTelemetry(OTel) 스팬을 Langfuse로 내보냅니다.
+
+```python
+from openinference.instrumentation.crewai import CrewAIInstrumentor
+
+CrewAIInstrumentor().instrument(skip_dep_check=True)
+```
+
+### 4단계: 기본 CrewAI 애플리케이션
+
+간단한 CrewAI 애플리케이션을 만들어 보겠습니다. 이 예제에서는 작업을 완료하기 위해 협력할 수 있는 에이전트로 구성된 간단한 크루를 만듭니다. 이는 Langfuse 트레이싱을 시연하기 위한 기반이 됩니다.
+
+```python
+from crewai import Agent, Task, Crew
+
+# Define your agents with roles and goals
+coder = Agent(
+    role='Software developer',
+    goal='Write clear, concise code on demand',
+    backstory='An expert coder with a keen eye for software trends.',
+)
+
+# Create tasks for your agents
+task1 = Task(
+    description="Define the HTML for making a simple website with heading- Hello World! Langfuse monitors your CrewAI agent!",
+    expected_output="A clear and concise HTML code",
+    agent=coder
+)
+
+# Instantiate your crew
+crew = Crew(
+    agents=[coder],
+    tasks=[task1],
+)
+
+with langfuse.start_as_current_observation(as_type="span", name="crewai-index-trace"):
+    result = crew.kickoff()
+    print(result)
+
+langfuse.flush()
+```
+
+### 5단계: Langfuse에서 트레이스 보기
+
+애플리케이션을 실행한 후 Langfuse 트레이스 테이블로 이동하세요. 애플리케이션 실행에 대한 상세한 트레이스를 확인할 수 있으며, LLM 호출, 에이전트 작업, 입력, 출력, 성능 메트릭에 대한 인사이트를 얻을 수 있습니다. 트레이스는 작업 처리부터 에이전트 협력을 거쳐 응답 생성에 이르는 전체 흐름을 보여줍니다.
+
+![CrewAI example trace in Langfuse](https://langfuse.com/images/cookbook/integration_crewai/crewai-example-trace.png)
+
+[Langfuse에서 예제 트레이스](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/a287bb31e317433610d8827617471140?timestamp=2025-07-11T07:45:13.601Z&display=details)
+
+</Steps>
+
+import LearnMore from "@/components-mdx/integration-learn-more.mdx";
+
+<LearnMore />

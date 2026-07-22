@@ -26,7 +26,7 @@ const SECTIONS = [
 // their Korean label but link to the English page.
 const SECTIONS_KO = [
   { title: "문서", path: "/docs/kr", Icon: IconBook },
-  { title: "인테그레이션", path: "/integrations", Icon: Unplug },
+  { title: "인테그레이션", path: "/integrations/kr", Icon: Unplug },
   { title: "셀프 호스팅", path: "/self-hosting/kr", Icon: IconDesktopTower },
   { title: "가이드", path: "/guides/kr", Icon: IconCompass },
   { title: "아카데미", path: "/academy/kr", Icon: GraduationCap },

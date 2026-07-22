@@ -1,0 +1,312 @@
+---
+source: ⚠️ Jupyter Notebook
+title: Langfuse로 Temporal 워크플로우 트레이싱하기
+sidebarTitle: Temporal
+logo: /images/integrations/temporal_icon.png
+logoAppearance: dark
+description: Langfuse를 사용하여 OpenTelemetry를 통해 Temporal 워크플로우와 액티비티를 모니터링하는 방법을 알아보세요
+category: Integrations
+---
+
+# Langfuse로 Temporal 워크플로우 트레이싱하기
+
+이 노트북은 AI 에이전트와 LLM 기반 애플리케이션을 모니터링, 디버깅, 평가하기 위해 **Temporal 워크플로우**에 **Langfuse**를 **통합**하는 방법을 보여줍니다.
+
+> **Temporal이란 무엇인가요?**: [Temporal](https://temporal.io/)은 장애가 발생하더라도 애플리케이션 코드의 실행을 보장하는 지속적 실행(durable execution) 플랫폼입니다. 장기 실행 워크플로우와 분산 애플리케이션에 대한 신뢰성, 확장성, 가시성을 제공합니다.
+
+> **Langfuse란 무엇인가요?**: [Langfuse](https://langfuse.com/)는 AI 에이전트와 LLM 애플리케이션을 위한 오픈소스 옵저버빌리티 플랫폼입니다. LLM 호출, 도구 사용, 비용, 지연 시간 등을 시각화하고 모니터링하는 데 도움을 줍니다.
+
+## 사용 사례: Temporal을 활용한 심층 조사 에이전트
+
+이 예제에서는 다음과 같은 **심층 조사 에이전트**를 구축합니다:
+
+- Temporal 워크플로우를 사용하여 장기 실행 조사 작업을 조율합니다
+- 조사 계획 및 콘텐츠 생성을 위해 OpenAI Agents SDK를 활용합니다
+- OpenTelemetry를 통해 모든 옵저버빌리티 데이터를 Langfuse로 전송합니다
+
+이 설정을 통해 다음을 수행할 수 있습니다:
+
+- **워크플로우 실행 추적**: 모든 워크플로우 실행, 액티비티, 그 상태를 확인합니다
+- **LLM 호출 모니터링**: 프롬프트, 완성, 토큰 사용량, 비용을 확인합니다
+- **실패 디버깅**: 조사 파이프라인의 병목 현상과 오류를 식별합니다
+- **품질 평가**: 시간에 따른 조사 결과물의 품질을 평가합니다
+
+## 1. 종속성 설치
+
+Temporal SDK, OpenTelemetry 패키지, Langfuse를 설치하세요:
+
+```python
+%pip install temporalio openai openai-agents langfuse openinference-instrumentation-openai-agents
+```
+
+## 2. 환경 및 API 키 구성
+
+Langfuse, Temporal, OpenAI 자격 증명을 설정하세요. 무료 [Langfuse Cloud](https://langfuse.com/cloud) 계정에 가입하거나 [Langfuse를 셀프 호스팅](https://langfuse.com/self-hosting)하여 Langfuse 키를 얻을 수 있습니다.
+
+```python
+import os
+
+# Get keys for your project from the project settings page: https://cloud.langfuse.com
+os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-lf-...")
+os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-lf-...")
+os.environ.setdefault("LANGFUSE_BASE_URL", "https://cloud.langfuse.com") # 🇪🇺 EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+
+# Your openai key
+os.environ.setdefault("OPENAI_API_KEY", "sk-proj-...")
+
+# Temporal server address (use Temporal Cloud or local dev server)
+os.environ.setdefault("TEMPORAL_HOST", "localhost:7233")
+os.environ.setdefault("TEMPORAL_NAMESPACE", "default")
+os.environ.setdefault("TEMPORAL_TASK_QUEUE", "agents-task-queue")
+```
+
+    'agents-task-queue'
+
+## 3. OpenAI Agents를 위한 OpenTelemetry 트레이싱
+
+[`OpenAIAgentsInstrumentor`](https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-openai-agents/examples) 라이브러리를 사용하여 OpenAI Agents SDK를 감싸고 OpenTelemetry 스팬을 Langfuse로 전송하세요.
+
+```python
+from openinference.instrumentation.openai_agents import OpenAIAgentsInstrumentor
+
+OpenAIAgentsInstrumentor().instrument()
+```
+
+## 4. Langfuse 클라이언트 초기화
+
+Langfuse 연결을 확인하세요:
+
+```python
+from langfuse import get_client
+
+langfuse = get_client()
+
+# Verify connection
+if langfuse.auth_check():
+    print("✅ Langfuse client is authenticated and ready!")
+else:
+    print("❌ Authentication failed. Please check your credentials and host.")
+```
+
+## 5. Temporal 액티비티 정의
+
+조사 워크플로우의 일부로 실행될 액티비티를 만듭니다. 각 액티비티는 조사 프로세스의 개별 단계를 나타냅니다.
+
+```python
+from __future__ import annotations
+
+import asyncio
+from temporalio import workflow
+from agents import Agent, RunConfig, Runner, WebSearchTool, custom_span, gen_trace_id, trace
+from agents.model_settings import ModelSettings
+from pydantic import BaseModel
+
+# Planner Agent Models
+class WebSearchItem(BaseModel):
+    reason: str
+    "Your reasoning for why this search is important to the query."
+
+    query: str
+    "The search term to use for the web search."
+
+class WebSearchPlan(BaseModel):
+    searches: list[WebSearchItem]
+    """A list of web searches to perform to best answer the query."""
+
+# Writer Agent Models
+class ReportData(BaseModel):
+    short_summary: str
+    """A short 2-3 sentence summary of the findings."""
+
+    markdown_report: str
+    """The final report"""
+
+    follow_up_questions: list[str]
+    """Suggested topics to research further"""
+
+# Agent factory functions
+def new_planner_agent():
+    return Agent(
+        name="PlannerAgent",
+        instructions=(
+            "You are a helpful research assistant. Given a query, come up with a set of web searches "
+            "to perform to best answer the query. Output between 5 and 20 terms to query for."
+        ),
+        model="gpt-4o",
+        output_type=WebSearchPlan,
+    )
+
+def new_search_agent():
+    return Agent(
+        name="Search agent",
+        instructions=(
+            "You are a research assistant. Given a search term, you search the web for that term and "
+            "produce a concise summary of the results. The summary must 2-3 paragraphs and less than 300 "
+            "words. Capture the main points. Write succinctly, no need to have complete sentences or good "
+            "grammar. This will be consumed by someone synthesizing a report, so its vital you capture the "
+            "essence and ignore any fluff. Do not include any additional commentary other than the summary "
+            "itself."
+        ),
+        tools=[WebSearchTool()],
+        model_settings=ModelSettings(tool_choice="required"),
+    )
+
+def new_writer_agent():
+    return Agent(
+        name="WriterAgent",
+        instructions=(
+            "You are a senior researcher tasked with writing a cohesive report for a research query. "
+            "You will be provided with the original query, and some initial research done by a research "
+            "assistant.\n"
+            "You should first come up with an outline for the report that describes the structure and "
+            "flow of the report. Then, generate the report and return that as your final output.\n"
+            "The final output should be in markdown format, and it should be lengthy and detailed. Aim "
+            "for 5-10 pages of content, at least 1000 words."
+        ),
+        model="o3-mini",
+        output_type=ReportData,
+    )
+```
+
+## 6. Temporal 워크플로우 정의
+
+조사 액티비티를 조율하는 워크플로우를 만드세요. Temporal은 실패가 발생하더라도 워크플로우가 안정적으로 실행되도록 보장합니다.
+
+```python
+class ResearchManager:
+    def __init__(self):
+        self.run_config = RunConfig()
+        self.search_agent = new_search_agent()
+        self.planner_agent = new_planner_agent()
+        self.writer_agent = new_writer_agent()
+
+    async def run(self, query: str) -> str:
+        trace_id = gen_trace_id()
+        with trace("Research trace", trace_id=trace_id):
+            search_plan = await self._plan_searches(query)
+            search_results = await self._perform_searches(search_plan)
+            report = await self._write_report(query, search_results)
+
+        return report.markdown_report
+
+    async def _plan_searches(self, query: str) -> WebSearchPlan:
+        result = await Runner.run(
+            self.planner_agent,
+            f"Query: {query}",
+            run_config=self.run_config,
+        )
+        return result.final_output_as(WebSearchPlan)
+
+    async def _perform_searches(self, search_plan: WebSearchPlan) -> list[str]:
+        with custom_span("Search the web"):
+            num_completed = 0
+            tasks = [
+                asyncio.create_task(self._search(item)) for item in search_plan.searches
+            ]
+            results = []
+            for task in workflow.as_completed(tasks):
+                result = await task
+                if result is not None:
+                    results.append(result)
+                num_completed += 1
+            return results
+
+    async def _search(self, item: WebSearchItem) -> str | None:
+        input = f"Search term: {item.query}\nReason for searching: {item.reason}"
+        try:
+            result = await Runner.run(
+                self.search_agent,
+                input,
+                run_config=self.run_config,
+            )
+            return str(result.final_output)
+        except Exception:
+            return None
+
+    async def _write_report(self, query: str, search_results: list[str]) -> ReportData:
+        input = f"Original query: {query}\nSummarized search results: {search_results}"
+        result = await Runner.run(
+            self.writer_agent,
+            input,
+            run_config=self.run_config,
+        )
+
+        return result.final_output_as(ReportData)
+```
+
+```python
+from temporalio import workflow
+
+@workflow.defn
+class ResearchWorkflow:
+    @workflow.run
+    async def run(self, query: str) -> str:
+        return await ResearchManager().run(query)
+```
+
+## 7. 워크플로우 실행
+
+조사 워크플로우를 실행하면 Temporal `OpenAIAgentsPlugin`과 OpenInference `OpenAIAgentsInstrumentor`가 모두 OTel 스팬을 Langfuse로 전송합니다.
+
+**참고**: 이를 위해서는 실행 중인 Temporal 서버가 필요합니다. 다음 명령으로 로컬 개발 서버를 시작할 수 있습니다:
+
+```bash
+temporal server start-dev
+```
+
+```python
+import sys
+import os
+from temporalio.client import Client
+from temporalio.worker import Worker
+from temporalio.contrib.openai_agents import OpenAIAgentsPlugin
+from temporalio.worker import UnsandboxedWorkflowRunner
+
+async def main():
+    tls = os.environ.get("TEMPORAL_TLS", "").lower() in ("1", "true", "yes")
+    api_key = os.environ.get("TEMPORAL_API_KEY")
+
+    plugin = OpenAIAgentsPlugin()
+
+    client = await Client.connect(
+        target_host=os.environ.get("TEMPORAL_ADDRESS", "localhost:7233"),
+        namespace=os.environ.get("TEMPORAL_NAMESPACE", "default"),
+        api_key=api_key or None,
+        tls=tls,
+        plugins=[plugin]
+    )
+
+    worker = Worker(
+        client,
+        task_queue=os.environ.get("TEMPORAL_TASK_QUEUE", "openai-agents-task-queue"),
+        workflows=[ResearchWorkflow],
+        workflow_runner=UnsandboxedWorkflowRunner()
+    )
+
+    async with worker:
+        handle = await client.start_workflow(
+            ResearchWorkflow.run,
+            id="research-workflow-01",
+            task_queue=os.environ.get("TEMPORAL_TASK_QUEUE", "openai-agents-task-queue"),
+            args=["Caribbean vacation spots in April, optimizing for surfing, hiking and water sports"],
+        )
+        result = await handle.result()
+        print("\nWorkflow result:\n", result)
+
+await main()
+```
+
+## 8. Langfuse에서 트레이스 보기
+
+워크플로우를 실행한 후 Langfuse에서 전체 트레이스를 확인할 수 있습니다. 트레이스에는 다음이 표시됩니다:
+
+- **워크플로우 실행**: 타이밍과 상태를 포함한 전체 `ResearchWorkflow`
+- **액티비티 스팬**: 중첩된 스팬으로 표시되는 각 액티비티(`plan_research`, `execute_research`)
+- **LLM 호출**: 프롬프트, 완성, 토큰 사용량을 포함한 OpenAI API 호출
+- **비용 추적**: 토큰 사용량에 기반한 예상 비용
+- **지연 시간 메트릭**: 각 구성 요소에 소요된 시간
+
+![Langfuse의 예시 트레이스](https://langfuse.com/images/cookbook/integration_temporal/temporal-research-workflow-trace.png)
+
+**예시 트레이스**: [Langfuse에서 보기](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/02c0ff139fa7df3142e4bd436d72c09b?timestamp=2025-10-22T09:05:59.516Z)

@@ -1,0 +1,90 @@
+---
+title: Observability and Tracing for Flowise
+sidebarTitle: Flowise
+logo: /images/integrations/flowise_icon.svg
+description: "Monitor and trace your Flowise LLM applications with Langfuse. Automatically capture detailed traces, costs, and metrics for every request in your no-code AI workflows."
+---
+
+# Flowise Observability & Tracing
+
+**Flowise**([GitHub](https://github.com/FlowiseAI/Flowise))는 노코드 빌더입니다. 드래그 앤 드롭 에디터로 커스터마이즈된 LLM 플로우를 만들 수 있습니다.
+
+네이티브 인테그레이션을 통해 Flowise로 노코드로 복잡한 LLM 애플리케이션을 빠르게 만들고, Langfuse로 이를 모니터링하고 개선할 수 있습니다.
+
+이 인테그레이션은 UI에서 대화형으로, API로, 임베드로 사용하는 등 Flowise의 모든 사용 사례를 지원합니다.
+
+## 인테그레이션
+
+<Steps>
+
+### Langfuse API 키 받기
+
+<Tabs items={["Langfuse cloud", "local or self-hosted"]}>
+<Tab>
+
+1. [cloud.langfuse.com](https://cloud.langfuse.com/auth/sign-up)에서 계정과 프로젝트를 생성하세요
+2. 프로젝트의 API 키를 복사하세요
+
+</Tab>
+<Tab>
+
+1. 셀프 호스팅이나 로컬 설정에 대한 [안내](/docs/get-started/)를 따르세요
+2. 프로젝트의 API 키를 복사하세요
+
+</Tab>
+</Tabs>
+
+### Flowise 실행하기
+
+```sh
+# install
+npm install -g flowise
+
+# start
+npx flowise start
+```
+
+### Langfuse 추가하기
+
+<Video
+  src="https://static.langfuse.com/docs-videos/flowise-setup.mp4"
+  aspectRatio={4.185 / 3}
+  gifStyle
+/>
+
+선택적으로 `release`를 추가해 현재 버전의 플로우에 태그를 지정할 수 있습니다. 다른 옵션은 대개 변경할 필요가 없습니다.
+
+</Steps>
+
+## Flowise와 Langfuse의 매핑
+
+이 인테그레이션은 Flowise의 다음 필드를 Langfuse로 자동 매핑합니다:
+
+| Flowise                                                         | Langfuse                                           | 필요한 버전                                                                          |
+| --------------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| [chatId](https://docs.flowiseai.com/api-reference/chat-message) | [sessionId](/docs/observability/features/sessions) | [Flowise 1.4.10](https://github.com/FlowiseAI/Flowise/releases/tag/flowise%401.4.10) |
+
+## Override Config
+
+Flowise는 Langfuse API에 `overrideConfig`로 추가 매개변수를 전달할 수 있게 합니다. 사용자 수준 추적을 위한 `userId`와 같은 추가 정보를 Langfuse에 전달하는 데 사용할 수 있습니다.
+
+`overrideConfig`에 대해 더 알아보려면 [Flowise Prediction API 문서](https://docs.flowiseai.com/api-reference/prediction)를 참고하세요.
+
+```json
+{
+  "question": "hi there",
+  "overrideConfig": {
+    "analytics": {
+      "langFuse": {
+        "userId": "user1"
+      }
+    }
+  }
+}
+```
+
+## GitHub Discussions
+
+import { GhDiscussionsPreview } from "@/components/gh-discussions/GhDiscussionsPreview";
+
+<GhDiscussionsPreview labels={["integration-flowise"]} />

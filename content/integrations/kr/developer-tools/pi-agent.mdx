@@ -1,0 +1,156 @@
+---
+title: "Trace Pi Agent with Langfuse"
+sidebarTitle: Pi Agent
+logo: /images/integrations/pi-agent_icon.svg
+description: "Trace Pi coding agent sessions — prompts, agent turns, model generations, tool calls, token usage, cost, and scores — with Langfuse for comprehensive observability."
+category: Integrations
+---
+
+# Pi Agent tracing with Langfuse
+
+> **Pi란 무엇인가요?** [Pi](https://pi.dev)는 터미널에서 실행되는 최소한이면서도 확장 가능한 AI 코딩 에이전트입니다. 15개 이상의 제공업체와 수백 개의 모델을 지원하며, 확장 기능, 스킬, 프롬프트 템플릿, 테마를 통해 여러분의 워크플로우에 맞춰집니다.
+
+> **Langfuse란 무엇인가요?** [Langfuse](https://langfuse.com/)는 오픈소스 AI 엔지니어링 플랫폼입니다. 팀이 에이전틱 애플리케이션을 추적하고, 문제를 디버깅하고, 품질을 평가하고, 프로덕션에서 비용을 모니터링할 수 있도록 돕습니다.
+
+<Callout type="info" title="Community-maintained integration">
+[`pi-langfuse`](https://www.npmjs.com/package/pi-langfuse) 확장은 Langfuse 팀이 아닌 커뮤니티가 만들고 유지 관리합니다. 문제가 발생하면 [확장의 저장소](https://github.com/gooyoung/pi-langfuse)에 신고해 주세요.
+</Callout>
+
+## 이 인테그레이션으로 무엇을 추적할 수 있나요?
+
+`pi-langfuse` 확장은 Pi의 라이프사이클 이벤트에 훅을 걸어 각 프롬프트를 Pi 세션별로 그룹화된 자체 트레이스로 Langfuse에 전송합니다. 다음을 모니터링할 수 있습니다:
+
+- **사용자 프롬프트**: Pi로 보내는 모든 프롬프트이며, 프롬프트당 하나의 트레이스로 그룹화됩니다.
+- **에이전트 워크플로우**: 전체 턴에 걸쳐 있는 루트 에이전트 관찰.
+- **모델 생성**: 입력, 출력, 토큰 사용량, 비용이 담긴 각 모델 요청.
+- **도구 호출**: 입력, 출력, 오류 상태와 함께 도구 관찰로 캡처된 Pi가 호출하는 도구들.
+- **최종 응답**: 프롬프트에 대한 어시스턴트의 최종 답변.
+- **점수**: 도구 호출 횟수, 도구 성공률, 턴 수, 세션에 오류가 있었는지 여부와 같은 트레이스 수준 점수.
+
+## 작동 방식
+
+1. Pi의 패키지 매니저로 `pi-langfuse` 확장을 설치하면, 이것이 여러분의 Pi 설정에 등록됩니다.
+2. 사용자가 프롬프트를 입력할 때마다, 확장은 Langfuse 트레이스를 열고 루트 `agent` 관찰, 모델 요청당 `generation`, 도구 호출당 `tool` 관찰을 기록합니다.
+3. 턴이 끝나면 최종 응답, 토큰 사용량, 비용, 트레이스 수준 점수가 첨부되고 [Langfuse SDK](/docs/observability/sdk/overview)를 사용해 트레이스가 여러분의 프로젝트로 전송됩니다.
+4. 자격 증명과 캡처 옵션은 설정 파일, 환경 변수, 또는 대화형 설정 명령에서 해석됩니다.
+
+## 빠른 시작
+
+<Steps>
+
+### Langfuse 설정하기
+
+1. [Langfuse Cloud](https://cloud.langfuse.com)에 가입하거나 [Langfuse를 직접 호스팅](/self-hosting)하세요.
+2. 새 프로젝트를 생성하고 프로젝트 설정에서 API 키를 복사하세요.
+
+### Pi와 확장 설치하기
+
+Pi(Node.js 22+ 필요)를 설치하고 세션을 실행할 수 있도록 모델 제공업체에 로그인하세요:
+
+```bash
+npm install -g --ignore-scripts @earendil-works/pi-coding-agent
+pi   # then run /login inside the interactive session
+```
+
+`pi-langfuse` 확장을 설치하세요. 이렇게 하면 패키지를 다운로드하고 Pi 설정에 자동으로 등록됩니다:
+
+```bash
+pi install npm:pi-langfuse
+```
+
+`pi list`로 등록되었는지 확인하세요.
+
+### Langfuse 자격 증명 추가하기 [#set-credentials]
+
+권장하는 설정 방법은 대화형 명령입니다. Pi 안에서 이를 실행하고 메시지가 표시되면 공개 키, 비밀 키, 호스트를 입력하세요 — 값은 `~/.pi/agent/pi-langfuse/config.json`에 저장됩니다:
+
+```text
+/langfuse-setup    # (re)enter credentials
+/langfuse-status   # show host, masked key, and capture policy
+/langfuse-test     # verify host and keys
+```
+
+또는 `~/.pi/agent/pi-langfuse/config.json`에 직접 설정 파일을 생성하세요:
+
+```json
+{
+  "publicKey": "pk-lf-...",
+  "secretKey": "sk-lf-...",
+  "host": "https://cloud.langfuse.com",
+  "privacyPreset": "full-debug"
+}
+```
+
+또는 환경 변수로 자격 증명을 설정하세요. 저장된 설정이 우선하며 — 환경 변수는 설정 파일이 없거나 불완전할 때만 사용됩니다:
+
+```bash
+export LANGFUSE_PUBLIC_KEY="pk-lf-..."
+export LANGFUSE_SECRET_KEY="sk-lf-..."
+export LANGFUSE_BASE_URL="https://cloud.langfuse.com" # 🇪🇺 EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+```
+
+### Pi 사용하기
+
+평소처럼 Pi를 실행하세요. 작업하는 동안 세션이 Langfuse로 전송되며, Pi는 시작 시 `📊 Langfuse: Tracing enabled`를 출력합니다:
+
+```bash
+cd your-project
+pi "Read README.md and summarize what this repository does"
+```
+
+### Langfuse에서 트레이스 확인하기
+
+Langfuse 프로젝트를 열어 캡처된 트레이스를 확인하세요. 구조는 Pi가 실제로 동작하는 방식을 그대로 반영합니다:
+
+- **프롬프트 트레이스**: 여러분의 프롬프트부터 최종 답변까지, 사용자 프롬프트당 하나의 트레이스입니다.
+- **에이전트와 생성**: 루트 에이전트 관찰이 있고, 모델 응답마다 하나의 생성이 있으며 토큰 사용량과 비용을 포함합니다.
+- **도구 호출**: 입력, 출력, 오류 상태와 함께 도구 관찰로 캡처되어 턴이 어디서 잘못되었는지 파악할 수 있습니다.
+- **점수**: 빠른 필터링과 품질 모니터링을 위한 트레이스 수준 점수(도구 호출 횟수, 도구 성공률, 턴 수, 오류 플래그).
+
+![Example Pi Agent trace in Langfuse showing the agent root, model generations, and a read tool call with its input and output](/images/docs/pi-agent/pi-agent-example-trace.png)
+
+_[Langfuse의 예시 트레이스](https://cloud.langfuse.com/project/cmpy5u3fb06o5ad0j04xohhmz/traces/cd5b90328ceb3e76fbdd2d74c557e164?observation=b3b84fb6df76b9d7)_
+
+</Steps>
+
+## 프라이버시 제어
+
+`pi-langfuse`는 흔한 비밀 정보(API 키, 베어러 토큰, 비밀번호, 개인 키)를 마스킹하고 업로드 전에 로컬 절대 경로를 해시 처리합니다. 어떤 페이로드를 전송할지는 설정 파일의 `privacyPreset`이나 `LANGFUSE_PRIVACY_PRESET` 환경 변수로 설정하는 프라이버시 프리셋을 통해 제어할 수 있습니다:
+
+| 프리셋          | 캡처하는 내용                                                       |
+| --------------- | ------------------------------------------------------------------- |
+| `metadata-only` | 메타데이터만; 입력, 출력, 도구 I/O, 시스템 프롬프트, cwd를 생략     |
+| `prompts-only`  | 프롬프트/제공업체 입력과 메타데이터                                 |
+| `conversations` | 입력과 어시스턴트 출력이지만, 도구 I/O, 시스템 프롬프트, cwd는 생략 |
+| `full-debug`    | 전체 트레이스 세부 정보(기본값)                                     |
+
+세밀한 플래그가 프리셋보다 우선합니다: `LANGFUSE_CAPTURE_INPUTS`, `LANGFUSE_CAPTURE_OUTPUTS`, `LANGFUSE_CAPTURE_TOOL_IO`, `LANGFUSE_CAPTURE_SYSTEM_PROMPT`, `LANGFUSE_CAPTURE_CWD`. `~/.pi/agent/pi-langfuse/config.json`을 비공개로 유지하고 API 키를 절대 커밋하지 마세요.
+
+## 문제 해결
+
+### Langfuse에 트레이스가 나타나지 않음
+
+1. **확장이 로드되지 않았습니다.** `pi list`를 실행해 `pi-langfuse`가 나타나는지 확인한 뒤, Pi 안에서 `/langfuse-status`를 실행해 활성 설정을 확인하세요.
+2. **자격 증명이 누락되었거나 유효하지 않습니다.** `/langfuse-test`를 실행해 호스트와 키를 확인하세요. 공개 키가 `pk-lf-`로 시작하는지도 확인하세요.
+3. **리전이 일치하지 않습니다.** `host`(또는 `LANGFUSE_BASE_URL`)가 여러분의 키가 속한 리전과 일치해야 합니다.
+
+### 인증 오류
+
+API 키가 올바른지, 호스트가 여러분의 키가 속한 리전과 일치하는지 확인하세요:
+
+- **EU 리전**: `https://cloud.langfuse.com`
+- **US 리전**: `https://us.cloud.langfuse.com`
+- **Japan 리전**: `https://jp.cloud.langfuse.com`
+- **HIPAA 리전**: `https://hipaa.cloud.langfuse.com`
+
+### 데이터 프라이버시
+
+활성화되면, 확장은 Pi 세션 데이터를 Langfuse로 전송하며, 프라이버시 프리셋에 따라 프롬프트, 어시스턴트 메시지, 도구 입력 및 출력이 포함될 수 있습니다. Langfuse에 저장하고 싶지 않은 데이터가 포함된 세션에는 더 제한적인 프리셋(예: `metadata-only` 또는 `conversations`)을 사용하세요.
+
+## 리소스
+
+- [pi-langfuse 확장 (npm)](https://www.npmjs.com/package/pi-langfuse)
+- [pi-langfuse 저장소 (GitHub)](https://github.com/gooyoung/pi-langfuse)
+- [Pi 문서](https://pi.dev)
+- [Langfuse TypeScript SDK](/docs/observability/sdk/overview)

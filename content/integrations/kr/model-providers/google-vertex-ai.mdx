@@ -1,0 +1,99 @@
+---
+source: ⚠️ Jupyter Notebook
+title: Langfuse로 Google Vertex AI 옵저버빌리티 구현하기
+sidebarTitle: Google Vertex AI
+logo: /images/integrations/vertexai_icon.png
+description: Langfuse를 Google Vertex AI와 통합하여 AI 대화를 포괄적으로 트레이싱하고 디버깅하는 방법을 알아보세요.
+category: Integrations
+---
+
+# Langfuse에서 Google Vertex AI 모델 트레이싱하기
+
+이 노트북은 Google Vertex API 서비스를 통해 쿼리된 모델을 트레이싱하고 관찰하는 방법을 보여줍니다.
+
+> **Google Vertex AI란 무엇인가요?** [Google Vertex AI](https://cloud.google.com/vertex-ai?hl=en)는 관리형 서비스, SDK, API를 통해 머신러닝과 생성형 AI를 구축, 배포, 관리할 수 있는 Google Cloud의 통합 플랫폼입니다. 데이터 준비 및 훈련부터 튜닝과 예측까지 모든 과정을 간소화하며, 엔터프라이즈급 보안 및 MLOps 도구와 함께 Gemini와 같은 파운데이션 모델에 대한 접근을 제공합니다.
+
+> **Langfuse란 무엇인가요?** [Langfuse](https://langfuse.com)는 LLM 옵저버빌리티 및 모니터링을 위한 오픈 소스 플랫폼입니다. 메타데이터, 프롬프트 세부 정보, 토큰 사용량, 지연 시간 등을 캡처하여 AI 애플리케이션을 트레이싱하고 모니터링할 수 있도록 도와줍니다.
+
+<Steps>
+## 1단계: 종속성 설치
+
+시작하기 전에 Python 환경에 필요한 패키지를 설치하세요.
+
+```python
+%pip install langfuse google-cloud-aiplatform openinference-instrumentation-vertexai
+```
+
+## 2단계: Langfuse SDK 구성
+
+다음으로 Langfuse API 키를 설정합니다. 무료 [Langfuse Cloud](https://langfuse.com/cloud) 계정에 가입하거나 [Langfuse를 셀프 호스팅](https://langfuse.com/self-hosting)하여 이 키를 얻을 수 있습니다. 이 환경 변수들은 Langfuse 클라이언트가 인증하고 Langfuse 프로젝트로 데이터를 전송하는 데 필수적입니다.
+
+또한 서비스 계정 키 파일의 Application Default Credentials(ADC)를 사용하는 Google Vertex API 자격 증명도 설정하세요.
+
+```python
+import os
+
+# Get keys for your project from the project settings page: https://cloud.langfuse.com
+os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-lf-...")
+os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-lf-...")
+os.environ.setdefault("LANGFUSE_BASE_URL", "https://cloud.langfuse.com") # 🇪🇺 EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+
+# Get your Google Vertex API key
+os.environ.setdefault("GOOGLE_APPLICATION_CREDENTIALS", "your-service-account-key.json")
+```
+
+환경 변수를 설정했으니, 이제 Langfuse 클라이언트를 초기화할 수 있습니다. `get_client()`는 환경 변수에 제공된 자격 증명을 사용하여 Langfuse 클라이언트를 초기화합니다.
+
+```python
+from langfuse import get_client
+
+# Initialise Langfuse client and verify connectivity
+langfuse = get_client()
+assert langfuse.auth_check(), "Langfuse auth failed - check your keys ✋"
+```
+
+## 3단계: OpenTelemetry Instrumentation
+
+[`VertexAIInstrumentor`](https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-vertexai) 라이브러리를 사용하여 Google Vertex SDK 호출을 래핑하고 OpenTelemetry 스팬을 Langfuse로 전송합니다.
+
+```python
+from openinference.instrumentation.vertexai import VertexAIInstrumentor
+
+VertexAIInstrumentor().instrument()
+```
+
+## 4단계: 예시 실행하기
+
+```python
+import vertexai
+from vertexai.generative_models import GenerativeModel
+
+# Initialize the SDK (use your project and region)
+vertexai.init(project="your-project-id", location="europe-central2")
+
+# Pick a Gemini model available in your region (examples: "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.5-flash")
+model = GenerativeModel("gemini-2.5-flash")
+
+# Single-shot generation
+resp = model.generate_content("What is Langfuse?")
+print(resp.text)
+
+# (Optional) Streaming
+for chunk in model.generate_content("Why is LLM observability important?", stream=True):
+    print(chunk.text, end="")
+```
+
+### Langfuse에서 트레이스 보기
+
+애플리케이션을 실행한 후 Langfuse Trace Table로 이동하세요. 애플리케이션 실행에 대한 상세한 트레이스를 확인할 수 있으며, 에이전트 대화, LLM 호출, 입력, 출력, 성능 메트릭에 대한 인사이트를 얻을 수 있습니다.
+
+![Langfuse 트레이스](https://langfuse.com/images/cookbook/integration_vertexai/vertexai-trace.png)
+
+[Langfuse UI에서 트레이스 보기](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/308aca9bc430ad872d474fc545889ee2?timestamp=2025-07-25T07:35:01.172Z&display=details)
+
+</Steps>
+
+import LearnMore from "@/components-mdx/integration-learn-more.mdx";
+
+<LearnMore />

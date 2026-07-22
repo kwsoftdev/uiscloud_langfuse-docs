@@ -1,0 +1,145 @@
+---
+title: Human Evaluation for LLM Apps with Testable Minds
+sidebarTitle: Testable Minds
+logo: /images/integrations/testable_minds_icon.svg
+description: Testable Minds의 다양한 참가자 풀을 사용해 Langfuse 트레이스에 대한 사람 평가를 대규모로 수집하세요.
+---
+
+# Testable Minds Integration
+
+[Testable Minds](https://testable.org/ai/langfuse)는 **Testable**이 제공하는 **사람 평가 플랫폼**으로, LLM 트레이스를 사전 심사된 다양한 참가자 풀에 연결합니다. Langfuse는 자동화된 [평가](/docs/scores/overview)를 기본으로 제공하지만, 많은 팀은 실제로 AI가 어떻게 동작하는지 이해하기 위해 실제 **사람의 피드백**이 필요합니다.
+
+다음과 같은 질문에 쉽게 답할 수 있도록 통합 기능을 구축했습니다.
+
+- _"실제 사용자는 내 LLM 출력의 품질을 어떻게 인식할까?"_
+- _"내 AI 응답은 다양한 인구통계 집단에서 도움이 되고, 정확하고, 적절한가?"_
+- _"사람의 피드백은 내 자동 평가 점수와 어떤 상관관계가 있을까?"_
+- _"내 자동 평가 파이프라인에는 어떤 사각지대가 있을까?"_
+
+## 작동 방식
+
+이 통합은 Langfuse와 Testable Minds 사이에 자동화된 루프를 생성합니다.
+
+1. Testable Minds는 필터에 맞는 트레이스를 확인하기 위해 Langfuse 프로젝트를 폴링합니다
+2. 트레이스는 평가 세션으로 배치되어 자격을 갖춘 참가자에게 제시됩니다
+3. 참가자는 Langfuse 점수 구성에 따라 각 트레이스를 평가합니다
+4. 결과는 원본 트레이스의 점수로 Langfuse에 자동으로 다시 전송됩니다
+
+## 시작하기
+
+<Steps>
+
+### Testable 계정 생성하기
+
+[testable.org/ai/langfuse](https://testable.org/ai/langfuse)에서 가입하여 **Testable Minds**에 접근하고, 등록 시 **Langfuse 계정 유형**을 선택하세요.
+
+### Langfuse 점수 구성 설정하기
+
+Langfuse에 적어도 하나의 [점수 구성](/faq/all/manage-score-configs)이 정의되어 있는지 확인하세요. 점수 구성은 참가자가 트레이스에 대해 답변할 질문을 결정합니다. 모든 점수 유형(숫자형, 범주형, 불리언)이 지원됩니다.
+
+> **팁:** 비전문가 참가자도 이해할 수 있는 명확하고 객관적인 질문을 사용하세요. 최상의 결과를 위해 예시가 포함된 설명을 추가하세요.
+
+### Langfuse를 Testable에 연결하기
+
+<Callout type="info" emoji="🎓">
+연구 및 교육 목적으로 Langfuse를 사용하고 있다면 Langfuse 연구 지원금을 받을 수 있습니다. 자세한 내용은 [여기](/research)를 참고하세요.
+</Callout>
+
+<Tabs items={["Langfuse Cloud", "Self-hosted"]}>
+<Tab>
+
+1. Testable 대시보드에서 `Account → Connections`로 이동합니다
+2. Langfuse **Secret Key**와 **Public Key**를 입력합니다
+3. 서버 리전을 선택합니다(Cloud EU 또는 Cloud US)
+4. **Check Connection**을 클릭하여 확인한 후 **Save Connection**을 클릭합니다
+
+</Tab>
+<Tab>
+
+1. Testable 대시보드에서 `Account → Connections`로 이동합니다
+2. Langfuse **Secret Key**와 **Public Key**를 입력합니다
+3. **Self hosted**를 선택하고 전체 Langfuse base URL을 입력합니다
+4. **Check Connection**을 클릭하여 확인한 후 **Save Connection**을 클릭합니다
+
+</Tab>
+</Tabs>
+
+### 스터디 생성하기
+
+1. `Dashboard → Studies`로 이동하여 **Create Study**를 클릭합니다
+2. 스터디를 구성합니다.
+
+   **참가자**
+   - 트레이스당 응답자 수
+   - 선택적 성별 균형 적용
+   - 연령, 지역, 언어 숙련도 등 특정 인구통계를 대상으로 하는 선정 기준
+
+   **Langfuse 데이터 설정**
+   - **Traces minimum count**: 세션을 시작하기 전 필요한 최소 미할당 트레이스 수
+   - **Score Configs**: 평가할 [Langfuse 점수](/faq/all/manage-score-configs) 구성 선택
+   - **Tags**(선택 사항): Langfuse 태그로 트레이스 필터링(예: `external_eval`, `testable_minds_eval` 등)(태그 간 AND 로직)
+   - **Environments**(선택 사항): 환경으로 필터링(예: `production`, `staging` 등)(환경 간 OR 로직)
+
+   **참가자에게 표시되는 콘텐츠**
+   - 참가자에게 표시되는 제목과 설명
+
+3. 평가 비용을 충당하기 위해 Testable Minds 잔액을 충전합니다
+4. 스터디 헤더에서 **Start traces collection**을 켭니다
+
+### Langfuse에서 점수 확인하기
+
+참가자가 평가를 완료하면 점수가 자동으로 Langfuse 트레이스에 다시 전송됩니다. [Traces 섹션](/docs/tracing)에서 확인할 수 있습니다.
+
+</Steps>
+
+## 통합 세부 정보
+
+#### 트레이스 가져오기
+
+- 스터디가 활성 상태인 동안 트레이스가 폴링됩니다. **Pause traces collection**을 켜서 가져오기를 일시 중지할 수 있습니다.
+- 입력과 출력이 모두 있는 트레이스만 가져오기 대상으로 고려됩니다
+- 현재는 텍스트 기반 입력/출력만 지원됩니다
+
+#### 평가 세션 생성
+
+미할당 트레이스가 구성된 최소 개수에 도달하면 새 평가 세션이 생성됩니다. 각 세션에는 응답 품질을 보장하기 위한 내장 주의력 검사가 포함되며, 이 검사를 통과하지 못한 응답은 자동으로 제외됩니다.
+
+#### 점수 전달
+
+참가자의 답변은 선택한 Langfuse 점수 구성에 매핑되어 원본 트레이스의 점수로 다시 전송됩니다.
+
+#### 데이터 품질
+
+평가는 AI와 LLM 평가 작업에 특별히 선별되고 검증된 이력을 가진 Testable Minds 참가자의 사전 자격을 갖춘 하위 집합에 의해 수행됩니다. 모든 참가자는 신원이 확인되었으며 작업 복잡도와 길이에 따라 공정하게 보상받습니다.
+
+각 평가 세션에는 내장 주의력 검사가 포함되며, 이 검사를 통과하지 못한 응답은 자동으로 제외되어 Langfuse 점수가 정확하고 신뢰할 수 있는 상태로 유지됩니다.
+
+#### 비용
+
+비용은 참가자 수, 평가된 전체 트레이스 수, 트레이스 길이(입력과 출력)에 따라 **Testable Minds**가 동적으로 계산합니다.
+
+## 문제 해결
+
+**연결 테스트가 실패하나요?** 비밀 키를 다시 입력하고(저장 후에는 자동으로 채워지지 않습니다), 올바른 base URL을 확인하고, API 키가 점수 구성과 트레이스에 접근할 수 있는지 확인하세요.
+
+**Langfuse에 점수가 표시되지 않나요?** 점수 구성이 여전히 활성 상태인지(보관되지 않았는지) 확인하세요.
+
+**세션이 생성되지 않나요?** 스터디가 활성 상태인지(일시 중지되지 않았는지), Testable Minds 예산이 충분한지, 필터에 맞는 트레이스가 최소 개수를 충족할 만큼 충분한지 확인하세요.
+
+## FAQ
+
+**한 스터디에서 여러 점수 구성을 사용할 수 있나요?**
+네. 참가자는 선택된 모든 구성에 대해 각 트레이스를 평가하며, 각 구성에 대한 점수가 다시 전송됩니다.
+
+**여러 스터디를 동시에 실행할 수 있나요?**
+네. 각 스터디는 자체 필터, 참가자, 점수 구성으로 독립적으로 운영됩니다.
+
+**실행 중인 스터디를 일시 중지할 수 있나요?**
+네. **Pause traces collection**을 켜서 가져오기와 새 세션 생성을 중단할 수 있습니다. 기존 세션은 완료될 때까지 계속됩니다.
+
+**셀프 호스팅 Langfuse도 지원하나요?**
+네. Connections에서 "Self hosted"를 선택하고 전체 base URL을 입력하세요.
+
+## 피드백
+
+피드백이나 질문이 있으시면 [문의하기](https://testable.org/contact)를 이용해 주세요.

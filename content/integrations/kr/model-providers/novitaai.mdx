@@ -1,0 +1,109 @@
+---
+source: ⚠️ Jupyter Notebook
+title: Langfuse로 Novita AI 모니터링하기
+sidebarTitle: Novita AI
+logo: /images/integrations/novitaai_icon.svg
+description: OpenAI 드롭인 대체재를 사용하여 Novita AI를 Langfuse와 통합하는 방법을 알아보세요.
+category: Integrations
+---
+
+# Langfuse로 Novita AI 옵저버빌리티 확보하기
+
+이 가이드는 Novita AI를 Langfuse와 통합하는 방법을 보여줍니다. Novita AI의 채팅, 언어, 코드용 API 엔드포인트는 OpenAI의 API와 완전히 호환됩니다. 이를 통해 Langfuse의 OpenAI 드롭인 대체재를 사용하여 애플리케이션의 모든 부분을 트레이싱할 수 있습니다.
+
+> **Novita AI란 무엇인가요?** [Novita AI](https://novita.ai/)는 개발자가 저렴하고 안정적인 GPU 클라우드 인프라를 기반으로 간단한 API를 통해 AI 모델을 쉽게 배포할 수 있도록 돕는 AI 클라우드 플랫폼입니다. Novita AI Llama 3 API 데모는 [여기](https://novita.ai/model-api/product/llm-api/playground/meta-llama-llama-3.1-70b-instruct)에서 사용해볼 수 있습니다.
+
+> **Langfuse란 무엇인가요?** [Langfuse](https://langfuse.com)는 팀이 API 호출을 트레이싱하고, 성능을 모니터링하고, LLM 애플리케이션의 문제를 디버깅할 수 있도록 돕는 오픈소스 AI 엔지니어링 플랫폼입니다.
+
+<Steps>
+## 1단계: 의존성 설치
+
+필요한 Python 패키지가 설치되어 있는지 확인하세요.
+
+```python
+%pip install openai langfuse
+```
+
+## 2단계: 환경 변수 설정
+
+```python
+import os
+
+# Get keys for your project from the project settings page
+# https://cloud.langfuse.com
+
+os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-...")
+os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-...")
+os.environ.setdefault("LANGFUSE_BASE_URL", "https://cloud.langfuse.com") # 🇪🇺 EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+
+
+# Get your Novita AI API key from the project settings page
+os.environ.setdefault("NOVITA_API_KEY", "...")
+```
+
+## 3단계: Langfuse OpenAI 드롭인 대체재
+
+이 단계에서는 `from langfuse.openai import openai`를 임포트하여 네이티브 [OpenAI 드롭인 대체재](https://langfuse.com/integrations/model-providers/openai-py)를 사용합니다.
+
+Novita AI를 OpenAI 클라이언트 라이브러리와 함께 사용하려면 Novita AI API 키를 `api_key` 옵션에 전달하고, `base_url`을 `https://api.novita.ai/v3/openai`로 변경하세요.
+
+```python
+# instead of import openai:
+from langfuse.openai import openai
+
+client = openai.OpenAI(
+  api_key=os.environ.get("NOVITA_API_KEY"),
+  base_url="https://api.novita.ai/v3/openai",
+)
+```
+
+<Callout type="info" emoji="ℹ️">
+**참고:** OpenAI 드롭인 대체재는 [저수준 Langfuse Python SDK](https://langfuse.com/docs/sdk/python/low-level-sdk) 및 [`@observe()` 데코레이터](https://langfuse.com/docs/sdk/python/decorators)와 완전히 호환되어, 애플리케이션의 모든 부분을 트레이싱할 수 있습니다.
+
+</Callout>
+
+## 4단계: 예제 실행
+
+다음 셀은 트레이싱되는 OpenAI 클라이언트를 사용하여 Novita AI의 채팅 모델을 호출하는 방법을 보여줍니다. 모든 API 호출은 Langfuse에 의해 자동으로 트레이싱됩니다.
+
+```python
+client = openai.OpenAI(
+  api_key=os.environ.get("NOVITA_API_KEY"),
+  base_url="https://api.novita.ai/v3/openai",
+)
+
+response = client.chat.completions.create(
+  model="meta-llama/llama-3.1-70b-instruct",
+  messages=[
+    {"role": "system", "content": "Act like you are a helpful assistant."},
+    {"role": "user", "content": "What are the famous attractions in San Francisco?"},
+  ]
+)
+
+print(response.choices[0].message.content)
+```
+
+## 5단계: Langfuse에서 트레이스 확인하기
+
+예제 모델 호출을 실행한 후 Langfuse에서 트레이스를 확인할 수 있습니다. Novita AI API 호출에 대한 다음과 같은 상세 정보를 확인할 수 있습니다.
+
+- 요청 파라미터 (모델, 메시지, temperature 등)
+- 응답 내용
+- 토큰 사용량 통계
+- 지연 시간 지표
+
+![Langfuse Trace Example](https://langfuse.com/images/cookbook/integration-novitaai/novitaai-example-trace.png)
+
+_[Langfuse의 공개 예제 트레이스 링크](https://cloud.langfuse.com/project/cm7ua5l6e05wlad07qr6ce2wn/traces/039cc8b2-dba0-479f-9cd6-63672bc08c71?timestamp=2025-03-06T02%3A15%3A15.184Z)_
+
+</Steps>
+
+import LearnMore from "@/components-mdx/integration-learn-more.mdx";
+
+<LearnMore />
+
+## 참고 자료
+
+- 사용 가능한 모델 및 API 옵션에 대한 자세한 내용은 [Novita AI 문서](https://novita.ai/docs/guides/introduction)를 확인하세요.
+- LLM 애플리케이션을 위한 모니터링 및 트레이싱 기능에 대해 더 알아보려면 [Langfuse](https://langfuse.com)를 방문하세요.

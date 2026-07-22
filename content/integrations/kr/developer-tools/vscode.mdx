@@ -1,0 +1,191 @@
+---
+title: "Use Langfuse in VS Code via MCP"
+sidebarTitle: VS Code
+logo: /images/integrations/vscode_icon.svg
+description: "Connect the Langfuse MCP server to VS Code to query and manage your prompts, traces, and datasets from GitHub Copilot agent mode."
+category: Integrations
+---
+
+# Use Langfuse in VS Code via MCP
+
+이 가이드는 [Langfuse MCP 서버](/docs/api-and-data-platform/features/mcp-server)를 [VS Code](https://code.visualstudio.com)에 연결해 GitHub Copilot의 에이전트 모드에서 직접 Langfuse 데이터를 조회하고 관리하는 방법을 보여줍니다.
+
+> **VS Code란 무엇인가요?** [**VS Code**](https://code.visualstudio.com)는 GitHub Copilot을 통해 내장 AI 지원 기능을 제공하는 Microsoft의 코드 에디터입니다. [에이전트 모드](https://code.visualstudio.com/docs/copilot/chat/mcp-servers)는 Model Context Protocol(MCP)을 지원해, Copilot이 코드 작성과 디버깅을 돕는 동안 외부 도구를 호출할 수 있게 합니다.
+
+> **Langfuse란 무엇인가요?** [**Langfuse**](https://langfuse.com)는 오픈소스 AI 엔지니어링 플랫폼입니다. 트레이싱, 프롬프트 관리, 평가와 같은 기능으로 팀이 LLM 애플리케이션을 협업하여 디버깅, 분석, 개선할 수 있도록 돕습니다.
+
+## 이 인테그레이션이 하는 일
+
+Langfuse는 데이터 플랫폼을 위한 네이티브 [Model Context Protocol(MCP) 서버](/docs/api-and-data-platform/features/mcp-server)를 제공합니다. VS Code에 연결하면, Copilot 에이전트 모드는 이를 사용해 다음을 할 수 있습니다:
+
+- **프롬프트 관리**: 에디터를 벗어나지 않고 [Langfuse 프롬프트 관리](/docs/prompt-management/overview)에서 프롬프트를 나열, 읽기, 생성, 업데이트합니다.
+- **트레이스 검사**: 실제 프로덕션 데이터를 기준으로 LLM 애플리케이션을 디버깅하기 위해 트레이스와 관찰을 가져옵니다.
+- **데이터셋 작업**: 평가에 사용되는 데이터셋과 항목을 탐색합니다.
+- **프로그래밍 방식으로 플랫폼에 접근**: Langfuse [공개 API](/docs/api-and-data-platform/features/public-api)가 노출하는 것과 동일한 리소스에 접근합니다.
+
+<Callout type="info">
+
+이 페이지는 데이터 플랫폼을 위한 **인증된** Langfuse MCP 서버를 다룹니다. AI 에이전트에 Langfuse 문서를 노출하는 공개 [Docs MCP 서버](/docs/docs-mcp)도 있습니다 — VS Code에서 여러분의 코드베이스에 [Langfuse 트레이싱을 자동으로 통합](/docs/get-started)할 때 유용합니다.
+
+</Callout>
+
+## 사전 준비 사항
+
+- [GitHub Copilot](https://code.visualstudio.com/docs/copilot/setup)이 활성화된 [VS Code](https://code.visualstudio.com) 1.99 이상
+- [Langfuse](https://langfuse.com) 계정([클라우드](https://cloud.langfuse.com) 또는 [셀프 호스팅](/self-hosting))
+
+## 빠른 시작
+
+<Steps>
+
+### 인증 헤더 받기
+
+1. Langfuse에서 프로젝트 설정으로 이동해 **프로젝트 범위 API 키**를 생성하거나 복사하세요:
+   - 공개 키: `pk-lf-...`
+   - 비밀 키: `sk-lf-...`
+2. 자격 증명을 base64 형식으로 인코딩하세요:
+
+   ```bash filename="terminal"
+   echo -n "pk-lf-your-public-key:sk-lf-your-secret-key" | base64
+   ```
+
+   결과 토큰은 아래에서 `{your-base64-token}`으로 사용하게 됩니다.
+
+### VS Code에 MCP 서버 추가하기
+
+워크스페이스의 `.vscode` 폴더에 `.mcp.json` 파일을 생성하세요(또는 커맨드 팔레트를 통해 서버를 추가하세요: `MCP: Add Server...` → `HTTP`). `{your-base64-token}`을 인코딩한 자격 증명으로 바꾸고 여러분의 데이터 리전에 맞는 엔드포인트를 선택하세요:
+
+<Tabs items={["Cloud EU", "Cloud US", "Cloud Japan", "HIPAA US", "Self-Hosted"]}>
+
+<Tab>
+
+```json filename=".vscode/mcp.json" /{your-base64-token}/
+{
+  "servers": {
+    "langfuse": {
+      "type": "http",
+      "url": "https://cloud.langfuse.com/api/public/mcp",
+      "headers": {
+        "Authorization": "Basic {your-base64-token}"
+      }
+    }
+  }
+}
+```
+
+</Tab>
+
+<Tab>
+
+```json filename=".vscode/mcp.json" /{your-base64-token}/
+{
+  "servers": {
+    "langfuse": {
+      "type": "http",
+      "url": "https://us.cloud.langfuse.com/api/public/mcp",
+      "headers": {
+        "Authorization": "Basic {your-base64-token}"
+      }
+    }
+  }
+}
+```
+
+</Tab>
+
+<Tab>
+
+```json filename=".vscode/mcp.json" /{your-base64-token}/
+{
+  "servers": {
+    "langfuse": {
+      "type": "http",
+      "url": "https://jp.cloud.langfuse.com/api/public/mcp",
+      "headers": {
+        "Authorization": "Basic {your-base64-token}"
+      }
+    }
+  }
+}
+```
+
+</Tab>
+
+<Tab>
+
+```json filename=".vscode/mcp.json" /{your-base64-token}/
+{
+  "servers": {
+    "langfuse": {
+      "type": "http",
+      "url": "https://hipaa.cloud.langfuse.com/api/public/mcp",
+      "headers": {
+        "Authorization": "Basic {your-base64-token}"
+      }
+    }
+  }
+}
+```
+
+</Tab>
+
+<Tab>
+
+```json filename=".vscode/mcp.json" /{your-base64-token}/
+{
+  "servers": {
+    "langfuse": {
+      "type": "http",
+      "url": "https://your-domain.com/api/public/mcp",
+      "headers": {
+        "Authorization": "Basic {your-base64-token}"
+      }
+    }
+  }
+}
+```
+
+</Tab>
+
+</Tabs>
+
+<Callout type="info">
+
+모든 워크스페이스에서 서버를 사용할 수 있게 하려면, 커맨드 팔레트에서 `MCP: Open User Configuration`을 통해 사용자 수준 MCP 설정에도 동일한 `langfuse` 항목을 추가하세요.
+
+</Callout>
+
+### 서버 시작하기
+
+`.vscode/mcp.json` 파일을 열고 `langfuse` 서버 항목 위의 **Start**를 클릭하거나, 커맨드 팔레트에서 `MCP: List Servers`를 실행해 거기서 시작하세요. VS Code가 Langfuse MCP 서버에 연결됩니다.
+
+### 연결 확인하기
+
+1. Copilot Chat 뷰를 열고 **Agent** 모드로 전환하세요.
+2. **Tools** 피커에서 Langfuse 도구가 있는지 확인하세요.
+3. Copilot에게 `list all prompts in my Langfuse project`라고 요청하세요. `listPrompts` 도구를 호출해 프롬프트를 반환해야 합니다.
+
+</Steps>
+
+<Callout type="warning">
+  **읽기 및 쓰기 도구가 기본적으로 모두 사용 가능합니다.** 읽기 전용 도구만 사용하고 싶다면
+  에이전트 모드의 VS Code **Tools** 피커에서 사용 가능한 도구를 제한하세요. 전체 도구
+  목록은 [MCP 레퍼런스](https://mcp.reference.langfuse.com)를 참고하세요.
+</Callout>
+
+## 예시 프롬프트
+
+연결한 뒤, Copilot 에이전트 모드에 다음과 같이 요청해 보세요:
+
+- "List all prompts in my Langfuse project and show me the latest version of the `chat-assistant` prompt."
+- "Create a new text prompt called `summarizer` with the `production` label."
+- "Update the labels on the `chat-assistant` prompt to promote version 3 to production."
+
+## 리소스
+
+- [Langfuse MCP 서버](/docs/api-and-data-platform/features/mcp-server) — 인증된 MCP 서버에 대한 전체 설정 레퍼런스
+- [MCP 레퍼런스](https://mcp.reference.langfuse.com) — MCP 서버, 설정 스니펫, 도구, 스키마에 대한 정식 소스
+- [MCP를 통한 프롬프트 관리](/docs/prompt-management/features/mcp-server) — 프롬프트 관련 워크플로우와 예시
+- [Docs MCP 서버](/docs/docs-mcp) — Langfuse 문서를 위한 공개 MCP 서버
+- [VS Code MCP 서버 문서](https://code.visualstudio.com/docs/copilot/chat/mcp-servers) — VS Code에서 MCP 서버를 사용하는 방법에 대한 Microsoft의 가이드
+- [코딩 에이전트를 위한 Langfuse](/agents) — 코딩 에이전트를 위한 스킬, CLI, MCP 서버 개요

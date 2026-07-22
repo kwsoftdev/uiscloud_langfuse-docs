@@ -1,0 +1,103 @@
+---
+source: ⚠️ Jupyter Notebook
+title: Langfuse를 통한 TanStack AI 옵저버빌리티
+sidebarTitle: TanStack AI
+logo: /images/integrations/tanstack_ai_icon.png
+description: OpenTelemetry를 통해 Langfuse로 TanStack AI 애플리케이션을 트레이싱하는 방법을 알아보세요
+category: Integrations
+---
+
+# Langfuse로 TanStack AI 트레이싱하기
+
+[TanStack AI](https://tanstack.com/ai/latest)는 TypeScript로 AI 기반 애플리케이션을 구축하기 위한 TanStack의 프레임워크로, 제공업체에 구애받지 않는 `chat()` API, 스트리밍, 도구 호출을 제공합니다. TanStack AI를 **Langfuse**와 결합하면 개발 및 프로덕션 환경에서 모든 에이전트 단계, 도구 호출, 모델 응답을 트레이싱, 모니터링, 분석할 수 있습니다.
+
+이 노트북은 [OpenInference](https://github.com/Arize-ai/openinference)의 [`openInferenceMiddleware`](https://github.com/Arize-ai/openinference/tree/main/js/packages/openinference-tanstack-ai)를 사용하여 TanStack AI 호출을 자동으로 계측하고 OpenTelemetry 스팬을 Langfuse로 전송하는 방법을 보여줍니다.
+
+> **TanStack AI란 무엇인가요?**\
+> [TanStack AI](https://tanstack.com/ai/latest/docs/getting-started/overview)는 AI 애플리케이션을 구축하기 위한 TypeScript 프레임워크입니다. 스트리밍, 도구 호출, 플러그형 제공업체 어댑터(OpenAI, Anthropic 등)를 기본으로 지원하는 통합된 제공업체 독립적 `chat()` API를 제공합니다.
+
+> **Langfuse란 무엇인가요?**\
+> [Langfuse](https://langfuse.com)는 LLM 옵저버빌리티 및 모니터링을 위한 오픈소스 플랫폼입니다. 메타데이터, 프롬프트 세부 정보, 토큰 사용량, 지연 시간 등을 캡처하여 AI 애플리케이션을 트레이싱하고 모니터링할 수 있도록 도와줍니다.
+
+<Steps>
+## 1단계: 종속성 설치
+
+필요한 패키지를 설치하세요:
+
+```bash
+npm install @tanstack/ai @tanstack/ai-openai @arizeai/openinference-tanstack-ai @langfuse/otel @opentelemetry/sdk-node
+```
+
+> **참고**: 이 쿡북은 실행을 위해 **Deno.js**를 사용하며, 패키지 임포트와 환경 변수 설정에 다른 문법이 필요합니다. Node.js 애플리케이션의 경우 설정 과정은 유사하지만 표준 `npm` 패키지와 `process.env`를 사용합니다.
+
+## 2단계: 환경 구성
+
+Langfuse와 OpenAI API 키를 설정하세요. 무료 [Langfuse Cloud](https://langfuse.com/cloud) 계정에 가입하거나 [Langfuse를 셀프 호스팅](https://langfuse.com/self-hosting)하여 Langfuse 키를 얻을 수 있습니다. [OpenAI Platform](https://platform.openai.com/api-keys)에서 OpenAI API 키를 받으세요.
+
+```typescript
+Deno.env.set("OPENAI_API_KEY", "sk-proj-...");
+
+Deno.env.set("LANGFUSE_PUBLIC_KEY", "pk-lf-...");
+Deno.env.set("LANGFUSE_SECRET_KEY", "sk-lf-...");
+
+Deno.env.set("LANGFUSE_BASE_URL", "https://cloud.langfuse.com"); // 🇪🇺 EU region
+// Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+```
+
+## 3단계: Langfuse로 OpenTelemetry 초기화하기
+
+`LangfuseSpanProcessor`로 OpenTelemetry SDK를 설정하세요. OpenInference의 `openInferenceMiddleware`는 애플리케이션의 기존 OpenTelemetry 트레이서 프로바이더를 사용하므로 이 설정은 TanStack AI 호출 **이전에** 실행되어야 합니다.
+
+또한 기본 Langfuse 필터와 함께 `@arizeai/openinference-tanstack-ai` 계측 스코프의 스팬을 포함하는 커스텀 [`shouldExportSpan`](https://langfuse.com/docs/observability/sdk/advanced-features#filtering-by-instrumentation-scope) 필터를 제공합니다.
+
+```typescript
+import { NodeSDK } from "npm:@opentelemetry/sdk-node";
+import { LangfuseSpanProcessor, isDefaultExportSpan } from "npm:@langfuse/otel";
+
+const sdk = new NodeSDK({
+  spanProcessors: [
+    new LangfuseSpanProcessor({
+      shouldExportSpan: ({ otelSpan }) =>
+        isDefaultExportSpan(otelSpan) ||
+        otelSpan.instrumentationScope.name ===
+          "@arizeai/openinference-tanstack-ai",
+    }),
+  ],
+});
+
+sdk.start();
+```
+
+## 4단계: 에이전트 실행하기
+
+TanStack AI의 `chat()` 호출의 `middleware` 옵션에 `openInferenceMiddleware()`를 추가하세요. 모든 에이전트 단계, 도구 호출, 모델 완성이 자동으로 트레이싱되어 Langfuse로 전송됩니다. 이 미들웨어는 스트리밍 및 비스트리밍 호출 모두에서 작동합니다.
+
+```typescript
+import { chat } from "npm:@tanstack/ai";
+import { openaiText } from "npm:@tanstack/ai-openai";
+import { openInferenceMiddleware } from "npm:@arizeai/openinference-tanstack-ai";
+
+const text = await chat({
+  adapter: openaiText("gpt-4o-mini"),
+  stream: false,
+  systemPrompts: ["You are a concise technical explainer."],
+  messages: [
+    { role: "user", content: "What is the capital of France? Answer in a single sentence." },
+  ],
+  middleware: [openInferenceMiddleware()],
+});
+
+console.log(text);
+
+await sdk.shutdown();
+```
+
+## 5단계: Langfuse에서 트레이스 보기
+
+에이전트를 실행한 후 Langfuse Trace Table로 이동하세요. 에이전트 실행의 모든 단계, 도구 호출, 입력, 출력, 성능 메트릭에 대한 상세한 트레이스를 확인할 수 있습니다.
+
+</Steps>
+
+import LearnMore from "@/components-mdx/integration-learn-more-js.mdx";
+
+<LearnMore />

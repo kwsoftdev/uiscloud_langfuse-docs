@@ -1,0 +1,83 @@
+---
+title: Langfuse를 통한 IBM watsonx Orchestrate ADK 옵저버빌리티
+sidebarTitle: Watsonx Orchestrate ADK
+logo: /images/integrations/watsonx-orchestrate_icon.png
+description: Langfuse를 IBM watsonx Orchestrate Agent development kit과 통합하여 AI 에이전트를 모니터링, 디버깅, 분석하는 방법을 알아보세요.
+---
+
+# IBM watsonx Orchestrate
+
+Langfuse에서 IBM watsonx Orchestrate ADK로 구축된 에이전트와 도구를 모니터링하세요. Orchestrate는 텔레메트리(트레이스, 스팬, 로그)를 Langfuse로 전달하는 네이티브 통합을 갖추고 있어 풍부한 옵저버빌리티를 제공합니다.
+
+> **IBM watsonx Orchestrate란 무엇인가요?** [IBM watsonx Orchestrate ADK](https://developer.watson-orchestrate.ibm.com/)는 개발자가 watsonx Orchestrate가 자동화된 워크플로우 내에서 실행할 수 있는 커스텀 스킬(액션)을 구축하고 게시할 수 있게 해주는 프레임워크입니다.
+
+> **Langfuse란 무엇인가요?** [Langfuse](/)는 AI 애플리케이션을 모니터링, 디버깅, 분석하기 위한 플랫폼입니다. AI 애플리케이션을 모니터링, 디버깅, 분석하는 데 도움이 되는 도구와 서비스 세트를 제공합니다.
+
+## 사전 요구 사항
+
+- Langfuse Cloud (`https://cloud.langfuse.com`) 또는 셀프 호스팅 Langfuse 인스턴스
+- 설치된 IBM watsonx Orchestrate ADK
+
+## 빠른 시작 (CLI)
+
+Orchestrate가 텔레메트리를 Langfuse로 전송하도록 구성하세요. 자리 표시자를 실제 값으로 바꾸세요.
+
+```bash
+orchestrate settings observability langfuse configure \
+  --url "https://cloud.langfuse.com/api/public/otel" \
+  --api-key "sk-lf-0000-0000-0000-0000-0000" \
+  --health-uri "https://cloud.langfuse.com" \
+  --config-json '{"public_key": "pk-lf-0000-0000-0000-0000-0000"}'
+```
+
+<Callout type="info">
+- 셀프 호스팅 Langfuse의 경우 `--url`을 `https://<your-langfuse-host>/api/public/otel`로, `--health-uri`를 `https://<your-langfuse-host>`로 설정하세요.
+- 설정 파일에 포함되지 않은 경우 `--project-id`(또는 `-p`)도 제공할 수 있습니다.
+</Callout>
+
+## 대안: YAML 구성 파일
+
+YAML 파일을 만들고 CLI에서 참조하세요. 예시:
+
+```yaml
+spec_version: v1
+kind: langfuse
+project_id: default
+api_key: sk-lf-00000-00000-00000-00000-00000
+url: https://cloud.langfuse.com/api/public/otel
+host_health_uri: https://cloud.langfuse.com
+config_json:
+  public_key: pk-lf-00000-00000-00000-00000-00000
+  mask_pii: true
+```
+
+이를 적용하세요:
+
+```bash
+orchestrate settings observability langfuse configure --config-file=path_to_file.yml
+```
+
+## Orchestrate에서 텔레메트리 활성화하기
+
+IBM의 네이티브 옵저버빌리티 프레임워크를 활성화하려면 `--with-ibm-telemetry` 또는 `-i` 플래그로 Orchestrate 서버를 시작한 다음 브라우저에서 `https://localhost:8765`로 이동하세요.
+
+텔레메트리를 활성화한 상태로 Orchestrate 서버를 시작한 다음 로컬 콘솔을 여세요:
+
+```bash
+orchestrate start --with-ibm-telemetry
+# or shorthand
+orchestrate start -i
+
+# Open the console
+# https://localhost:8765
+```
+
+## 문제 해결
+
+- 연결/상태: `--health-uri`가 응답하는지, 수집 URL이 `/api/public/otel`을 가리키는지 확인하세요.
+- 인증: `api_key`(Secret Key)와 `public_key`(Public Key)가 동일한 Langfuse 프로젝트에 속하는지 확인하세요.
+- 셀프 호스팅: Langfuse 인스턴스가 Orchestrate에서 접근 가능하고 TLS가 올바르게 구성되어 있는지 확인하세요.
+
+## 참고 자료
+
+- IBM 문서: [Langfuse로 LLM 모니터링하기](https://developer.watson-orchestrate.ibm.com/llm/observability)

@@ -1,0 +1,245 @@
+---
+title: Langfuse를 이용한 LiveKit 에이전트 관찰 가능성
+sidebarTitle: LiveKit
+logo: /images/integrations/livekit_icon.svg
+description: Langfuse를 사용해 LiveKit Agents로 구축된 실시간 음성 AI 에이전트와 멀티모달 대화를 트레이싱하세요.
+---
+
+# Langfuse로 LiveKit 에이전트 트레이싱하기
+
+이 가이드는 실시간 음성 AI 애플리케이션의 관찰 가능성과 트레이싱을 위해 **Langfuse**를 **LiveKit Agents**와 통합하는 방법을 보여줍니다. 이 단계를 따르면 Langfuse 대시보드에서 LiveKit 에이전트를 모니터링, 디버그, 평가할 수 있게 됩니다.
+
+> **LiveKit Agents란 무엇인가요?** [LiveKit Agents](https://docs.livekit.io/agents/) ([GitHub](https://github.com/livekit/agents))는 프로덕션급 멀티모달 및 음성 AI 에이전트를 구축하기 위한 오픈소스 Python 및 Node.js 프레임워크입니다. 실시간 미디어를 AI 파이프라인에 공급하기 위한 완전한 도구와 추상화를 제공하며, 고성능 STT-LLM-TTS 음성 파이프라인과 어떤 AI 제공업체와도 사용할 수 있는 음성-음성 모델을 모두 지원합니다.
+
+> **Langfuse란 무엇인가요?** [Langfuse](https://langfuse.com)는 오픈소스 AI 엔지니어링 플랫폼입니다. LLM 애플리케이션을 위한 트레이싱 및 모니터링 기능을 제공합니다. Langfuse는 네이티브 통합, OpenTelemetry, 전용 SDK를 통해 다양한 도구 및 프레임워크와 통합하여 상세한 인사이트를 제공함으로써 개발자가 AI 시스템을 디버그, 분석, 최적화하도록 돕습니다.
+
+## 시작하기
+
+LiveKit Agents는 OpenTelemetry를 기본으로 지원합니다. Langfuse SDK는 OpenTelemetry span 프로세서로 등록되므로, `TracerProvider`를 생성하여 LiveKit과 Langfuse 모두에 전달하기만 하면 트레이스가 자동으로 Langfuse 대시보드에 나타납니다.
+
+LiveKit Agents는 Python과 Node.js 모두를 지원합니다. 아래 탭에서 사용하는 언어를 선택하세요.
+
+<Steps>
+
+### 1단계: 의존성 설치하기
+
+<LangTabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab title="Python SDK">
+
+```bash
+pip install langfuse livekit-agents livekit-plugins-openai livekit-plugins-silero livekit-plugins-turn-detector opentelemetry-sdk python-dotenv
+```
+
+</Tab>
+<Tab title="JS/TS SDK">
+
+```bash
+npm install @langfuse/otel @opentelemetry/sdk-trace-node @livekit/agents @livekit/agents-plugin-openai @livekit/agents-plugin-silero
+```
+
+</Tab>
+</LangTabs>
+
+### 2단계: Langfuse SDK 구성하기
+
+Langfuse API 키를 설정하세요. 무료 [Langfuse Cloud](https://langfuse.com/cloud) 계정에 가입하거나 [Langfuse를 셀프 호스팅](https://langfuse.com/self-hosting)하여 이 키를 받을 수 있습니다.
+
+import EnvPython from "@/components-mdx/env-python.mdx";
+import EnvJS from "@/components-mdx/env-js.mdx";
+
+<LangTabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab title="Python SDK">
+
+<EnvPython />
+
+</Tab>
+<Tab title="JS/TS SDK">
+
+<EnvJS />
+
+</Tab>
+</LangTabs>
+
+### 3단계: Langfuse 트레이서 프로바이더 설정하기
+
+<LangTabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab title="Python SDK">
+
+공유되는 `TracerProvider`를 생성하고 이를 LiveKit(`set_tracer_provider`를 통해)과 Langfuse SDK 모두에 전달하세요. Langfuse SDK는 프로바이더에 익스포터를 자동으로 등록하여 span을 Langfuse로 전송합니다.
+
+LiveKit은 많은 내부 span을 생성하므로, 모든 텔레메트리가 전달되도록 `should_export_span=lambda span: True`를 설정하세요.
+
+```python filename="agent.py"
+import os
+
+from langfuse import Langfuse
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.util.types import AttributeValue
+
+from livekit.agents.telemetry import set_tracer_provider
+
+
+def setup_langfuse(
+    metadata: dict[str, AttributeValue] | None = None,
+    *,
+    base_url: str | None = None,
+    public_key: str | None = None,
+    secret_key: str | None = None,
+) -> TracerProvider:
+    public_key = public_key or os.getenv("LANGFUSE_PUBLIC_KEY")
+    secret_key = secret_key or os.getenv("LANGFUSE_SECRET_KEY")
+    base_url = base_url or os.getenv("LANGFUSE_BASE_URL") or os.getenv("LANGFUSE_HOST")
+
+    if not public_key or not secret_key or not base_url:
+        raise ValueError(
+            "LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, and LANGFUSE_BASE_URL (or LANGFUSE_HOST) must be set"
+        )
+
+    trace_provider = TracerProvider()
+    set_tracer_provider(trace_provider, metadata=metadata)
+
+    Langfuse(
+        public_key=public_key,
+        secret_key=secret_key,
+        base_url=base_url,
+        tracer_provider=trace_provider,
+        should_export_span=lambda span: True,
+    )
+
+    return trace_provider
+```
+
+</Tab>
+<Tab title="JS/TS SDK">
+
+`LangfuseSpanProcessor`로 구성된 `NodeTracerProvider`를 생성하고 `telemetry.setTracerProvider()`를 통해 LiveKit에 전달하세요. OpenTelemetry JS SDK v2(`@langfuse/otel` v5에서 필요)에서는 프로바이더가 불변(immutable)이므로, span 프로세서는 생성 시점에 제공되어야 합니다.
+
+LiveKit은 많은 내부 span을 생성하므로, 모든 텔레메트리가 전달되도록 `shouldExportSpan: () => true`를 설정하세요. `tracerProvider.register()`를 호출하여 전역 OpenTelemetry 프로바이더로도 설정함으로써, 자체 계측(OTel API 또는 `@langfuse/tracing` 헬퍼)에서 생성된 span도 LiveKit의 span과 함께 캡처되도록 하세요.
+
+<Callout type="warning">
+`telemetry.setTracerProvider()`에 `metadata` 옵션을 전달하지 **마세요**. LiveKit은 이 옵션을 `provider.addSpanProcessor()`를 호출하여 처리하는데, 이 API는 OpenTelemetry JS SDK v2(`@langfuse/otel` v5가 의존하는 버전)에서 제거되었습니다. 이를 전달하면 `TypeError: provider.addSpanProcessor is not a function`이 발생하며 작업 진입 시 워커가 충돌합니다. 모든 span에 속성을 첨부하려면, 생성 시점에 `spanProcessors` 배열에 자체 span 프로세서를 추가하세요.
+</Callout>
+
+<Callout type="info">
+`@livekit/agents` v1.4.x 기준으로, `setTracerProvider()`는 여전히 OpenTelemetry JS SDK v1에 맞춰 타입이 지정되어 있는 반면, `@langfuse/otel` v5는 SDK v2를 사용합니다. 두 `NodeTracerProvider` 타입은 구조적으로 호환되지 않으므로 TypeScript에서 캐스트가 필요합니다. LiveKit은 프로바이더에서 `getTracer()`만 호출하며, 이는 두 SDK 버전 모두 지원하므로 런타임에서는 이 캐스트가 안전합니다.
+</Callout>
+
+```ts filename="agent.ts"
+import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
+import { LangfuseSpanProcessor } from "@langfuse/otel";
+import { telemetry } from "@livekit/agents";
+
+export function setupLangfuse(): NodeTracerProvider {
+  const tracerProvider = new NodeTracerProvider({
+    spanProcessors: [
+      // LiveKit emits many non-LLM spans; forward all of them to Langfuse
+      new LangfuseSpanProcessor({ shouldExportSpan: () => true }),
+    ],
+  });
+
+  // Register as the global OpenTelemetry provider so that spans you create in
+  // your own code (via the OTel API or @langfuse/tracing helpers) are also
+  // exported to Langfuse, not just LiveKit's internal spans.
+  tracerProvider.register();
+
+  // Pass the provider to LiveKit WITHOUT the metadata option (see warnings above).
+  // The cast bridges the SDK v1/v2 type mismatch; it is safe at runtime.
+  telemetry.setTracerProvider(
+    tracerProvider as unknown as Parameters<
+      typeof telemetry.setTracerProvider
+    >[0],
+  );
+
+  return tracerProvider;
+}
+```
+
+</Tab>
+</LangTabs>
+
+### 4단계: 엔트리포인트에서 트레이서 프로바이더 사용하기
+
+<LangTabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab title="Python SDK">
+
+`AgentSession.start()` 전에 `setup_langfuse()`를 호출하세요. 모든 span에 첨부될 선택적 메타데이터(예: `langfuse.session.id`)를 전달할 수 있습니다.
+
+```python filename="agent.py"
+from livekit.agents import AgentSession, JobContext, metrics
+from livekit.agents.voice import MetricsCollectedEvent
+from livekit.plugins import silero
+
+
+async def entrypoint(ctx: JobContext):
+    trace_provider = setup_langfuse(
+        metadata={
+            "langfuse.session.id": ctx.room.name,
+        }
+    )
+
+    async def flush_trace():
+        trace_provider.force_flush()
+
+    ctx.add_shutdown_callback(flush_trace)
+
+    session = AgentSession(vad=silero.VAD.load())
+
+    @session.on("metrics_collected")
+    def _on_metrics_collected(ev: MetricsCollectedEvent):
+        metrics.log_metrics(ev.metrics)
+
+    await session.start(agent=MyAgent(), room=ctx.room)
+```
+
+전체 엔드투엔드 Python 예제는 [GitHub](https://github.com/livekit/agents/blob/main/examples/voice_agents/langfuse_trace.py)에서 확인할 수 있습니다.
+
+</Tab>
+<Tab title="JS/TS SDK">
+
+세션이 시작되기 전에 에이전트 엔트리포인트 내부에서 `setupLangfuse()`를 호출하고, 작업이 종료될 때 span이 손실되지 않도록 종료 시 프로바이더를 플러시하세요.
+
+```ts filename="agent.ts"
+import { type JobContext, defineAgent } from "@livekit/agents";
+
+export default defineAgent({
+  entry: async (ctx: JobContext) => {
+    const tracerProvider = setupLangfuse();
+
+    // Flush buffered spans when the job shuts down
+    ctx.addShutdownCallback(async () => {
+      await tracerProvider.forceFlush();
+    });
+
+    // ... start your AgentSession as usual (see the LiveKit Agents docs)
+  },
+});
+```
+
+</Tab>
+</LangTabs>
+
+### 5단계: Langfuse에서 트레이스 확인하기
+
+에이전트를 실행한 후 [Langfuse Trace Table](https://cloud.langfuse.com)로 이동하세요. 모든 에이전트 단계, 도구 호출, 입력, 출력, 성능 메트릭에 대한 인사이트를 제공하는 에이전트 실행의 상세한 트레이스를 확인할 수 있습니다.
+
+![Langfuse의 LiveKit 트레이스](/images/docs/livekit-trace.png)
+
+[Langfuse의 예제 트레이스](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/5f00d917e418a8a41de5ad9b650daca0?observation=c9b49d21cbfee499&timestamp=2026-02-26T17%3A47%3A26.818Z&traceId=5f00d917e418a8a41de5ad9b650daca0)
+
+</Steps>
+
+import LearnMore from "@/components-mdx/integration-learn-more.mdx";
+
+<LearnMore />
+
+## 참고 자료
+
+- [LiveKit Agents 문서](https://docs.livekit.io/agents/)
+- [LiveKit 텔레메트리 가이드](https://docs.livekit.io/agents/build/metrics/)
+- [엔드투엔드 Python 예제](https://github.com/livekit/agents/blob/main/examples/voice_agents/langfuse_trace.py)
+
+## GitHub Discussions
+
+import { GhDiscussionsPreview } from "@/components/gh-discussions/GhDiscussionsPreview";
+
+<GhDiscussionsPreview labels={["integration-livekit"]} />

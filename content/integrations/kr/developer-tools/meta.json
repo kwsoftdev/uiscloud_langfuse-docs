@@ -1,0 +1,15 @@
+{
+  "title": "개발자 도구",
+  "pages": [
+    "augment-code",
+    "claude-code",
+    "codex",
+    "cursor",
+    "github-copilot",
+    "kiro",
+    "kiro-cli",
+    "opencode",
+    "pi-agent",
+    "vscode"
+  ]
+}

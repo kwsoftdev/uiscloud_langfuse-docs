@@ -1,0 +1,131 @@
+---
+source: ⚠️ Jupyter Notebook
+title: DSPy - 관찰 가능성 및 트레이싱
+sidebarTitle: DSPy
+logo: /images/integrations/dspy_icon.png
+description: 언어 모델의 프롬프트와 가중치를 체계적으로 최적화하는 프레임워크인 DSPy를 위한 오픈 소스 관찰 가능성.
+category: Integrations
+---
+
+# DSPy - 관찰 가능성 및 트레이싱
+
+이 쿡북은 DSPy를 Langfuse와 함께 사용하는 방법을 보여줍니다.
+
+> **DSPy란 무엇인가요?** [DSPy](https://github.com/stanfordnlp/dspy)는 언어 모델의 프롬프트와 가중치를 체계적으로 최적화하는 프레임워크로, 튜닝 프로세스를 자동화하고 신뢰성을 향상시켜 LM으로 복잡한 시스템을 더 쉽게 구축하고 개선할 수 있게 해줍니다. DSPy에 대한 자세한 정보는 [문서](https://dspy-docs.vercel.app/docs/intro)를 참조하세요.
+
+> **Langfuse란 무엇인가요?** [Langfuse](https://langfuse.com)는 오픈 소스 AI 엔지니어링 플랫폼입니다. LLM 애플리케이션을 위한 트레이싱 및 모니터링 기능을 제공합니다. Langfuse는 상세한 인사이트를 제공하고 네이티브 통합, OpenTelemetry, 전용 SDK를 통해 다양한 도구 및 프레임워크와 통합함으로써 개발자가 AI 시스템을 디버그, 분석, 최적화할 수 있도록 돕습니다.
+
+## 사전 요구 사항
+
+DSPy와 langfuse의 최신 버전을 설치합니다.
+
+```python
+%pip install langfuse dspy openinference-instrumentation-dspy -U
+```
+
+<Steps>
+## 1단계: Langfuse 환경 변수 설정
+
+먼저 환경 변수를 구성합니다. DSPy의 트레이스가 Langfuse로 올바르게 전송되도록 OpenTelemetry 엔드포인트, 프로토콜, 인증 헤더를 설정합니다. [Langfuse Cloud](https://cloud.langfuse.com)에 가입하거나 [Langfuse를 셀프 호스팅](https://langfuse.com/self-hosting)하여 Langfuse API 키를 얻을 수 있습니다.
+
+```python
+import os
+
+# Get keys for your project from the project settings page: https://cloud.langfuse.com
+os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-lf-...")
+os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-lf-...")
+os.environ.setdefault("LANGFUSE_BASE_URL", "https://cloud.langfuse.com") # 🇪🇺 EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+
+# Your OpenAI key
+os.environ.setdefault("OPENAI_API_KEY", "sk-proj-...")
+```
+
+환경 변수를 설정했으니 이제 Langfuse 클라이언트를 초기화할 수 있습니다. `get_client()`는 환경 변수에 제공된 자격 증명을 사용하여 Langfuse 클라이언트를 초기화합니다.
+
+```python
+from langfuse import get_client
+
+langfuse = get_client()
+
+# Verify connection
+if langfuse.auth_check():
+    print("Langfuse client is authenticated and ready!")
+else:
+    print("Authentication failed. Please check your credentials and host.")
+
+```
+
+## 2단계: DSPy에 대한 트레이싱 활성화
+
+다음으로, DSPy용 [OpenInference Instrumentation](https://pypi.org/project/openinference-instrumentation-dspy/) 모듈을 사용하여 DSPy 트레이스를 자동으로 캡처합니다. 이는 DSPy의 LM 호출을 계측하는 단일 호출로 이루어집니다.
+
+```python
+from openinference.instrumentation.dspy import DSPyInstrumentor
+
+DSPyInstrumentor().instrument()
+```
+
+## 3단계: DSPy 구성
+
+다음으로 DSPy를 설정합니다. 여기에는 언어 모델을 초기화하고 이를 사용하도록 DSPy를 구성하는 작업이 포함됩니다. 그런 다음 DSPy의 기능을 보여주는 다양한 DSPy 모듈을 실행할 수 있습니다.
+
+```python
+import dspy
+lm = dspy.LM('openai/gpt-4o-mini')
+dspy.configure(lm=lm)
+```
+
+## 4단계: 관찰 가능성을 통해 DSPy 모듈 실행하기
+
+[DSPy 문서](https://dspy.ai/)에서 핵심 기능을 보여주는 몇 가지 예제를 소개합니다. 각 예제는 자동으로 트레이스 데이터를 Langfuse로 전송합니다.
+
+### 예제 1: Chain-of-Thought 모듈 사용하기(수학 추론)
+
+```python
+math = dspy.ChainOfThought("question -> answer: float")
+math(question="Two dice are tossed. What is the probability that the sum equals two?")
+```
+
+### 예제 2: RAG 파이프라인 구축하기
+
+```python
+def search_wikipedia(query: str) -> list[str]:
+    results = dspy.ColBERTv2(url='http://20.102.90.50:2017/wiki17_abstracts')(query, k=3)
+    return [x['text'] for x in results]
+
+rag = dspy.ChainOfThought('context, question -> response')
+
+question = "What's the name of the castle that David Gregory inherited?"
+rag(context=search_wikipedia(question), question=question)
+```
+
+### 예제 3: DSPy Signatures로 분류 모듈 실행하기
+
+```python
+def evaluate_math(expression: str):
+    return dspy.PythonInterpreter({}).execute(expression)
+
+def search_wikipedia(query: str):
+    results = dspy.ColBERTv2(url='http://20.102.90.50:2017/wiki17_abstracts')(query, k=3)
+    return [x['text'] for x in results]
+
+react = dspy.ReAct("question -> answer: float", tools=[evaluate_math, search_wikipedia])
+
+pred = react(question="What is 9362158 divided by the year of birth of David Gregory of Kinnairdy castle?")
+print(pred.answer)
+```
+
+## 5단계: Langfuse에서 트레이스 보기
+
+DSPy 애플리케이션을 실행한 후, Langfuse에서 트레이싱된 이벤트를 확인할 수 있습니다:
+
+![Example trace in Langfuse](https://langfuse.com/images/cookbook/integration-dspy/dspy-example-trace.png)
+
+_[Langfuse의 공개 예제 트레이스 링크](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/c6182b14e8e7ac7543645e19cdf1a895?timestamp=2025-06-06T15%3A59%3A47.264Z&display=details&observation=dfec1f8a95e91773)_
+
+</Steps>
+
+import LearnMore from "@/components-mdx/integration-learn-more.mdx";
+
+<LearnMore />

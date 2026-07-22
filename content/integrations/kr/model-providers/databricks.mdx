@@ -1,0 +1,92 @@
+---
+title: Databricks와 Langfuse 개요
+description: Databricks를 Langfuse와 함께 사용하여 AI 애플리케이션을 개발, 테스트, 평가하는 방법에 대한 개요입니다.
+sidebarTitle: Databricks
+logo: /images/integrations/databricks_icon.svg
+---
+
+# Databricks와 Langfuse
+
+> **Databricks란 무엇인가요?** > [Databricks](https://www.databricks.com/)는 Apache Spark의 창시자들이 설립한 통합 분석 플랫폼입니다. 협업 데이터 엔지니어링, 머신러닝, 데이터 분석을 위한 대화형 워크스페이스를 제공합니다. Databricks를 사용하면 팀이 빅데이터와 고급 분석 도구를 효율적으로 활용하여 대규모로 모델을 구축, 훈련, 배포할 수 있습니다.
+
+> **Langfuse란 무엇인가요?** > [Langfuse](https://langfuse.com/)는 개발자가 프로덕션 환경에서 언어 모델을 모니터링, 트레이싱, 평가할 수 있도록 돕는 종합 플랫폼입니다. 상세한 로깅과 이벤트 트레이싱을 통해 강력한 인사이트를 제공하여 견고한 성능 모니터링과 더 쉬운 AI 애플리케이션 디버깅을 보장합니다.
+
+## 트레이싱 및 옵저버빌리티
+
+Databricks를 Langfuse와 통합하면 Databricks로 구축한 애플리케이션을 트레이싱하고, Langfuse Playground에서 프롬프트를 실험하고, 엄격한 평가를 통해 모델을 벤치마킹할 수 있습니다.
+
+import { FileCode, BookOpen } from "lucide-react";
+
+<Cards>
+  <Card
+    title="예시 노트북"
+    href="/guides/cookbook/integration_databricks"
+    icon={<FileCode />}
+  />
+</Cards>
+
+## 플레이그라운드 및 평가
+
+이 가이드는 Databricks 언어 모델 엔드포인트를 Langfuse와 통합하는 과정을 안내합니다. 이를 통해 Langfuse Playground에서 프롬프트를 빠르게 **실험**하고 상호작용을 디버그할 수 있으며, 평가를 통해 모델을 체계적으로 **벤치마킹**할 수 있습니다.
+
+Langfuse를 사용하면 다음을 할 수 있습니다:
+
+- **플레이그라운드에서 실험하기:** 대화형 플레이그라운드를 사용하면 실시간으로 언어 모델을 테스트할 수 있습니다. 커스텀 프롬프트를 전송하고, 상세한 응답을 검토하고, [Prompt Library](/docs/prompts/get-started)에 프롬프트를 추가할 수 있습니다.
+- **평가로 벤치마킹하기:** [LLM-as-a-Judge 평가](/docs/scores/model-based-evals)는 애플리케이션의 성능을 벤치마킹하는 방법을 제공합니다. 미리 정의된 테스트 템플릿을 실행하고, 지연 시간과 정확도 같은 메트릭을 분석하고, 측정 가능한 결과를 기반으로 모델을 개선할 수 있습니다.
+
+<Steps>
+
+### Databricks에서 서빙 엔드포인트 설정하기
+
+Databricks에서 서빙 엔드포인트를 설정하는 것부터 시작합니다. 이를 통해 커스텀 파인튜닝된 모델이나 OpenAI 또는 Anthropic과 같은 게이트웨이를 통해 서빙되는 모델을 쿼리할 수 있습니다. 고급 구성 옵션은 [Databricks 문서](https://docs.databricks.com/aws/en/machine-learning/model-serving/manage-serving-endpoints)를 참고하세요.
+
+<Frame className="my-10" fullWidth>
+  ![Databricks에서 서빙 엔드포인트
+  설정하기](/images/docs/databricks/add-databricks-serving-endpoint.png)
+</Frame>
+
+### 프로젝트 설정에서 모델 추가하기
+
+다음으로, Databricks 모델 엔드포인트를 Langfuse 프로젝트 설정에 추가합니다.
+
+올바른 엔드포인트 URL과 인증 정보를 입력했는지 확인하세요. `model name`은 Databricks에서 생성한 서빙 엔드포인트의 이름입니다.
+
+<Frame className="sm:w-1/2">
+  ![프로젝트 설정에서 모델
+  추가하기](/images/docs/databricks/databricks-add-to-langfuse.png)
+</Frame>
+
+### 플레이그라운드에서 모델 사용하기
+
+Langfuse Playground는 다음을 할 수 있는 대화형 인터페이스를 제공합니다:
+
+- 프롬프트를 전송하고 빠른 결과를 확인합니다.
+- [Prompt Library](/docs/prompts/get-started)에 프롬프트를 추가합니다.
+
+<Frame className="my-10" fullWidth>
+  ![플레이그라운드에서 모델
+  사용하기](/images/docs/databricks/databricks-playground.png)
+</Frame>
+
+LLM 프로바이더로 **Databricks**를 선택하고 앞서 구성한 엔드포인트를 선택하세요.
+
+### 평가에 모델 사용하기
+
+LLM-as-a-judge는 LLM을 심사자로 사용하여 LLM 애플리케이션의 품질을 평가하는 기법입니다. LLM에 트레이스나 데이터셋 항목이 주어지고 출력에 대해 점수를 매기고 이유를 설명하도록 요청받습니다. 점수와 이유는 Langfuse에 [스코어](/docs/scores/data-model)로 저장됩니다.
+
+<Frame className="my-10" fullWidth>
+  ![평가에 모델
+  사용하기](/images/docs/databricks/databricks-evaluations.png)
+</Frame>
+
+</Steps>
+
+LLM 평가에 대해 더 알아보고 싶다면 블로그 게시물을 확인해 보세요:
+
+<Cards>
+  <Card
+    title="LLM Evaluation 101: Best Practices and Challenges"
+    href="/blog/2025-03-04-llm-evaluation-101-best-practices-and-challenges"
+    icon={<BookOpen />}
+  />
+</Cards>

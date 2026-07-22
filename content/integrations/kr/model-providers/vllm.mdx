@@ -1,0 +1,99 @@
+---
+source: ⚠️ Jupyter Notebook
+title: OpenTelemetry를 통해 Langfuse로 vLLM 트레이싱하기
+sidebarTitle: vLLM
+logo: /images/integrations/vllm_icon.svg
+description: LLM 옵저버빌리티를 위해 OpenTelemetry를 사용하여 Langfuse로 vLLM 추론을 트레이싱하는 방법을 알아보세요.
+category: Integrations
+---
+
+# vLLM 통합
+
+이 쿡북은 OpenTelemetry를 사용하여 [vLLM](https://github.com/vllm-project/vllm) 추론을 [Langfuse](https://langfuse.com)로 트레이싱하는 방법을 보여줍니다. vLLM은 [내장 OpenTelemetry 지원](https://docs.vllm.ai/en/latest/features/observability.html)을 제공하며, 이를 Langfuse의 [OpenTelemetry 엔드포인트](/docs/opentelemetry/get-started)로 트레이스를 전송하도록 구성할 수 있습니다.
+
+> **vLLM이란 무엇인가요?** [vLLM](https://github.com/vllm-project/vllm)은 LLM 추론 및 서빙을 위한 빠르고 사용하기 쉬운 라이브러리입니다. 최첨단 처리량, PagedAttention을 통한 효율적인 메모리 관리, 연속 배치 처리(continuous batching), 다양한 오픈소스 모델 지원을 특징으로 합니다.
+
+> **Langfuse란 무엇인가요?** [Langfuse](https://langfuse.com)는 오픈소스 AI 엔지니어링 플랫폼입니다. 트레이싱, 프롬프트 관리, 평가 기능을 제공하여 팀이 LLM 애플리케이션을 디버깅, 분석, 개선할 수 있도록 돕습니다.
+
+## 시작하기
+
+OpenTelemetry를 통한 Langfuse 트레이싱과 함께 vLLM을 사용하는 간단한 예제를 살펴보겠습니다.
+
+<Steps>
+### 1단계: 의존성 설치
+
+```python
+%pip install vllm langfuse -q
+```
+
+### 2단계: 환경 변수 설정
+
+[Langfuse Cloud](https://cloud.langfuse.com)에 가입하거나 [Langfuse를 셀프 호스팅](https://langfuse.com/self-hosting)하여 Langfuse API 키를 받으세요.
+
+```python
+import os
+
+# Get keys for your project from the project settings page: https://cloud.langfuse.com
+os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-lf-...")
+os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-lf-...")
+os.environ.setdefault("LANGFUSE_BASE_URL", "https://cloud.langfuse.com") # 🇪🇺 EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+
+# Configure OpenTelemetry endpoint & headers
+os.environ.setdefault("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL", "http/protobuf")
+os.environ.setdefault("OTEL_SERVICE_NAME", "vllm")
+```
+
+### 3단계: OpenTelemetry 트레이싱 초기화
+
+vLLM은 구성되면 자동으로 OpenTelemetry 스팬을 노출합니다. 다음 단계에서 설정하는 Langfuse 클라이언트가 이 OTEL 스팬을 캡처하여 Langfuse로 전송합니다.
+
+```python
+from vllm import LLM, SamplingParams
+
+langfuse_host = "https://cloud.langfuse.com"  # Other regions: https://us.cloud.langfuse.com (US), https://jp.cloud.langfuse.com (Japan), https://hipaa.cloud.langfuse.com (HIPAA)
+otlp_traces_endpoint = f"{langfuse_host}/api/public/otel/v1/traces"
+
+# --- vLLM ---
+llm = LLM(
+    model="facebook/opt-125m",
+    otlp_traces_endpoint=otlp_traces_endpoint,
+    disable_log_stats=False,
+)
+```
+
+이제 Langfuse OTel 클라이언트를 초기화합니다. `get_client()`는 환경 변수에 제공된 자격 증명을 사용하여 Langfuse 클라이언트를 초기화합니다.
+
+```python
+from langfuse import get_client
+
+langfuse = get_client()
+
+# Verify connection
+if langfuse.auth_check():
+    print("Langfuse client is authenticated and ready!")
+else:
+    print("Authentication failed. Please check your credentials and host.")
+```
+
+### 4단계: vLLM으로 모델 로드하기
+
+vLLM의 `LLM` 클래스를 사용하여 모델을 로드합니다. 이 예제에서는 시연을 위해 작은 모델(`facebook/opt-125m`)을 사용합니다. vLLM이 지원하는 어떤 모델로도 이를 대체할 수 있습니다.
+
+```python
+out = llm.generate(
+    ["Write one sentence about Berlin."],
+    SamplingParams(max_tokens=32),
+)
+print(out[0].outputs[0].text)
+```
+
+### 5단계: Langfuse에서 트레이스 확인하기
+
+모델을 실행하면 Langfuse에서 새 스팬을 확인할 수 있습니다.
+
+_**참고:** vLLM은 현재 토큰 수와 지연 시간 지표만 Langfuse로 내보냅니다. LLM 입력과 출력은 Langfuse SDK를 사용하여 별도의 트레이스에서 수동으로 캡처해야 합니다._
+
+[Langfuse의 예제 트레이스](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/462b76c435b348aa31ab82351c8ae33b?observation=a95f1c8affd878e9&timestamp=2025-12-23T12:59:03.259Z)
+
+</Steps>

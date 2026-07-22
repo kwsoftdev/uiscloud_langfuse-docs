@@ -1,0 +1,108 @@
+---
+title: Observability & Tracing for Inferable (open source)
+sidebarTitle: Inferable
+logo: /images/integrations/inferable_icon.png
+description: Inferable 애플리케이션을 위한 오픈 소스 옵저버빌리티입니다. 모든 요청에 대한 상세한 트레이스와 메트릭을 자동으로 캡처합니다.
+---
+
+# Langfuse Integration for Inferable
+
+[**Inferable**](https://www.inferable.ai)([GitHub](https://github.com/inferablehq/inferable))는 대규모로 신뢰할 수 있는 에이전틱 자동화를 구축할 수 있도록 돕는 오픈 소스 플랫폼입니다.
+
+네이티브 통합을 사용하면 Inferable로 분산된 에이전틱 자동화를 빠르게 만들고 Langfuse로 모니터링하고 개선할 수 있습니다. 코드 변경이 필요하지 않습니다.
+
+## 시작하기
+
+<Steps>
+
+### Langfuse API 키 발급받기
+
+<Tabs items={["Langfuse Cloud", "Local or self-hosted"]}>
+<Tab>
+
+1. [cloud.langfuse.com](https://cloud.langfuse.com)에서 계정과 프로젝트를 생성합니다
+2. 프로젝트의 API 키를 복사합니다
+
+</Tab>
+<Tab>
+
+1. 셀프 호스팅 또는 로컬 설정을 위한 [안내](/self-hosting)를 따릅니다
+2. 프로젝트의 API 키를 복사합니다
+
+</Tab>
+</Tabs>
+
+### Inferable을 Langfuse와 함께 구성하기
+
+<Tabs items={["Inferable Cloud", "Local or self-hosted"]}>
+<Tab>
+
+1. Inferable에서 원하는 클러스터의 Integrations 탭으로 이동합니다
+2. Langfuse 자격 증명을 추가합니다.
+   - **Secret API Key**: Langfuse 비밀 API 키
+   - **Public API Key**: Langfuse 공개 API 키
+   - **Base URL**: Langfuse Base URL(예: `https://cloud.langfuse.com`)
+   - **Send Message Payloads**: LLM 호출과 함수 호출의 입력 및 출력을 Langfuse로 전송할지 여부
+
+</Tab>
+
+<Tab>
+
+헤드리스 모드로 Inferable을 셀프 호스팅하는 경우, `integrations` 테이블에 Langfuse 자격 증명을 삽입하기만 하면 됩니다.
+
+```sql
+INSERT INTO integrations (cluster_id, langfuse) VALUES
+(
+  '<local_cluster_id>',
+  '{"publicKey":"<your_public_api_key>","secretKey":"<your_secret_api_key>","baseUrl":"<your_langfuse_base_url>","sendMessagePayloads":false}'
+);
+```
+
+콘솔을 셀프 호스팅하는 경우, 관리형 모드와 동일한 안내를 따르면 됩니다.
+
+</Tab>
+</Tabs>
+
+</Steps>
+
+## 기능
+
+### 트레이싱
+
+Langfuse 통합을 활성화하면 Langfuse 대시보드에서 [트레이스](/docs/tracing)를 볼 수 있습니다. Inferable의 각 Run은 Langfuse에서 각각의 트레이스로 매핑됩니다.
+
+![Inferable trace in Langfuse](/images/docs/inferable-langfuse-trace.png)
+
+트레이스에서 두 가지 유형의 스팬을 확인할 수 있습니다.
+
+- **Tool Calls**: 함수 이름으로 표시됩니다. LLM이 Run 내에서 수행한 각 도구 호출에 대해 생성되는 스팬입니다.
+- **LLM Calls**: `GENERATION`으로 표시됩니다. LLM 호출에 대해 생성되는 스팬입니다. Inferable은 Run 내의 각 LLM 호출마다 새 스팬을 생성하며, 여기에는 다음이 포함됩니다.
+  - 에이전트 루프 추론
+  - 유틸리티 호출(예: 요약, 제목 생성)
+
+Langfuse Tracing 데이터 구조에 대해 [여기](/docs/tracing)에서 더 알아보세요.
+
+### 평가
+
+Playground나 API를 통해 Run에 대한 평가를 제출할 때마다, Inferable은 해당 Run의 트레이스에 [점수](/docs/scores)를 Langfuse로 전송합니다.
+
+Langfuse를 평가에 사용하고 있다면, 이를 통해 평가를 Langfuse의 특정 트레이스와 연결할 수 있습니다.
+
+![Inferable evaluation in Langfuse](/images/docs/inferable-langfuse-eval.png)
+
+## 메시지 페이로드 보안
+
+기본적으로 Inferable은 LLM 호출과 함수 호출에 대한 메타데이터만 전송합니다. 여기에는 모델, Run ID, 토큰 사용량, 지연 시간 등이 포함됩니다.
+
+**Send Message Payloads**가 활성화된 경우, Inferable은 LLM 호출과 함수 호출의 입력과 출력도 전송합니다. 여기에는 다음이 포함됩니다.
+
+- 프롬프트
+- 응답
+- 도구 호출
+- 도구 호출 인자
+- 도구 호출 결과
+
+## 기타 참고 사항
+
+- Langfuse 트레이스가 Langfuse로 전송되는 데 최대 30초가 걸릴 수 있습니다. 하지만 보통 몇 초 안에 나타납니다.
+- 통합에 문제가 있는 경우 [Inferable GitHub](https://github.com/inferablehq/inferable/issues)에서 이슈를 등록할 수 있습니다.

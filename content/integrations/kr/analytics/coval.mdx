@@ -1,0 +1,41 @@
+---
+title: Coval 통합
+sidebarTitle: Coval
+logo: /images/integrations/coval_icon.png
+logoAppearance: dark
+description: 음성 에이전트의 시뮬레이션 기반 평가를 위해 Coval을 Langfuse와 통합하세요.
+---
+
+# Coval 통합
+
+Coval.dev는 AI 음성 및 채팅 에이전트를 위한 **시뮬레이션 및 평가** 플랫폼입니다. 대규모로 AI 에이전트를 테스트, 모니터링, 최적화할 수 있게 해줌으로써 개발자가 더 빠르게 신뢰할 수 있는 에이전트를 구축하도록 돕습니다. 또한 사용자 지정 메트릭을 만들고 수천 개의 시나리오를 실행할 수 있는 도구를 제공하여, 원활한 시뮬레이션과 평가로 AI 에이전트 개발을 가속화합니다.
+
+Coval은 Langfuse와 네이티브로 통합되어 고급 음성 에이전트 디버깅을 위한 직접적인 트레이스 전송을 지원합니다. 이 통합은 음성 AI 애플리케이션에 대한 더 깊은 인사이트를 제공하여, 상세한 메시지 분석을 통해 성능과 안정성을 개선하는 데 도움이 됩니다.
+
+음성 에이전트 평가에 대해 더 알아보려면 [공동 블로그 게시물](/blog/2025-01-22-evaluating-voice-ai-agents)을 참고하세요.
+
+## 시작하기
+
+<Steps>
+
+### Langfuse 자격 증명 받기
+
+먼저 Langfuse 자격 증명이 필요합니다.
+
+- Secret Key
+- Public Key
+- Host URL
+
+[Langfuse Cloud](https://langfuse.com/cloud)에 가입하거나 [Langfuse를 셀프 호스팅](/self-hosting)하여 이 자격 증명을 얻을 수 있습니다.
+
+### Langfuse 자격 증명 추가하기
+
+Coval 대시보드에 로그인한 후 `Menu → Organization → Manage → Langfuse Integration`으로 이동합니다. Langfuse 자격 증명을 입력하고 Save를 클릭해 업데이트합니다.
+
+### Coval에서 평가를 실행하고 Langfuse에서 트레이스 확인하기
+
+이제 Coval에서 평가를 실행할 때마다 Coval이 트레이스를 Langfuse에 기록합니다.
+
+결과를 확인하려면 실행 결과 페이지로 이동하여 **Integrations**를 선택하세요. Coval은 대화 맥락 안에서 메트릭을 검토하는 데 도움을 주며, Langfuse를 방문해 특정 메시지를 디버그하거나 프롬프트를 개선할 수도 있습니다.
+
+</Steps>

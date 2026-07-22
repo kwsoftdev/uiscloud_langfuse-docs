@@ -1,0 +1,104 @@
+---
+source: ⚠️ Jupyter Notebook
+title: Langfuse 통합으로 Google Gemini 모델 옵저버빌리티 구현하기
+sidebarTitle: Google Gemini
+logo: /images/integrations/google_gemini_icon.svg
+description: Langfuse를 Google GenAI SDK와 통합하여 AI 대화를 포괄적으로 트레이싱하고 디버깅하는 방법을 알아보세요.
+category: Integrations
+---
+
+# Langfuse에서 Google Gemini 모델 트레이싱하기
+
+이 노트북은 Langfuse와 Google GenAI SDK로 Google Gemini 모델을 트레이싱하고 관찰하는 방법을 보여줍니다.
+
+> **Google Gemini란 무엇인가요?** [Google Gemini](https://ai.google.dev/gemini-api/docs/libraries)는 Gemini API와 Vertex AI를 통해 제공되는 Google의 멀티모달 생성 모델(텍스트, 이미지, 오디오, 비디오, 코드) 계열로, 속도/품질에 대한 다양한 요구에 맞춰 Flash와 Pro 같은 티어를 제공합니다.
+
+> **Google GenAI SDK란 무엇인가요?** [Google GenAI SDK](https://cloud.google.com/vertex-ai/generative-ai/docs/sdks/overview)는 Gemini 호출을 단순화하는 통합 클라이언트 라이브러리(Python/JavaScript)로, 인증(API 키 또는 ADC), 스트리밍, 도구/함수 호출, 안전성을 처리하여 몇 줄의 코드로 모델을 통합할 수 있게 해줍니다.
+
+> **Langfuse란 무엇인가요?** [Langfuse](https://langfuse.com)는 LLM 옵저버빌리티 및 모니터링을 위한 오픈 소스 플랫폼입니다. 메타데이터, 프롬프트 세부 정보, 토큰 사용량, 지연 시간 등을 캡처하여 AI 애플리케이션을 트레이싱하고 모니터링할 수 있도록 도와줍니다.
+
+<Steps>
+## 1단계: 종속성 설치
+
+시작하기 전에 Python 환경에 필요한 패키지를 설치하세요.
+
+```python
+%pip install google-genai openai langfuse openinference-instrumentation-google-genai
+```
+
+## 2단계: Langfuse SDK 구성
+
+다음으로 Langfuse API 키를 설정합니다. 무료 [Langfuse Cloud](https://langfuse.com/cloud) 계정에 가입하거나 [Langfuse를 셀프 호스팅](https://langfuse.com/self-hosting)하여 이 키를 얻을 수 있습니다. 이 환경 변수들은 Langfuse 클라이언트가 인증하고 Langfuse 프로젝트로 데이터를 전송하는 데 필수적입니다.
+
+또한 서비스 계정 키 파일의 Application Default Credentials(ADC)를 사용하는 Google Vertex API 자격 증명도 설정하세요.
+
+```python
+import os
+
+# Get keys for your project from the project settings page: https://cloud.langfuse.com
+os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-lf-...")
+os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-lf-...")
+os.environ.setdefault("LANGFUSE_BASE_URL", "https://cloud.langfuse.com") # 🇪🇺 EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+
+# Your Google Gemini API key
+os.environ.setdefault("GOOGLE_API_KEY", "***")
+```
+
+환경 변수를 설정했으니, 이제 Langfuse 클라이언트를 초기화할 수 있습니다. `get_client()`는 환경 변수에 제공된 자격 증명을 사용하여 Langfuse 클라이언트를 초기화합니다.
+
+```python
+from langfuse import get_client
+
+# Initialise Langfuse client and verify connectivity
+langfuse = get_client()
+assert langfuse.auth_check(), "Langfuse auth failed - check your keys ✋"
+```
+
+## 3단계: OpenTelemetry Instrumentation
+
+[`GoogleGenAIInstrumentor`](https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-google-genai) 라이브러리를 사용하여 [Google GenAI SDK](https://ai.google.dev/gemini-api/docs/libraries) 호출을 래핑하고 OpenTelemetry 스팬을 Langfuse로 전송합니다.
+
+```python
+from openinference.instrumentation.google_genai import GoogleGenAIInstrumentor
+
+GoogleGenAIInstrumentor().instrument()
+```
+
+## 4단계: 예시 실행하기
+
+```python
+from google import genai
+
+client = genai.Client()
+
+response = client.models.generate_content(
+    model="gemini-2.5-flash",
+    contents="What is Langfuse?",
+)
+print(response.text)
+```
+
+```python
+# Streaming Example
+for chunk in client.models.generate_content_stream(
+    model="gemini-2.5-flash",
+    contents="What is Langfuse?",
+):
+    print(chunk.text, end="", flush=True)
+print()  # newline after streaming
+```
+
+### Langfuse에서 트레이스 보기
+
+애플리케이션을 실행한 후 Langfuse Trace Table로 이동하세요. 애플리케이션 실행에 대한 상세한 트레이스를 확인할 수 있으며, 에이전트 대화, LLM 호출, 입력, 출력, 성능 메트릭에 대한 인사이트를 얻을 수 있습니다.
+
+![Langfuse 트레이스](https://langfuse.com/images/cookbook/integration_gemini/gemini-trace.png)
+
+[Langfuse에서 트레이스 보기](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/9f2f0fe0228fd81a9fe75882934b384a?timestamp=2025-08-01T13%3A22%3A00.147Z&display=details&observation=b7a63ca7e1d083bc)
+
+</Steps>
+
+import LearnMore from "@/components-mdx/integration-learn-more.mdx";
+
+<LearnMore />

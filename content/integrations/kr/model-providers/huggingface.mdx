@@ -1,0 +1,121 @@
+---
+source: ⚠️ Jupyter Notebook
+title: Langfuse 통합을 통한 Hugging Face 모델의 옵저버빌리티
+sidebarTitle: Hugging Face
+logo: /images/integrations/huggingface_icon.svg
+description: OpenAI SDK를 사용하여 Langfuse로 Hugging Face 모델을 모니터링하는 방법에 대한 예제 노트북
+category: Integrations
+---
+
+# 쿡북: 🪢 Langfuse로 🤗 Hugging Face 모델 모니터링하기
+
+이 쿡북은 [Langfuse](https://langfuse.com)와의 OpenAI SDK 통합을 사용하여 Hugging Face 모델을 모니터링하는 방법을 보여줍니다. 이를 통해 LLM 애플리케이션을 협업하며 디버그, 모니터링, 평가할 수 있습니다.
+
+이 통합을 사용하면 다양한 모델을 테스트하고 평가하며, 애플리케이션의 비용을 모니터링하고, 사용자 피드백이나 사람이 직접 매긴 평가 같은 점수를 부여할 수 있습니다.
+
+<Callout type="info" emoji="ℹ️">
+**참고**: *이 예제에서는 OpenAI SDK를 사용하여 [Hugging Face 추론 API에 접근](https://huggingface.co/blog/tgi-messages-api)합니다. [Langchain](https://langfuse.com/integrations/frameworks/langchain)과 같은 다른 프레임워크를 사용하거나, [API](https://api.reference.langfuse.com/)를 통해 데이터를 수집할 수도 있습니다.*
+
+</Callout>
+
+## 설정
+
+### 필수 패키지 설치
+
+```python
+%pip install langfuse openai --upgrade
+```
+
+### 환경 변수 설정
+
+필요한 키로 환경 변수를 설정하세요. [Langfuse Cloud](https://cloud.langfuse.com)에서 Langfuse 프로젝트 키를 얻으세요. 또한 [Hugging Face](https://huggingface.co/settings/tokens)에서 액세스 토큰을 발급받으세요.
+
+```python
+import os
+
+# Get keys for your project from https://cloud.langfuse.com
+os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-lf-...") # Private Project
+os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-lf-...") # Private Project
+os.environ.setdefault("LANGFUSE_BASE_URL", "https://cloud.langfuse.com")  # 🇪🇺 EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+
+os.environ.setdefault("HUGGINGFACE_ACCESS_TOKEN", "hf_...")
+```
+
+### 필요한 모듈 임포트
+
+`openai`를 직접 임포트하는 대신 `langfuse.openai`에서 임포트하세요. 필요한 다른 모듈도 임포트합니다.
+
+```python
+# Instead of: import openai
+from langfuse.openai import OpenAI
+from langfuse import observe
+```
+
+### Hugging Face 모델을 위한 OpenAI 클라이언트 초기화
+
+OpenAI 클라이언트를 초기화하되 Hugging Face 모델 엔드포인트를 가리키도록 하세요. OpenAI API 형식을 지원하는 Hugging Face에 호스팅된 모든 모델을 사용할 수 있습니다. 모델 URL과 액세스 토큰을 자신의 것으로 교체하세요.
+
+이 예제에서는 `Meta-Llama-3-8B-Instruct` 모델을 사용합니다.
+
+```python
+# Initialize the OpenAI client, pointing it to the Hugging Face Inference API
+client = OpenAI(
+    base_url="https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3-8B-Instruct" + "/v1/",  # replace with your endpoint url
+    api_key= os.getenv('HUGGINGFACE_ACCESS_TOKEN'),  # replace with your token
+)
+```
+
+## 예제
+
+### 채팅 완료 요청
+
+`client`를 사용하여 Hugging Face 모델에 채팅 완료 요청을 보냅니다. 실제 모델은 `base_url`에서 지정되므로 `model` 파라미터는 어떤 식별자든 사용할 수 있습니다. 이 예제에서는 모델 변수를 [Text Generation Inference](https://huggingface.co/docs/text-generation-inference/en/index)의 줄임말인 `tgi`로 설정합니다.
+
+```python
+completion = client.chat.completions.create(
+    model="model-name",
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant."},
+        {
+            "role": "user",
+            "content": "Write a poem about language models"
+        }
+    ]
+)
+print(completion.choices[0].message.content)
+```
+
+![Example trace in Langfuse](https://langfuse.com/images/cookbook/huggingface/huggingface-cookbook-trace-poem.png)
+
+_[Langfuse의 예제 트레이스](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/0c205096-fbd9-48b9-afa3-5837483488d8?timestamp=2025-01-09T15%3A03%3A08.365Z)_
+
+### Langfuse로 요청 관찰하기
+
+`langfuse.openai`의 `OpenAI` 클라이언트를 사용하면 요청이 자동으로 Langfuse에 트레이싱됩니다. `@observe()` 데코레이터를 사용하여 여러 생성을 하나의 트레이스로 묶을 수도 있습니다.
+
+```python
+@observe()  # Decorator to automatically create a trace and nest generations
+def generate_rap():
+    completion = client.chat.completions.create(
+        name="rap-generator",
+        model="tgi",
+        messages=[
+            {"role": "system", "content": "You are a poet."},
+            {"role": "user", "content": "Compose a rap about the open source AI engineering platform Langfuse."}
+        ],
+        metadata={"category": "rap"},
+    )
+    return completion.choices[0].message.content
+
+rap = generate_rap()
+print(rap)
+```
+
+![Example trace in Langfuse](https://langfuse.com/images/cookbook/huggingface/huggingface-cookbook-trace-rap.png)
+
+_[Langfuse의 예제 트레이스](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/8c432652-ee56-4985-83aa-9e95945ca481?timestamp=2025-01-09T15%3A00%3A22.904Z)_
+
+import LearnMore from "@/components-mdx/integration-learn-more.mdx";
+
+<LearnMore />

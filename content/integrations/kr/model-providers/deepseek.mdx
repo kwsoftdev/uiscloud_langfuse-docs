@@ -1,0 +1,139 @@
+---
+source: ⚠️ Jupyter Notebook
+title: OpenAI SDK를 사용하여 Langfuse로 DeepSeek 모델을 모니터링하는 방법에 대한 예시 쿡북
+sidebarTitle: DeepSeek
+logo: /images/integrations/deepseek_icon.svg
+description: 향상된 LLM 애플리케이션 모니터링, 디버깅, 트레이싱을 위해 Langfuse를 DeepSeek와 통합하는 방법을 알아보세요. 오늘 AI 개발 워크플로우를 개선하세요.
+category: Integrations
+---
+
+# 쿡북: OpenAI SDK를 사용하여 Langfuse로 DeepSeek 모델 모니터링하기
+
+DeepSeek API는 OpenAI와 호환되는 API 형식을 사용합니다. 구성을 수정하면 OpenAI SDK나 OpenAI API와 호환되는 소프트웨어를 사용하여 DeepSeek API에 접근할 수 있습니다.
+
+이 쿡북은 [Langfuse](https://langfuse.com)와의 OpenAI SDK 통합을 사용하여 [DeepSeek](https://github.com/deepseek-ai/DeepSeek-V3) 모델을 모니터링하는 방법을 보여줍니다. Langfuse의 옵저버빌리티 도구와 OpenAI SDK를 활용하면 DeepSeek 모델을 사용하는 애플리케이션을 효과적으로 디버그, 모니터링, 평가할 수 있습니다.
+
+이 가이드는 통합 설정, DeepSeek 모델에 대한 요청 생성, Langfuse로 상호작용을 관찰하는 과정을 안내합니다.
+
+<Callout type="info" emoji="ℹ️">
+**참고:** *Langfuse는 [LangChain](https://langfuse.com/integrations/frameworks/langchain), [LlamaIndex](https://langfuse.com/integrations/frameworks/llamaindex), [LiteLLM](https://langfuse.com/integrations/gateways/litellm), [기타 프레임워크](https://langfuse.com/integrations)와도 네이티브로 통합되어 있습니다. 이러한 프레임워크도 DeepSeek 요청을 트레이싱하는 데 사용할 수 있습니다.*
+
+</Callout>
+
+## 설정
+
+### 필요한 패키지 설치하기
+
+시작하려면 필요한 패키지를 설치하세요. `langfuse`와 `openai`의 최신 버전을 사용하고 있는지 확인하세요.
+
+```python
+%pip install langfuse openai --upgrade
+```
+
+### 환경 변수 설정하기
+
+필요한 키로 환경 변수를 설정합니다. [Langfuse Cloud](https://cloud.langfuse.com)에서 Langfuse 프로젝트 키를 얻으세요. 또한 [DeepSeek](https://platform.deepseek.com/api_keys)에서 모델에 접근하기 위한 액세스 토큰도 필요합니다.
+
+```python
+import os
+
+# Get keys for your project from the project settings page: https://cloud.langfuse.com
+os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-lf-...")
+os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-lf-...")
+os.environ.setdefault("LANGFUSE_BASE_URL", "https://cloud.langfuse.com") # 🇪🇺 EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+
+# Your DeepSeek API key (get it from https://platform.deepseek.com/api_keys)
+os.environ.setdefault("DEEPSEEK_API_KEY", "sk-...")  # Replace with your DeepSeek API key
+```
+
+### 필요한 모듈 임포트하기
+
+`openai`를 직접 임포트하는 대신 `langfuse.openai`에서 임포트합니다. 또한 다른 필요한 모듈도 임포트하세요.
+
+이 통합을 다른 Langfuse [기능](https://langfuse.com/docs/tracing#advanced-usage)과 함께 사용하는 방법을 배우려면 [OpenAI 통합 문서](https://langfuse.com/integrations/model-providers/openai-py)를 확인하세요.
+
+```python
+# Instead of: import openai
+from langfuse.openai import OpenAI
+from langfuse import observe
+```
+
+### DeepSeek 모델을 위한 OpenAI 클라이언트 초기화하기
+
+OpenAI 클라이언트를 초기화하고 DeepSeek 모델 엔드포인트를 가리키도록 합니다. 모델 URL과 앱 키를 자신의 것으로 교체하세요.
+
+```python
+# Initialize the OpenAI client, pointing it to the DeepSeek Inference API
+client = OpenAI(
+    base_url="https://api.deepseek.com",  # Replace with the DeepSeek model endpoint URL
+    api_key=os.getenv('DEEPSEEK_API_KEY'),  # Replace with your DeepSeek API key
+)
+```
+
+## 예시
+
+### 채팅 완성 요청
+
+`client`를 사용하여 DeepSeek 모델에 채팅 완성 요청을 보냅니다. 실제 모델은 `base_url`에 지정되어 있으므로 `model` 매개변수는 어떤 식별자든 될 수 있습니다.
+
+```python
+completion = client.chat.completions.create(
+    model="deepseek-chat",
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "Why is AI cool? Answer in 20 words or less."}
+    ]
+)
+print(completion.choices[0].message.content)
+```
+
+    AI is cool because it automates tasks, enhances creativity, and solves complex problems quickly—making life smarter and easier.
+
+![Langfuse의 예시 트레이스](https://langfuse.com/images/cookbook/integration_deepseek/deepseek-simple-trace.png)
+
+_[Langfuse에서 예시 트레이스 보기](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/83702a6c-ae0e-4317-87fa-dc82568a2d89?timestamp=2025-01-09T17%3A06%3A40.848Z)_
+
+### Langfuse로 요청 관찰하기
+
+`langfuse.openai`의 `OpenAI` 클라이언트를 사용하면 요청이 자동으로 Langfuse에 트레이싱됩니다. 여러 생성을 하나의 트레이스로 그룹화하기 위해 `@observe()` 데코레이터를 사용할 수도 있습니다.
+
+```python
+@observe()  # Decorator to automatically create a trace and nest generations
+def generate_story():
+    completion = client.chat.completions.create(
+        name="story-generator",
+        model="deepseek-chat",
+        messages=[
+            {"role": "system", "content": "You are a creative storyteller."},
+            {"role": "user", "content": "Tell me a short story about a token that got lost on its way to the language model. Answer in 100 words or less."}
+        ],
+        metadata={"genre": "adventure"},
+    )
+    return completion.choices[0].message.content
+
+story = generate_story()
+print(story)
+```
+
+    **The Lost Token**\
+
+    Timmy the Token was excited—today, he’d help the language model craft a story! But as he raced through the data pipeline, he took a wrong turn, tumbling into a forgotten cache.\
+
+    "Hello?" Timmy echoed. Only silence replied.\
+
+    Days passed. The model stuttered without him. Then, a cleanup script swept through. "Gotcha!" it chirped, rescuing Timmy.\
+
+    Back in the prompt, Timmy gleamed. The model sparked to life: *"Once, a token got lost…"*\
+
+    And so, Timmy’s adventure became the very story he was meant to tell.\
+
+    (100 words exactly)
+
+![Langfuse의 예시 트레이스](https://langfuse.com/images/cookbook/integration_deepseek/deepseek-story-trace.png)
+
+_[Langfuse에서 예시 트레이스 보기](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/9a0dca39-9fac-4fce-ace9-52b85edfb0d8?timestamp=2025-01-09T17%3A08%3A25.698Z)_
+
+import LearnMore from "@/components-mdx/integration-learn-more.mdx";
+
+<LearnMore />

@@ -1,0 +1,118 @@
+---
+title: Mirascope를 위한 오픈소스 관찰 가능성 & 모니터링
+sidebarTitle: Mirascope
+logo: /images/integrations/mirascope_icon.svg
+description: Mirascope 애플리케이션을 위한 오픈소스 관찰 가능성입니다. 사용자가 애플리케이션과 상호작용하는 방식에 대한 상세한 트레이스를 자동으로 캡처합니다.
+---
+
+# Langfuse로 Mirascope 애플리케이션 모니터링하기
+
+이 가이드는 Mirascope 애플리케이션을 추적하고 디버그하기 위해 Langfuse를 사용하는 방법을 보여줍니다.
+
+## Mirascope란 무엇인가요?
+
+Mirascope ([GitHub](https://github.com/mirascope/mirascope))는 LLM 애플리케이션을 구축하기 위한 Python 툴킷입니다.
+
+> Mirascope로 LLM 애플리케이션을 개발하는 것은 이미 익숙한 Python 코드를 작성하는 것과 똑같이 느껴집니다.
+> LLM을 위한 Python 툴킷: Mirascope는 표준 Python 코딩 방식과 유사한 직관적인 인터페이스를 제공하여 대규모 언어 모델(LLM)을 사용하는 애플리케이션 개발을 단순화합니다.
+
+## Langfuse란 무엇인가요?
+
+Langfuse ([GitHub](https://github.com/langfuse/langfuse))는 LLM 엔지니어링을 위한 오픈소스 플랫폼입니다. LLM 애플리케이션을 디버그하고 개선하는 데 도움을 주는 트레이싱, 평가, 프롬프트 관리, 메트릭을 제공합니다.
+
+## Mirascope를 Langfuse와 함께 사용하는 방법
+
+이 통합을 사용하면 사용자가 애플리케이션과 상호작용하는 방식에 대한 상세한 트레이스를 자동으로 캡처할 수 있습니다.
+필요한 패키지를 직접 설치하거나 `langfuse` 추가 옵션 플래그를 사용해 설치할 수 있습니다:
+
+```bash
+pip install "mirascope[langfuse]"
+```
+
+Mirascope는 `with_langfuse` 데코레이터를 통해 Langfuse [`observe()` 데코레이터](/docs/sdk/python/decorators)를 Mirascope 내의 모든 관련 함수에 자동으로 전달합니다.
+
+```python
+from mirascope.integrations.langfuse import with_langfuse
+```
+
+### 시작하기
+
+#### 1. 호출
+
+`with_langfuse` 데코레이터는 Mirascope의 [지원되는 모든 LLM 제공업체](https://docs.mirascope.io/latest/learn/calls/#supported-providers)에 대한 호출을 자동으로 로깅하기 위해 모든 Mirascope 함수에 사용할 수 있습니다.
+
+도구를 사용하는 간단한 예제입니다:
+
+```python
+from mirascope.core import anthropic, prompt_template
+from mirascope.integrations.langfuse import with_langfuse
+
+
+def format_book(title: str, author: str):
+    return f"{title} by {author}"
+
+
+@with_langfuse()
+@anthropic.call(model="claude-3-5-sonnet-20240620", tools=[format_book])
+@prompt_template("Recommend a {genre} book.")
+def recommend_book(genre: str):
+    ...
+
+
+print(recommend_book("fantasy"))
+# > Certainly! I'd be happy to recommend a fantasy book...
+```
+
+이는 다음을 제공합니다:
+
+- 프롬프트 템플릿, 입력/출력 속성 등의 항목을 캡처하는 `recommend_book` 함수를 둘러싼 트레이스
+- 에이전트와의 대화를 사람이 읽기 쉬운 형태로 표시
+- 사용된 토큰 수를 포함한 응답의 세부 정보
+
+[Langfuse의 예제 트레이스](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/794523f3-fb98-47fa-96f6-04f99dae862a?observation=0be07a39-40e7-46e8-9b85-84d9fbc73e2c)
+
+![Langfuse의 예제 트레이스](/images/cookbook/integration_mirascope_simple.png)
+
+#### 2. 스트림
+
+스트림도 정확히 같은 방식으로 캡처할 수 있습니다:
+
+```python
+from mirascope.core import openai, prompt_template
+from mirascope.integrations.langfuse import with_langfuse
+
+
+@with_langfuse()
+@openai.call(
+    model="gpt-4o-mini",
+    stream=True,
+    call_params={"stream_options": {"include_usage": True}},
+)
+@prompt_template("Recommend a {genre} book.")
+def recommend_book(genre: str):
+    ...
+
+
+for chunk, _ in recommend_book("fantasy"):
+    print(chunk.content, end="", flush=True)
+# > I recommend **"The Name of the Wind"** by Patrick Rothfuss. It's the first book...
+```
+
+일부 제공업체에서는 사용량이 추적되도록 특정 `call_params`를 설정해야 할 수 있습니다.
+
+## 더 알아보기
+
+import { BookOpen, FileCode } from "lucide-react";
+
+<Cards num={3}>
+  <Card
+    title="예제가 담긴 노트북"
+    href="/guides/cookbook/integration_mirascope"
+    icon={<FileCode />}
+  />
+  <Card
+    title="Mirascope 문서"
+    href="https://docs.mirascope.io/latest/integrations/langfuse/"
+    icon={<BookOpen />}
+  />
+</Cards>

@@ -1,0 +1,493 @@
+---
+title: OpenAI (Python)
+sidebarTitle: OpenAI (Python)
+seoTitle: Open Source Observability for OpenAI (Python)
+description: 임포트만 변경하여 Langfuse에서 완전한 옵저버빌리티를 확보하는 OpenAI SDK(Python) 드롭인 대체재입니다.
+logo: /images/integrations/openai_icon.svg
+logoAppearance: dark
+---
+
+# OpenAI SDK(Python)의 옵저버빌리티
+
+<Callout type="info">
+  JS/TS 버전을 찾고 계신가요? [여기서
+  확인하세요](/integrations/kr/model-providers/openai-js).
+</Callout>
+
+OpenAI Python SDK를 사용하는 경우, Langfuse **드롭인 대체재**를 사용하면 임포트만 변경하여 완전한 로깅을 확보할 수 있습니다. 이는 OpenAI와 Azure OpenAI 모두에서 동작합니다.
+
+```diff
+- import openai
++ from langfuse.openai import openai
+
+Alternative imports:
++ from langfuse.openai import OpenAI, AsyncOpenAI, AzureOpenAI, AsyncAzureOpenAI
+```
+
+Langfuse는 다음을 자동으로 추적합니다.
+
+- 스트리밍, 비동기, 함수를 지원하는 모든 프롬프트/완료
+- 지연 시간
+- [API 오류](#error-tracking)
+- 모델 사용량(토큰)과 비용(USD) ([더 알아보기](/docs/model-usage-and-cost))
+
+## 작동 방식
+
+<Steps>
+
+### Langfuse SDK 설치
+
+이 통합은 OpenAI SDK 버전 `>=0.27.8`과 호환됩니다. OpenAI SDK 버전 `>=1.0.0`에서는 비동기 함수와 스트리밍을 지원합니다.
+
+```sh
+pip install langfuse openai
+```
+
+### Langfuse로 래핑된 OpenAI SDK로 전환하기
+
+<Tabs items={["Environment variables", "Attributes"]}>
+
+<Tab>
+
+Langfuse 자격 증명을 환경 변수에 추가하세요
+
+import EnvPython from "@/components-mdx/env-python.mdx";
+
+<EnvPython />
+
+임포트 변경
+
+```diff
+- import openai
++ from langfuse.openai import openai
+
+Alternative imports:
++ from langfuse.openai import OpenAI, AsyncOpenAI, AzureOpenAI, AsyncAzureOpenAI
+```
+
+</Tab>
+<Tab>
+
+임포트 변경
+
+```diff
+- import openai
++ from langfuse.openai import openai
+
+Alternative imports:
++ from langfuse.openai import OpenAI, AsyncOpenAI, AzureOpenAI, AsyncAzureOpenAI
+```
+
+Langfuse 자격 증명을 코드에 추가하세요
+
+```python
+openai.langfuse_public_key = "pk-lf-..."
+openai.langfuse_secret_key = "sk-lf-..."
+openai.langfuse_enabled = True # Default is True, set to False to disable Langfuse
+openai.LANGFUSE_BASE_URL = "https://cloud.langfuse.com" # 🇪🇺 EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+
+# Set openai key via attribute
+openai.api_key = "sk-..."
+```
+
+</Tab>
+
+</Tabs>
+
+선택 사항으로, SDK 연결을 서버와 확인합니다. 프로덕션 사용에는 권장하지 않습니다.
+
+```python
+from langfuse import get_client
+
+get_client().auth_check()
+```
+
+### 평소대로 OpenAI SDK 사용하기
+
+_변경할 필요가 없습니다._
+
+통합의 엔드투엔드 예제는 노트북을 확인하세요.
+
+import { FileCode } from "lucide-react";
+
+<Cards>
+  <Card
+    title="Example notebook"
+    href="/guides/cookbook/integration_openai_sdk"
+    icon={<FileCode />}
+  />
+</Cards>
+
+</Steps>
+
+## 문제 해결
+
+### 이벤트 큐잉 및 배치 처리
+
+Langfuse SDK는 네트워크 요청 수를 줄이고 전반적인 성능을 개선하기 위해 백그라운드에서 이벤트를 큐에 쌓고 배치 처리합니다. 장시간 실행되는 애플리케이션에서는 추가 설정 없이 잘 동작합니다.
+
+단기 실행 애플리케이션을 운영하는 경우, 애플리케이션이 종료되기 전에 모든 이벤트가 플러시되도록 Langfuse를 플러시해야 합니다.
+
+```python
+from langfuse import get_client
+from langfuse.openai import openai
+
+# Flush via global client
+langfuse = get_client()
+langfuse.flush()
+```
+
+이벤트 큐잉 및 배치 처리에 대해 [여기](/docs/observability/features/queuing-batching)에서 더 알아보세요.
+
+### Assistants API
+
+이 통합은 OpenAI Assistants가 추가 API 요청 없이는 쉽게 캡처할 수 없는 서버 측 상태를 가지고 있기 때문에 assistants api의 트레이싱을 지원하지 않습니다. assistants api 사용량을 가장 잘 트레이싱하는 방법에 대한 자세한 내용은 이 [FAQ](/faq/all/openai-assistant-api)에서 확인하세요.
+
+### 디버그 모드
+
+통합에 문제가 있다면 디버그 모드를 활성화하여 요청과 응답에 대한 더 많은 정보를 확인할 수 있습니다.
+
+```python
+from langfuse import Langfuse
+from langfuse.openai import openai
+
+# Enable debug via global client
+langfuse = Langfuse(debug=True)
+```
+
+또는 환경 변수를 설정할 수도 있습니다.
+
+```sh
+export LANGFUSE_DEBUG=true
+```
+
+### 샘플링
+
+[샘플링](/docs/observability/features/sampling)을 사용하여 Langfuse 서버가 수집하는 트레이스 양을 조절할 수 있습니다.
+
+```python
+from langfuse import Langfuse
+from langfuse.openai import openai
+
+# Set sampling via global client (default is 1.0)
+langfuse = Langfuse(sample_rate=0.1)
+```
+
+또는 환경 변수를 설정할 수도 있습니다.
+
+```sh
+export LANGFUSE_SAMPLE_RATE=0.1
+```
+
+### 트레이싱 비활성화
+
+적절한 플래그를 설정하여 Langfuse로 트레이스를 전송하지 않도록 할 수 있습니다.
+
+```python
+from langfuse import Langfuse
+from langfuse.openai import openai
+
+# Disable via global client
+langfuse = Langfuse(tracing_enabled=False)
+```
+
+또는 환경 변수를 설정할 수도 있습니다.
+
+```sh
+export LANGFUSE_TRACING_ENABLED=false
+```
+
+## 고급 사용법
+
+### 커스텀 트레이스 속성
+
+openai 메서드에 다음 속성을 추가할 수 있습니다.
+
+| 속성                    | 설명                                                                    |
+| ----------------------- | ----------------------------------------------------------------------- |
+| `name`                  | 특정 유형의 생성을 식별하려면 `name`을 설정하세요.                      |
+| `metadata`              | Langfuse에서 확인하고 싶은 추가 정보로 `metadata`를 설정하세요.         |
+| `trace_id`              | 자세한 내용은 아래의 "Langfuse Python SDK와의 상호운용성"을 참고하세요. |
+| `parent_observation_id` | 자세한 내용은 아래의 "Langfuse Python SDK와의 상호운용성"을 참고하세요. |
+
+**트레이스 속성 설정하기 (`session_id`, `user_id`, `tags`):**
+
+두 가지 옵션이 있습니다.
+
+**옵션 1: 메타데이터를 통한 방법 (가장 간단한 방법):**
+
+```python
+from langfuse.openai import openai
+
+result = openai.chat.completions.create(
+    model="gpt-3.5-turbo",
+    messages=[
+        {"role": "system", "content": "You are a very accurate calculator."},
+        {"role": "user", "content": "1 + 1 = "}
+    ],
+    name="test-chat",
+    metadata={
+        "langfuse_session_id": "session_123",
+        "langfuse_user_id": "user_456",
+        "langfuse_tags": ["calculator"],
+        "someMetadataKey": "someValue"  # Regular metadata still works
+    }
+)
+```
+
+**옵션 2: 감싸는 span을 통한 방법 (더 세밀한 제어):**
+
+```python
+from langfuse import get_client, propagate_attributes
+from langfuse.openai import openai
+
+langfuse = get_client()
+
+with langfuse.start_as_current_observation(as_type="span", name="calculator-request") as span:
+    with propagate_attributes(
+        session_id="session_123",
+        user_id="user_456",
+        tags=["calculator"]
+    ):
+        result = openai.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a very accurate calculator."},
+                {"role": "user", "content": "1 + 1 = "}
+            ],
+            name="test-chat",
+            metadata={"someMetadataKey": "someValue"},
+        )
+```
+
+### 트레이스 사용하기
+
+[Langfuse 트레이싱](/docs/observability/overview)은 여러 관찰(LLM 또는 비-LLM 호출 모두 가능)을 하나의 트레이스로 그룹화합니다. 이 통합은 기본적으로 각 openai 호출마다 하나의 트레이스를 생성합니다.
+
+- OpenAI와 관련 없는 관찰을 트레이스에 추가합니다.
+- 여러 OpenAI 호출을 하나의 트레이스로 묶으면서 트레이스를 커스터마이즈합니다.
+- 트레이스 구조를 더 세밀하게 제어합니다.
+- 모든 Langfuse 트레이싱 기능을 사용합니다.
+
+<Callout type="info">
+  Langfuse 트레이싱이 처음이신가요? 기본 개념에 대한 [소개](/docs/observability/overview)를
+  확인하세요.
+</Callout>
+
+다음 옵션 중 어느 것이든 사용할 수 있습니다.
+
+1. [Python `@observe()` 데코레이터](/docs/sdk/python/decorators) - v2와 v3 모두에서 동작합니다
+2. 명시적 span 관리 사용 - v3와 v2에서 방식이 다릅니다
+
+**옵션 1: Python 데코레이터**
+
+```python
+from langfuse import observe
+from langfuse.openai import openai
+
+@observe()
+def capital_poem_generator(country):
+  capital = openai.chat.completions.create(
+    model="gpt-3.5-turbo",
+    messages=[
+        {"role": "system", "content": "What is the capital of the country?"},
+        {"role": "user", "content": country}],
+    name="get-capital",
+  ).choices[0].message.content
+
+  poem = openai.chat.completions.create(
+    model="gpt-3.5-turbo",
+    messages=[
+        {"role": "system", "content": "You are a poet. Create a poem about this city."},
+        {"role": "user", "content": capital}],
+    name="generate-poem",
+  ).choices[0].message.content
+  return poem
+
+capital_poem_generator("Bulgaria")
+```
+
+**옵션 2: 컨텍스트 매니저**
+
+```python
+from langfuse import get_client, propagate_attributes
+from langfuse.openai import openai
+
+langfuse = get_client()
+
+with langfuse.start_as_current_observation(as_type="span", name="capital-poem-generator") as span:
+    # Propagate trace attributes to all child observations
+    with propagate_attributes(
+        user_id="user_123",
+        session_id="session_456",
+        tags=["poetry", "capital"]
+    ):
+      capital = openai.chat.completions.create(
+          model="gpt-3.5-turbo",
+          messages=[
+              {"role": "system", "content": "What is the capital of the country?"},
+              {"role": "user", "content": "Bulgaria"}],
+          name="get-capital",
+      ).choices[0].message.content
+
+      poem = openai.chat.completions.create(
+          model="gpt-3.5-turbo",
+          messages=[
+              {"role": "system", "content": "You are a poet. Create a poem about this city."},
+              {"role": "user", "content": capital}],
+          name="generate-poem",
+      ).choices[0].message.content
+```
+
+### 스트리밍 응답에서의 OpenAI 토큰 사용량
+
+OpenAI는 `stream_options`의 `include_usage` 파라미터가 `True`로 설정된 경우에만 스트리밍 응답에서 토큰 사용량을 반환합니다. OpenAI가 직접 제공하는 토큰 사용량을 활용하려면 `stream_options` 인수에 `{"include_usage": True}`를 설정하세요.
+
+<Callout type="info">
+  `include_usage=True`로 스트리밍 응답을 사용할 때, OpenAI는 마지막 청크에
+  `choices` 리스트가 비어 있는 상태로 토큰 사용량 정보를 반환합니다. 정확한
+  토큰 사용량 트레이싱을 위해 `choices` 리스트가 비어 있지 않은지 확인하지
+  않고 인덱스에 접근하지 않도록, 애플리케이션이 이 비어 있는 `choices`
+  청크를 제대로 처리하는지 확인하세요.
+</Callout>
+
+```python /stream_options={"include_usage": True}/
+from langfuse import get_client
+from langfuse.openai import openai
+
+client = openai.OpenAI()
+
+stream = client.chat.completions.create(
+  model="gpt-4o",
+  messages=[{"role": "user", "content": "How are you?"}],
+  stream=True,
+  stream_options={"include_usage": True},
+)
+
+result = ""
+
+for chunk in stream:
+  # Check if chunk choices are not empty. OpenAI returns token usage in a final chunk with an empty choices list.
+  if chunk.choices:
+    result += chunk.choices[0].delta.content or ""
+
+# Flush via global client
+get_client().flush()
+```
+
+### OpenAI 베타 API
+
+OpenAI 베타 API는 버전마다 자주 변경되므로, OpenAI SDK 내 안정 API만 완전히 지원합니다. 베타 API를 사용하는 경우, `@observe()` [데코레이터](/docs/sdk/python/decorators)로 OpenAI SDK를 수동으로 감싸서 Langfuse SDK를 계속 사용할 수 있습니다.
+
+#### 구조화된 출력
+
+**구조화된 출력 파싱**의 경우, 사용 중인 `openai` Python SDK 버전에 따라 완전히 계측된 두 가지 옵션이 있습니다.
+
+- **`openai>=1.92.0` (권장):** `client.chat.completions.parse(...)`를 사용하세요. OpenAI는 [v1.92.0](https://github.com/openai/openai-python/releases/tag/v1.92.0)에서 `parse`와 `stream`을 베타에서 졸업시켰고, Langfuse는 안정 버전인 `openai.resources.chat.completions.Completions.parse`(및 비동기 버전)를 래핑합니다. `response_format`을 통해 Pydantic 모델을 직접 전달하면서도 `name`, `metadata`, `langfuse_session_id` 같은 Langfuse 속성을 그대로 설정할 수 있습니다.
+- **`openai<1.92.0` (레거시):** parse 헬퍼는 `client.beta.chat.completions.parse(...)`에서만 사용할 수 있습니다. Langfuse는 이러한 이전 버전에서도 베타 경로를 래핑하므로, `name`이나 `metadata` 같은 속성도 여기서 동작합니다.
+
+<Callout type="info">
+  `openai>=1.92.0`에서는 `client.beta.chat.completions.parse(...)` 호출이
+  OpenAI SDK에 의해 안정 버전 `parse` 메서드로 재라우팅되므로 계측된 상태를
+  유지합니다. 새 코드에서는 `client.chat.completions.parse(...)`를 사용하는
+  것을 권장합니다.
+</Callout>
+
+```python
+from langfuse import get_client
+from langfuse.openai import openai
+from pydantic import BaseModel
+
+class CalendarEvent(BaseModel):
+    name: str
+    date: str
+    participants: list[str]
+
+completion = openai.chat.completions.parse(
+    model="gpt-4o-2024-08-06",
+    messages=[
+        {"role": "system", "content": "Extract the event information."},
+        {
+            "role": "user",
+            "content": "Alice and Bob are going to a science fair on Friday.",
+        },
+    ],
+    response_format=CalendarEvent,
+    name="extract-calendar-event",
+    metadata={"langfuse_tags": ["structured-output"]},
+)
+
+print(completion.choices[0].message.parsed)
+
+# Flush via global client
+get_client().flush()
+```
+
+OpenAI SDK를 업그레이드할 수 없어 `chat.completions.create`를 계속 사용해야 한다면, OpenAI SDK의 `type_to_response_format_param`으로 변환하여 Pydantic 모델을 전달할 수 있습니다.
+
+```python
+from langfuse.openai import openai
+from openai.lib._parsing._completions import type_to_response_format_param
+from pydantic import BaseModel
+
+class CalendarEvent(BaseModel):
+    name: str
+    date: str
+    participants: list[str]
+
+completion = openai.chat.completions.create(
+    model="gpt-4o-2024-08-06",
+    messages=[
+        {"role": "system", "content": "Extract the event information."},
+        {
+            "role": "user",
+            "content": "Alice and Bob are going to a science fair on Friday.",
+        },
+    ],
+    response_format=type_to_response_format_param(CalendarEvent),
+)
+```
+
+#### Assistants API
+
+이 통합은 OpenAI Assistants가 추가 API 요청 없이는 쉽게 캡처할 수 없는 서버 측 상태를 가지고 있기 때문에 assistants api의 트레이싱을 지원하지 않습니다. Langfuse에서 assistants api 사용량을 가장 잘 트레이싱하는 엔드투엔드 예제는 이 [노트북](/integrations/kr/model-providers/openai-assistants-api)을 확인하세요.
+
+## OpenAI API 오류 트레이싱 [#error-tracking]
+
+Langfuse는 네이티브 통합을 사용하는 경우 OpenAI API 오류를 자동으로 추적하고 모니터링합니다. 오류는 `level`과 `statusMessage` 필드를 통해 캡처됩니다 ([문서](/docs/observability/features/log-levels) 참고).
+
+시작하는 방법은 [여기](/integrations/kr/model-providers/openai-py)에서 더 알아보세요.
+
+```diff
+- import openai
++ from langfuse.openai import openai
+```
+
+```python
+# Cause an error by attempting to use a host that does not exist.
+openai.base_url = "https://example.com"
+
+country = openai.chat.completions.create(
+  name="will-error",
+  model="gpt-3.5-turbo",
+  messages=[
+      {"role": "user", "content": "How are you?"}],
+)
+```
+
+오류 발생 👆
+
+![Openai error](/images/docs/openai-error.png)
+
+## FAQ
+
+import { FaqPreview } from "@/components/faq/FaqPreview";
+
+<FaqPreview tags={["integration"]} />
+
+## GitHub Discussions
+
+import { GhDiscussionsPreview } from "@/components/gh-discussions/GhDiscussionsPreview";
+
+<GhDiscussionsPreview labels={["integration-openai"]} />

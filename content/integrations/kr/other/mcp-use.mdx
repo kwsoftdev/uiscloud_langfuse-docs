@@ -1,0 +1,137 @@
+---
+title: Observability for mcp-use with Langfuse
+sidebarTitle: mcp-use
+logo: /images/integrations/mcp-use_icon.svg
+logoAppearance: dark
+description: 포괄적인 옵저버빌리티와 디버깅 기능을 위해 Langfuse로 mcp-use 에이전트와 도구 실행을 모니터링하고 트레이싱하세요.
+category: Integrations
+---
+
+# mcp-use Integration with Langfuse
+
+[**mcp-use**](https://docs.mcp-use.com)는 AI 에이전트를 외부 데이터 소스 및 도구에 연결하기 위해 Anthropic이 개발한 개방형 표준인 Model Context Protocol(MCP)을 구현한 플랫폼입니다. Langfuse 통합을 사용하면 mcp-use 에이전트 상호작용을 모니터링하고 트레이싱하여 옵저버빌리티를 강화할 수 있습니다.
+
+> **MCP(Model Context Protocol)란 무엇인가요?** MCP는 AI 에이전트가 외부 데이터 소스 및 도구에 안전하게 연결할 수 있게 해주는 개방형 표준입니다. AI 애플리케이션이 외부 서비스와 통신하는 방식을 표준화하여, 데이터베이스, API, 기타 도구와 상호작용할 수 있는 컨텍스트 인식 AI 에이전트를 더 쉽게 구축할 수 있게 해줍니다.
+
+> **mcp-use란 무엇인가요?** mcp-use는 Model Context Protocol을 구현한 플랫폼으로, 적절한 거버넌스와 보안을 유지하면서 외부 시스템과 원활하게 상호작용할 수 있는 AI 에이전트를 구축하고 배포할 수 있는 도구를 개발자에게 제공합니다.
+
+## 통합
+
+<Steps>
+
+### 사전 요구 사항
+
+- Langfuse 프로젝트([cloud.langfuse.com](https://cloud.langfuse.com)에서 가입하거나 셀프 호스팅)
+
+### Langfuse 통합 설정하기
+
+1. Langfuse 프로젝트 설정 페이지에서 **Langfuse API 키를 발급받습니다.**
+
+2. mcp-use 플랫폼 설정으로 이동하여 옵저버빌리티 섹션에 Langfuse 자격 증명을 추가함으로써 **mcp-use에서 Langfuse를 구성합니다.**
+
+   ```bash
+   # Environment variables for mcp-use
+   LANGFUSE_PUBLIC_KEY=pk-lf-...
+   LANGFUSE_SECRET_KEY=sk-lf-...
+   LANGFUSE_BASE_URL=https://cloud.langfuse.com  # or your self-hosted URL
+   ```
+
+3. mcp-use 구성에서 **옵저버빌리티를 활성화**하여 Langfuse로 트레이스 전송을 시작합니다.
+
+### 트레이싱되는 항목
+
+Langfuse 통합을 활성화하면 mcp-use는 다음을 자동으로 캡처합니다.
+
+- **에이전트 상호작용**: 완전한 대화 및 에이전트 의사 결정 과정
+- **도구 실행**: 외부 도구 호출과 그 결과에 대한 상세한 트레이스
+- **컨텍스트 사용**: 상호작용 전반에서 컨텍스트가 관리되고 활용되는 방식
+- **성능 지표**: 지연 시간, 토큰 사용량, 실행 시간
+- **오류 처리**: 실패한 요청과 오류 복구 과정
+
+### Langfuse에서 트레이스 확인하기
+
+구성이 완료되면 Langfuse 대시보드에서 다음을 포함한 상세한 트레이스를 확인할 수 있습니다.
+
+- **MCP 프로토콜 메시지**: 에이전트와 도구 간의 요청/응답 패턴
+- **도구 호출 체인**: 에이전트가 외부 도구를 호출하는 방식의 시각화
+- **컨텍스트 흐름**: 상호작용 전반에서 컨텍스트가 전달되고 유지되는 방식
+- **리소스 접근**: 외부 데이터 소스 및 API 호출에 대한 세부 정보
+
+트레이스 구조 예시:
+
+```
+Agent Request
+├── Context Preparation
+├── Tool Discovery
+├── External Tool Call
+│   ├── API Request
+│   └── Response Processing
+└── Agent Response
+```
+
+</Steps>
+
+## 이점
+
+mcp-use와 Langfuse 통합은 다음을 제공합니다.
+
+- **완전한 옵저버빌리티**: 에이전트 동작과 도구 사용에 대한 완전한 가시성
+- **성능 최적화**: 도구 실행과 컨텍스트 처리에서 병목 지점 파악
+- **디버깅 지원**: 실패를 추적하고 에이전트 의사 결정 과정 이해
+- **보안 모니터링**: 데이터 접근 패턴과 도구 권한 추적
+- **비용 관리**: 토큰 사용량과 API 호출 패턴 모니터링
+
+## 구성 옵션
+
+### 고급 설정
+
+추가 구성 옵션으로 통합을 사용자 지정할 수 있습니다.
+
+```javascript
+// Example configuration for enhanced tracing
+{
+  "observability": {
+    "langfuse": {
+      "enabled": true,
+      "traceLevel": "detailed", // basic, detailed, verbose
+      "captureToolInputs": true,
+      "captureToolOutputs": true,
+      "captureContext": true,
+      "filterSensitiveData": true
+    }
+  }
+}
+```
+
+### 메타데이터 보강
+
+mcp-use는 다음에 대한 메타데이터로 트레이스를 자동으로 보강할 수 있습니다.
+
+- 에이전트 구성과 기능
+- 도구 권한과 접근 수준
+- 컨텍스트 소스와 데이터 계보
+- 사용자 세션과 상호작용 패턴
+
+## 모범 사례
+
+1. **도구 성능 모니터링**: Langfuse 대시보드를 사용해 도구 실행 시간과 성공률을 추적하세요
+2. **컨텍스트 사용 분석**: 컨텍스트가 에이전트 성능과 정확도에 미치는 영향을 이해하세요
+3. **알림 설정**: 도구 실행 실패나 성능 저하에 대한 알림을 구성하세요
+4. **보안 패턴 검토**: 도구 접근 패턴과 데이터 사용을 정기적으로 감사하세요
+5. **워크플로 최적화**: 트레이스 데이터를 사용해 불필요한 도구 호출을 파악하고 제거하세요
+
+## 문제 해결
+
+Langfuse에 트레이스가 나타나지 않는 경우:
+
+1. **자격 증명 확인**: Langfuse API 키가 올바르고 적절한 권한을 가지고 있는지 확인하세요
+2. **네트워크 확인**: mcp-use가 Langfuse 인스턴스에 접근할 수 있는지 확인하세요(방화벽/프록시 설정)
+3. **구성 검토**: mcp-use 설정에서 옵저버빌리티가 활성화되어 있는지 확인하세요
+4. **로그 확인**: 통합 오류나 경고가 있는지 mcp-use 로그를 검토하세요
+
+## 더 알아보기
+
+- [mcp-use 문서](https://docs.mcp-use.com)
+- [mcp-use 옵저버빌리티 가이드](https://docs.mcp-use.com/development/observability)
+- [Model Context Protocol 사양](https://modelcontextprotocol.io)
+- [Langfuse 트레이싱 가이드](/docs/tracing)

@@ -1,0 +1,37 @@
+---
+title: Trace Cursor Agents with Langfuse
+sidebarTitle: Cursor
+logo: /images/integrations/cursor_icon.png
+description: Monitor and trace your Cursor AI agent interactions with Langfuse for comprehensive observability and debugging of AI-assisted coding sessions.
+category: Integrations
+---
+
+# Trace Cursor Agents with Langfuse
+
+이 가이드는 모니터링, 디버깅, AI 지원 코딩 세션 분석을 위해 [Cursor](https://cursor.com) AI 에이전트 상호작용을 Langfuse로 추적하는 방법을 보여줍니다.
+
+> **Cursor란 무엇인가요?** [**Cursor**](https://cursor.com)는 VS Code를 기반으로 만들어진 AI 기반 코드 에디터입니다. 자연어 상호작용을 통해 코드를 작성, 편집, 디버깅하고 이해하도록 돕는 AI 에이전트를 갖추고 있습니다. Cursor 에이전트는 셸 명령을 실행하고, 파일을 읽고 편집하며, MCP(Model Context Protocol) 도구를 사용해 개발자를 지원할 수 있습니다.
+
+> **Langfuse란 무엇인가요?** [**Langfuse**](https://langfuse.com)는 오픈소스 AI 엔지니어링 플랫폼입니다. 트레이싱, 프롬프트 관리, 평가와 같은 기능으로 팀이 LLM 애플리케이션을 협업하여 디버깅, 분석, 개선할 수 있도록 돕습니다.
+
+## 이 인테그레이션이 하는 일
+
+이 인테그레이션을 사용하면 모든 Cursor 에이전트 활동을 자동으로 Langfuse로 추적할 수 있습니다:
+
+- **사용자 프롬프트**: 에이전트에 전송된 모든 프롬프트와 지시를 캡처합니다
+- **에이전트 응답**: 모든 에이전트 응답과 추론 과정을 기록합니다
+- **파일 작업**: 상세한 통계와 함께 파일 읽기 및 편집을 추적합니다
+- **셸 명령**: 셸 명령 실행과 출력을 모니터링합니다
+- **MCP 도구 호출**: 모든 MCP 도구 호출과 결과를 기록합니다
+- **세션 추적**: 손쉬운 필터링을 위해 대화와 워크스페이스별로 트레이스를 그룹화합니다
+- **성능 지표**: 지연 시간, 토큰 사용량, 실행 시간을 캡처합니다
+
+## 작동 방식
+
+출처: [naoufalelh/cursor-langfuse](https://github.com/naoufalelh/cursor-langfuse)
+
+import { CursorLangfuseReadme } from "@/components/CursorLangfuseReadme";
+
+<div className="p-6 mt-6 border bg-muted/30 rounded-lg overflow-auto max-h-[70vh]">
+  <CursorLangfuseReadme />
+</div>

@@ -21,7 +21,7 @@ export const sectionNavDataKo: SectionNavData[] = [
   { name: "문서", href: "/docs/kr" },
   { name: "셀프 호스팅", href: "/self-hosting/kr" },
   { name: "가이드", href: "/guides/kr" },
-  { name: "인테그레이션", href: "/integrations" },
+  { name: "인테그레이션", href: "/integrations/kr" },
   { name: "자주 묻는 질문", href: "/faq/kr" },
   { name: "핸드북", href: "/handbook/kr" },
   { name: "라이브러리", href: "/library" },

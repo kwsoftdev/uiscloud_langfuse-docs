@@ -1,0 +1,270 @@
+---
+source: ⚠️ Jupyter Notebook
+title: LiteLLM SDK 통합
+sidebarTitle: LiteLLM SDK
+logo: /images/integrations/litellm_icon.png
+description: 이 가이드에서는 LiteLLM SDK를 사용해 LLM 호출을 캡처하고 Langfuse에 로그로 남기는 방법을 보여드립니다.
+category: Integrations
+---
+
+# LiteLLM SDK 통합
+
+이 가이드에서는 LiteLLM SDK를 사용해 LLM 호출을 캡처하고 Langfuse에 로그로 남기는 방법을 보여드립니다.
+
+> **LiteLLM이란 무엇인가요?** [LiteLLM](https://github.com/BerriAI/litellm)은 OpenAI 호환 엔드포인트를 통해 수백 개의 서로 다른 LLM 제공업체와 모델을 호출하고 관리할 수 있는 단일 통합 API를 제공하는 오픈소스 프록시 및 SDK입니다.
+
+> **Langfuse란 무엇인가요?** [Langfuse](https://langfuse.com)는 LLM 애플리케이션을 트레이싱, 모니터링, 디버그하는 데 도움을 주는 오픈소스 LLM 관찰 가능성 플랫폼입니다.
+
+LiteLLM을 Langfuse와 통합하는 방법에는 세 가지가 있습니다:
+
+1. LiteLLM SDK를 사용해 LLM 호출을 직접 캡처하기.
+2. LiteLLM 프록시를 통해 로그를 전송하여 프록시를 거치는 모든 LLM 호출을 캡처하기.
+3. 호환되는 프레임워크(OpenAI 또는 LangChain SDK 등)를 사용해 LLM 호출을 캡처하기.
+
+<Callout type="info">
+  이 통합은 LiteLLM SDK를 위한 것입니다. LiteLLM 프록시 통합을 찾고 있다면
+  [LiteLLM 프록시 통합](/integrations/kr/gateways/litellm) 페이지를 참고하세요.
+
+</Callout>
+
+## 기능
+
+- 모든 LiteLLM 요청에 대한 자동 트레이스 수집
+- Langfuse Cloud 지원(EU, US, Japan, HIPAA 리전)
+- 셀프 호스팅된 Langfuse 인스턴스 지원
+- 사용자 지정 엔드포인트 구성
+- Basic Auth를 사용한 안전한 인증
+- 다른 OTEL 통합과의 일관된 속성 매핑
+
+## 사전 준비
+
+1. **Langfuse 계정**: [Langfuse Cloud](https://cloud.langfuse.com)에 가입하거나 셀프 호스팅 인스턴스를 설정하세요
+2. **API 키**: Langfuse 프로젝트 설정에서 public 키와 secret 키를 가져오세요
+3. **의존성**: 필요한 패키지를 설치하세요:
+   ```bash
+   pip install litellm opentelemetry-api opentelemetry-sdk opentelemetry-exporter-otlp
+   ```
+
+## 구성
+
+### 환경 변수
+
+| 변수                  | 필수 여부 | 설명                   | 예시                           |
+| --------------------- | --------- | ---------------------- | ------------------------------ |
+| `LANGFUSE_PUBLIC_KEY` | 예        | Langfuse public 키     | `pk-lf-...`                    |
+| `LANGFUSE_SECRET_KEY` | 예        | Langfuse secret 키     | `sk-lf-...`                    |
+| `LANGFUSE_OTEL_HOST`  | 아니요    | OTEL 엔드포인트 호스트 | `https://otel.my-langfuse.com` |
+
+### 엔드포인트 결정 방식
+
+이 통합은 `LANGFUSE_OTEL_HOST`로부터 OTEL 엔드포인트를 자동으로 구성합니다
+
+- **기본값(US)**: `https://us.cloud.langfuse.com/api/public/otel`
+- **EU 리전**: `https://cloud.langfuse.com/api/public/otel`
+- **Japan 리전**: `https://jp.cloud.langfuse.com/api/public/otel`
+- **HIPAA 리전**: `https://hipaa.cloud.langfuse.com/api/public/otel`
+- **셀프 호스팅**: `{LANGFUSE_OTEL_HOST}/api/public/otel`
+
+## 사용법
+
+### 기본 설정
+
+```python
+import os
+import litellm
+
+# Set your Langfuse credentials
+os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-lf-...")
+os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-lf-...")
+
+# Enable Langfuse OTEL integration
+litellm.callbacks = ["langfuse_otel"]
+
+# Make LLM requests as usual
+response = litellm.completion(
+    model="gpt-3.5-turbo",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+```
+
+### 고급 구성
+
+```python
+import os
+import litellm
+
+# Set your Langfuse credentials
+os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-lf-...")
+os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-lf-...")
+
+# Use EU region
+os.environ.setdefault("LANGFUSE_OTEL_HOST", "https://cloud.langfuse.com")  # EU region
+# os.environ.setdefault("LANGFUSE_OTEL_HOST", "https://otel.my-langfuse.company.com")  # custom OTEL endpoint
+
+# Or use self-hosted instance
+# os.environ.setdefault("LANGFUSE_OTEL_HOST", "https://my-langfuse.company.com")
+
+litellm.callbacks = ["langfuse_otel"]
+```
+
+### 수동 OTEL 구성
+
+OpenTelemetry 구성을 직접 제어해야 하는 경우:
+
+```python
+import os
+import base64
+import litellm
+
+# Get keys for your project from the project settings page: https://cloud.langfuse.com
+os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-lf-...")
+os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-lf-...")
+os.environ.setdefault("LANGFUSE_OTEL_HOST", "https://cloud.langfuse.com") # EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+# os.environ.setdefault("LANGFUSE_OTEL_HOST", "https://otel.my-langfuse.company.com") # custom OTEL endpoint
+
+LANGFUSE_AUTH = base64.b64encode(
+    f"{os.environ.get('LANGFUSE_PUBLIC_KEY')}:{os.environ.get('LANGFUSE_SECRET_KEY')}".encode()
+).decode()
+
+host = os.environ.get("LANGFUSE_OTEL_HOST")
+os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = host + "/api/public/otel"
+os.environ["OTEL_EXPORTER_OTLP_HEADERS"] = f"Authorization=Basic {LANGFUSE_AUTH},x-langfuse-ingestion-version=4"
+
+litellm.callbacks = ["langfuse_otel"]
+```
+
+### LiteLLM 프록시와 함께 사용하기
+
+프록시 구성에 통합을 추가하세요:
+
+1. 환경 변수에 자격 증명을 추가하세요
+
+```bash
+export LANGFUSE_PUBLIC_KEY="pk-lf-..."
+export LANGFUSE_SECRET_KEY="sk-lf-..."
+export LANGFUSE_OTEL_HOST="https://us.cloud.langfuse.com"  # Default US region
+# Other Langfuse data regions: https://cloud.langfuse.com (EU), https://jp.cloud.langfuse.com (Japan), https://hipaa.cloud.langfuse.com (HIPAA)
+# export LANGFUSE_OTEL_HOST="https://otel.my-langfuse.company.com"  # custom OTEL endpoint
+```
+
+2. config.yaml 설정하기
+
+```yaml
+# config.yaml
+litellm_settings:
+  callbacks: ["langfuse_otel"]
+```
+
+3. 프록시 실행하기
+
+```bash
+litellm --config /path/to/config.yaml
+```
+
+## 수집되는 데이터
+
+이 통합은 다음 데이터를 자동으로 수집합니다:
+
+- **요청 세부 정보**: 모델, 메시지, 파라미터(temperature, max_tokens 등)
+- **응답 세부 정보**: 생성된 콘텐츠, 토큰 사용량, 종료 사유
+- **타이밍 정보**: 요청 소요 시간, 첫 토큰까지의 시간
+- **메타데이터**: 사용자 ID, 세션 ID, 사용자 지정 태그(제공된 경우)
+- **오류 정보**: 예외 세부 정보 및 스택 트레이스(오류가 발생한 경우)
+
+## 메타데이터 지원
+
+기존 Langfuse 통합에서 사용 가능한 모든 메타데이터 필드는 이제 OTEL 통합을 사용할 때 **완전히 지원됩니다**.
+
+- `metadata` 딕셔너리에 전달하는 모든 키(`generation_name`, `trace_id`, `session_id`, `tags` 등)는 OpenTelemetry span 속성으로 내보내집니다.
+- 속성 이름에는 `langfuse.` 접두사가 붙어 있어 관찰 가능성 백엔드에서 쉽게 필터링하거나 검색할 수 있습니다.
+  예시: `langfuse.generation.name`, `langfuse.trace.id`, `langfuse.trace.session_id`.
+
+### 메타데이터 전달 – 예제
+
+```python
+response = litellm.completion(
+    model="gpt-3.5-turbo",
+    messages=[{"role": "user", "content": "Hello!"}],
+    metadata={
+        "generation_name": "welcome-message",
+        "trace_id": "trace-123",
+        "session_id": "sess-42",
+        "tags": ["prod", "beta-user"]
+    }
+)
+```
+
+결과 span에는 다음과 유사한 속성이 포함됩니다:
+
+```
+langfuse.generation.name   = "welcome-message"
+langfuse.trace.id          = "trace-123"
+langfuse.trace.session_id  = "sess-42"
+langfuse.trace.tags        = ["prod", "beta-user"]
+```
+
+**Langfuse UI**(Traces 탭)를 사용해 `langfuse.*` 속성을 포함하는 span을 검색, 필터링, 분석하세요.
+이 통합의 OTEL 익스포터는 데이터를 Langfuse의 OTLP HTTP 엔드포인트로 직접 전송합니다. 이는 Grafana, Honeycomb, Datadog 또는 다른 일반적인 OTEL 백엔드를 위한 것이 **아닙니다**.
+
+## 인증
+
+이 통합은 Langfuse public 키와 secret 키를 사용해 HTTP Basic 인증을 사용합니다:
+
+```
+Authorization: Basic <base64(public_key:secret_key)>
+```
+
+이는 통합에서 자동으로 처리됩니다 - 환경 변수를 통해 키만 제공하면 됩니다.
+
+## 문제 해결
+
+### 일반적인 문제
+
+1. **자격 증명 누락 오류**
+
+   ```
+   ValueError: LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY must be set
+   ```
+
+   **해결 방법**: 두 환경 변수 모두 유효한 키로 설정되어 있는지 확인하세요.
+
+2. **연결 문제**
+   - 인터넷 연결을 확인하세요
+   - 엔드포인트 URL이 올바른지 확인하세요
+   - 셀프 호스팅 인스턴스의 경우, `/api/public/otel` 엔드포인트에 접근할 수 있는지 확인하세요
+
+3. **인증 오류**
+   - public 키와 secret 키가 올바른지 확인하세요
+   - 키가 동일한 Langfuse 프로젝트에 속하는지 확인하세요
+   - 키가 필요한 권한을 가지고 있는지 확인하세요
+
+### 디버그 모드
+
+상세한 정보를 확인하려면 자세한 로깅을 활성화하세요:
+
+**SDK:**
+
+```python
+import litellm
+litellm._turn_on_debug()
+```
+
+**프록시:**
+
+```bash
+export LITELLM_LOG="DEBUG"
+```
+
+이렇게 하면 다음이 표시됩니다:
+
+- 엔드포인트 결정 로직
+- 인증 헤더 생성
+- OTEL 트레이스 제출 세부 정보
+
+## 관련 링크
+
+- [Langfuse 문서](https://langfuse.com/docs)
+- [Langfuse OpenTelemetry 가이드](https://langfuse.com/integrations/native/opentelemetry)
+- [OpenTelemetry Python SDK](https://opentelemetry.io/docs/languages/python/)
+- [LiteLLM 관찰 가능성](https://docs.litellm.ai/docs/observability/)

@@ -1,0 +1,98 @@
+---
+title: "Langfuse Integration with OpenWebUI"
+description: "Learn how to integrate Langfuse with OpenWebUI for detailed monitoring and recording of model calls. Follow our quick start guide to observe your LLM interactions in Langfuse."
+sidebarTitle: OpenWebUI
+logo: /images/integrations/openwebui_icon.png
+logoAppearance: dark
+---
+
+# Langfuse Integration with OpenWebUI
+
+[OpenWebUI](https://openwebui.com/)는 오프라인으로 동작하며 Ollama와 OpenAI 호환 API를 포함한 다양한 LLM 러너를 지원하는 셀프 호스팅 WebUI입니다. OpenWebUI는 오픈소스이며 여러분 자신의 인프라에 쉽게 배포할 수 있습니다.
+
+_Langfuse를 OpenWebUI와 통합하는 방법_
+
+<Video src="https://static.langfuse.com/docs-videos/openwebui-integration.mp4" />
+
+Langfuse는 OpenWebUI를 위한 오픈소스 관측 가능성과 평가를 제공합니다. Langfuse 인테그레이션을 활성화하면, 애플리케이션 데이터를 Langfuse로 추적해 OpenWebUI의 사용을 개발, 모니터링, 개선할 수 있습니다:
+
+- 애플리케이션 [트레이스](/docs/observability/overview)
+- 사용 패턴
+- 사용자 및 모델별 비용 데이터
+- [평가](/docs/evaluation/overview)
+
+## Langfuse를 OpenWebUI와 통합하는 방법:
+
+OpenWebUI의 [Pipelines](https://github.com/open-webui/pipelines/)는 OpenAI API 플러그인을 위한 UI에 구애받지 않는 프레임워크입니다. 사용자 프롬프트를 가로채고, 처리하고, 최종 LLM으로 전달하는 플러그인을 주입할 수 있게 해, 프롬프트 처리를 더 세밀하게 제어하고 커스터마이즈할 수 있습니다.
+
+애플리케이션 데이터를 Langfuse로 추적하려면, 메시지 상호작용의 실시간 모니터링과 분석을 가능하게 하는 [Langfuse 파이프라인](https://github.com/open-webui/pipelines/blob/039f9c54f8e9f9bcbabde02c2c853e80d25c79e4/examples/filters/langfuse_v3_filter_pipeline.py)을 사용할 수 있습니다.
+
+## 빠른 시작 가이드
+
+<Steps>
+
+### OpenWebUI 설정하기
+
+OpenWebUI가 실행 중인지 확인하세요. 이를 위해서는 [OpenWebUI 문서](https://docs.openwebui.com/)를 참고하세요.
+
+### Pipelines 설정하기
+
+Docker를 사용해 [Pipelines](https://github.com/open-webui/pipelines/)를 실행하세요. 다음 명령으로 Pipelines를 시작하세요:
+
+```bash
+docker run -p 9099:9099 --add-host=host.docker.internal:host-gateway -v pipelines:/app/pipelines --name pipelines --restart always ghcr.io/open-webui/pipelines:main
+```
+
+### OpenWebUI와 Pipelines 연결하기
+
+**Admin Panel > Settings**에서, 다음 세부 정보로 OpenAI API 유형의 새 연결을 생성하고 저장하세요:
+
+- **URL:** http://localhost:9099/ (앞서 실행한 Docker 컨테이너가 실행 중인 위치입니다).
+- **Password:** 0p3n-w3bu! (표준 비밀번호)
+
+![OpenWebUI Settings](/images/docs/openwebui-setup-settings.png)
+
+### Langfuse 필터 파이프라인 추가하기
+
+다음으로, **Admin Panel > Settings > Pipelines**로 이동해 Langfuse 필터 파이프라인을 추가하세요. Pipelines가 http://host.docker.internal:9099(앞서 구성한 대로)에서 리스닝하고 있다고 지정하고, _Install from GitHub URL_ 옵션을 사용해 다음 URL로 [Langfuse 필터 파이프라인](https://github.com/open-webui/pipelines/blob/039f9c54f8e9f9bcbabde02c2c853e80d25c79e4/examples/filters/langfuse_v3_filter_pipeline.py)을 설치하세요:
+
+```
+https://github.com/open-webui/pipelines/blob/main/examples/filters/langfuse_v3_filter_pipeline.py
+```
+
+이제 아래에 여러분의 Langfuse API 키를 추가하세요. 아직 Langfuse에 가입하지 않았다면, [여기](https://cloud.langfuse.com)에서 계정을 생성해 API 키를 받을 수 있습니다.
+
+![OpenWebUI add Langfuse Pipeline](/images/docs/openwebui-add-pipeline.png)
+
+<Callout type="info">
+  스트리밍이 활성화된 상태에서 OpenAI 모델의 사용량(토큰 수)을 캡처하려면, OpenWebUI의 모델
+  설정으로 이동해 *Capabilities* 아래의 "Usage"
+  [박스](https://github.com/open-webui/open-webui/discussions/5770#discussioncomment-10778586)를
+  체크해야 합니다.
+</Callout>
+
+### 4단계: Langfuse에서 트레이스 확인하기
+
+이제 OpenWebUI 애플리케이션과 상호작용하고 Langfuse에서 트레이스를 확인할 수 있습니다.
+
+![OpenWebUI Example Trace in Langfuse](/images/docs/openwebui-example-trace.png)
+
+[Langfuse UI의 예시 트레이스](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/87275f28b45a8c0b5414ff0d9fd67d9a?timestamp=2025-08-22T11%3A15%3A19.006Z&display=details&observation=851eaa672faa7634)
+
+</Steps>
+
+## 더 알아보기
+
+OpenWebUI Pipelines에 대한 포괄적인 가이드는 [이 게시글](https://ikasten.io/2024/06/03/getting-started-with-openwebui-pipelines/)을 방문하세요.
+
+OpenWebUI 설정에 대해 더 알아보려면 [공식 문서](https://docs.openwebui.com/)를 확인하세요.
+
+## 피드백
+
+피드백이나 요청이 있다면 GitHub [Issue](/issue)를 생성하거나 [Discord](https://discord.langfuse.com/)에서 커뮤니티와 여러분의 작업을 공유해 주세요.
+
+## GitHub Discussions
+
+import { GhDiscussionsPreview } from "@/components/gh-discussions/GhDiscussionsPreview";
+
+<GhDiscussionsPreview labels={["integration-openwebui"]} />

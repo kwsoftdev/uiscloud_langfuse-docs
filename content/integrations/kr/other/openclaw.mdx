@@ -1,0 +1,100 @@
+---
+title: "Trace OpenClaw with Langfuse"
+sidebarTitle: OpenClaw
+logo: /images/integrations/openclaw_icon.svg
+description: "프롬프트, 추론, 도구 호출, 비용에 대한 완전한 가시성을 위해 OpenClaw x Langfuse 플러그인을 사용하여 Langfuse로 OpenClaw AI 에이전트를 트레이싱하세요."
+category: Integrations
+---
+
+# Trace OpenClaw with Langfuse
+
+<iframe
+  width="100%"
+  className="aspect-[16/9] rounded border w-full"
+  src="https://www.youtube-nocookie.com/embed/lT8XsHg3uZA"
+  title="Add full observability to your OpenClaw agent with Langfuse"
+  frameBorder="0"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+  referrerPolicy="strict-origin-when-cross-origin"
+  allowFullScreen
+></iframe>
+
+> **OpenClaw란 무엇인가요?** [OpenClaw](https://github.com/openclaw/openclaw)는 Peter Steinberger가 만든 무료 오픈 소스 자율 AI 에이전트입니다. 모델에 구애받지 않으며 Claude, GPT, DeepSeek 및 기타 LLM을 지원합니다. 로컬에서 실행되며 Signal, Telegram, Discord, WhatsApp과 같은 메시징 플랫폼을 통해 접근할 수 있습니다. OpenClaw는 작업을 실행하고, 자체 스킬을 작성하고, 사용자 선호도에 대한 장기 메모리를 유지할 수 있습니다.
+
+> **Langfuse란 무엇인가요?** [Langfuse](/)는 팀이 AI 애플리케이션에서 LLM 호출을 추적하고, 성능을 모니터링하고, 문제를 디버깅할 수 있도록 돕는 오픈 소스 AI 엔지니어링 플랫폼입니다.
+
+## 왜 OpenClaw를 트레이싱해야 할까요?
+
+자율 에이전트는 여러분이 절대 볼 수 없는 수많은 결정을 내립니다. 어떤 모델을 호출했는지, 무엇을 추론했는지, 어떤 스킬과 도구를 사용했는지, 각 턴에 얼마의 비용이 들었는지 등입니다. 트레이싱은 이 모든 것을 드러냅니다.
+
+- **에이전트 동작 이해하기.** OpenClaw가 내부적으로 만드는 프롬프트, 추론 트레이스, 도구 호출을 확인합니다.
+- **에이전트 개선하기.** 에이전트가 혼란스러워하는 지점을 파악하여 스킬, 시스템 프롬프트, 구성을 조정할 수 있습니다.
+- **비용 추적하기.** 모델과 세션 전반의 토큰 사용량과 지출을 모니터링합니다.
+
+## 트레이싱 설정하기
+
+[OpenClaw x Langfuse 플러그인](https://clawhub.ai/codecls/plugins/openclaw-x-langfuse-plugin)("Langfuse Bridge")은 OpenClaw의 내부 진단 버스를 구독하여 각 대화 턴을 중첩된 Langfuse 트레이스로 변환하고, 모델 호출, 도구 실행, 검색 단계에 대해 별도의 옵저베이션을 생성합니다. 트레이스는 Langfuse 세션으로 그룹화되며 토큰 사용량, 비용, 지연 시간, 오류를 포함합니다. 플러그인을 설치하고 Langfuse 키를 붙여넣으면 끝입니다. 프록시나 코드 변경이 필요 없습니다.
+
+<Steps>
+
+### Langfuse 설정하기
+
+[Langfuse Cloud](https://cloud.langfuse.com)에 가입하거나 [Langfuse를 셀프 호스팅](/self-hosting)하세요. 프로젝트를 생성하고 프로젝트 설정에서 공개 및 비밀 API 키를 복사합니다.
+
+### 플러그인 설치하기
+
+[ClawHub](https://clawhub.ai/codecls/plugins/openclaw-x-langfuse-plugin)에서 플러그인을 설치합니다.
+
+```bash
+openclaw plugins install clawhub:openclaw-x-langfuse-plugin
+```
+
+### 플러그인 구성하기
+
+`openclaw.json`에서 플러그인을 활성화하고 Langfuse 자격 증명을 제공합니다.
+
+```json
+{
+  "plugins": {
+    "allow": ["langfuse-bridge", "...any-other-plugins-you-have..."],
+    "entries": {
+      "langfuse-bridge": {
+        "enabled": true,
+        "config": {
+          "publicKey": "pk-lf-...",
+          "secretKey": "sk-lf-...",
+          "baseUrl": "https://cloud.langfuse.com"
+        }
+      }
+    }
+  }
+}
+```
+
+`baseUrl`은 Langfuse 데이터 리전을 선택합니다: 🇪🇺 EU `https://cloud.langfuse.com`, 🇺🇸 US `https://us.cloud.langfuse.com`, 🇯🇵 Japan `https://jp.cloud.langfuse.com`, ⚕️ HIPAA `https://hipaa.cloud.langfuse.com`, 또는 🏠 로컬 배포를 위한 자체 URL(예: `http://localhost:3000`).
+
+`openclaw.json`에 자격 증명을 넣는 대신 `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` 환경 변수로도 제공할 수 있습니다. 키가 없으면 플러그인은 경고를 로깅하고 계속 실행됩니다. 게이트웨이를 절대 차단하지 않습니다.
+
+### 게이트웨이 재시작하기
+
+게이트웨이를 재시작하여 구성을 적용합니다.
+
+```bash
+openclaw gateway restart
+```
+
+### Langfuse에서 트레이스 확인하기
+
+평소처럼 OpenClaw를 실행하세요. Langfuse 프로젝트를 열어 세션별로 그룹화된 트레이스를 확인하고, 각 턴의 모델 호출, 도구 및 스킬 실행, 토큰 사용량, 비용, 전달된 오류를 검사할 수 있습니다.
+
+</Steps>
+
+<Callout type="info" title="Did you know?">
+  이미 [OpenRouter](https://openrouter.ai/)를 통해 OpenClaw의 LLM 호출을 라우팅하고 계신가요? [OpenRouter 설정](https://openrouter.ai/settings)에서 Langfuse 키를 연결하여 [Broadcast](/integrations/kr/gateways/openrouter#broadcast)를 활성화하면 OpenClaw 구성을 건드리지 않고도 트레이스를 캡처할 수 있습니다. 이 방법은 OpenRouter를 통해 라우팅된 LLM 호출만 트레이싱하며, OpenClaw의 도구 및 스킬 스팬은 트레이싱하지 않습니다.
+</Callout>
+
+## 더 알아보기
+
+- [OpenClaw x Langfuse 플러그인](https://clawhub.ai/codecls/plugins/openclaw-x-langfuse-plugin): ClawHub에서 설치 및 구성 세부 정보 확인
+- [Langfuse 시작하기](/docs/observability/get-started): API 키 및 프로젝트 설정
+- [OpenClaw 문서](https://docs.openclaw.ai): 구성 및 플러그인 레퍼런스

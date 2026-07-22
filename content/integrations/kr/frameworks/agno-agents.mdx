@@ -1,0 +1,97 @@
+---
+source: ⚠️ Jupyter Notebook
+title: Langfuse로 Agno 관찰하기
+sidebarTitle: Agno
+logo: /images/integrations/agno_icon.jpg
+description: OpenTelemetry를 통해 Langfuse와 Agno를 통합하는 방법을 알아보세요
+category: Integrations
+---
+
+# Langfuse와 Agno 통합하기
+
+이 노트북은 **OpenLIT** 인스트루멘테이션을 사용하여 OpenTelemetry를 통해 **Langfuse**를 **Agno**와 통합하는 방법을 보여줍니다. 이 노트북을 마치면 향상된 관찰 가능성과 디버깅을 위해 Langfuse로 Agno 애플리케이션을 트레이싱할 수 있게 됩니다.
+
+> **Agno란 무엇인가요?** [Agno](https://docs.agno.com/)는 AI 에이전트를 구축하고 관리하기 위한 플랫폼입니다.
+
+> **Langfuse란 무엇인가요?** [Langfuse](https://langfuse.com)는 오픈 소스 AI 엔지니어링 플랫폼입니다. LLM 애플리케이션을 위한 트레이싱 및 모니터링 기능을 제공하여 개발자가 AI 시스템을 디버그, 분석, 최적화할 수 있도록 돕습니다. Langfuse는 네이티브 통합, OpenTelemetry, API/SDK를 통해 다양한 도구 및 프레임워크와 통합됩니다.
+
+## 시작하기
+
+Agno를 사용하고 이를 Langfuse와 통합하는 예제를 살펴보겠습니다.
+
+<Steps>
+### 1단계: 의존성 설치
+
+```python
+%pip install agno openai langfuse yfinance openlit
+```
+
+### 2단계: 환경 변수 설정
+
+[Langfuse Cloud](https://cloud.langfuse.com)에 가입하거나 [Langfuse를 셀프 호스팅](https://langfuse.com/self-hosting)하여 Langfuse API 키를 받으세요. OpenAI API 키도 필요합니다.
+
+```python
+import os
+
+# Get keys for your project from the project settings page: https://cloud.langfuse.com
+os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-lf-...")
+os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-lf-...")
+os.environ.setdefault("LANGFUSE_BASE_URL", "https://cloud.langfuse.com") # 🇪🇺 EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+
+# your openai key
+os.environ.setdefault("OPENAI_API_KEY", "sk-proj-...")
+```
+
+환경 변수를 설정했으니 이제 Langfuse 클라이언트를 초기화할 수 있습니다. `get_client()`는 환경 변수에 제공된 자격 증명을 사용하여 Langfuse 클라이언트를 초기화합니다.
+
+```python
+from langfuse import get_client
+
+langfuse = get_client()
+
+# Verify connection
+if langfuse.auth_check():
+    print("Langfuse client is authenticated and ready!")
+else:
+    print("Authentication failed. Please check your credentials and host.")
+```
+
+### 3단계: Langfuse로 트레이스 전송하기
+
+이 예제는 OpenLit 인스트루멘테이션 라이브러리를 사용하여 트레이스를 전송하는 방법을 보여줍니다
+
+```python
+from agno.agent import Agent
+from agno.models.openai import OpenAIChat
+from agno.tools.duckduckgo import DuckDuckGoTools
+
+# Initialize OpenLIT instrumentation
+import openlit
+openlit.init(tracer=langfuse._otel_tracer, disable_batch=True)
+
+# Create and configure the agent
+agent = Agent(
+    model=OpenAIChat(id="gpt-4o-mini"),
+    tools=[DuckDuckGoTools()],
+    markdown=True,
+    debug_mode=True,
+)
+
+# Use the agent
+agent.print_response("What is currently trending on Twitter?")
+```
+
+### 4단계: Langfuse에서 트레이스 확인하기
+
+위 에이전트 예제를 실행한 후, Langfuse에서 Agno 에이전트가 생성한 트레이스를 확인할 수 있습니다.
+
+![Agno Agents OpenLit Instrumentation](https://langfuse.com/images/cookbook/integration-agno-agents/agno-agents-openlit.png)
+
+[Langfuse의 예제 트레이스](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/080130871f53145aecf7c29d5dfb6e4c?timestamp=2025-06-11T14:01:32.598Z&display=details)
+
+</Steps>
+
+import LearnMore from "@/components-mdx/integration-learn-more.mdx";
+
+<LearnMore />

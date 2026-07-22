@@ -1,0 +1,84 @@
+---
+source: ⚠️ Jupyter Notebook
+title: Langfuse와 Fireworks AI 통합하기
+sidebarTitle: Fireworks AI
+logo: /images/integrations/fireworks_ai_icon.svg
+description: OpenAI SDK를 통해 Fireworks AI의 오픈 소스 및 독점 AI 모델을 Langfuse와 함께 사용하는 가이드입니다.
+category: Integrations
+---
+
+# Langfuse로 Fireworks AI 옵저버빌리티 구현하기
+
+이 가이드는 Fireworks AI를 Langfuse와 통합하는 방법을 보여줍니다. Fireworks AI의 API 엔드포인트는 OpenAI SDK와 완전히 [호환](https://docs.fireworks.ai/tools-sdks/openai-compatibility)되므로, AI 애플리케이션을 원활하게 트레이싱하고 모니터링할 수 있습니다.
+
+> **Fireworks AI란 무엇인가요?** [Fireworks AI](https://fireworks.ai/)는 OpenAI 호환 엔드포인트를 통해 최첨단 오픈 소스 및 독점 AI 모델에 API 접근을 제공하는 플랫폼입니다.
+
+> **Langfuse란 무엇인가요?** [Langfuse](https://langfuse.com)는 팀이 API 호출을 트레이싱하고, 성능을 모니터링하고, LLM 애플리케이션의 문제를 디버그하는 데 도움을 주는 오픈 소스 AI 엔지니어링 플랫폼입니다.
+
+<Steps>
+## 1단계: 종속성 설치
+
+```python
+%pip install openai langfuse
+```
+
+## 2단계: 환경 변수 설정
+
+```python
+import os
+
+# Get keys for your project from the project settings page
+# https://cloud.langfuse.com
+
+os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-lf-...")
+os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-lf-...")
+os.environ.setdefault("LANGFUSE_BASE_URL", "https://cloud.langfuse.com") # 🇪🇺 EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+
+# Set your Fireworks API details
+os.environ.setdefault("FIREWORKS_AI_API_BASE", "https://api.fireworks.ai/inference/v1")
+os.environ.setdefault("FIREWORKS_AI_API_KEY", "fw_...")
+```
+
+## 3단계: Langfuse OpenAI 드롭인 대체 사용하기
+
+```python
+from langfuse.openai import openai
+
+client = openai.OpenAI(
+  api_key=os.environ.get("FIREWORKS_AI_API_KEY"),
+  base_url=os.environ.get("FIREWORKS_AI_API_BASE")
+)
+```
+
+## 4단계: 예시 실행하기
+
+```python
+response = client.chat.completions.create(
+  model="accounts/fireworks/models/llama-v3p1-8b-instruct",
+  messages=[
+    {"role": "system", "content": "You are a helpful assistant."},
+    {"role": "user", "content": "Why is open source important?"},
+  ],
+  name = "Fireworks-AI-Trace" # name of the trace
+)
+print(response.choices[0].message.content)
+```
+
+## 5단계: Langfuse에서 트레이스 확인하기
+
+예시를 실행한 후 Langfuse에 로그인하여 다음을 포함한 상세 트레이스를 확인하세요:
+
+- 요청 매개변수
+- 응답 콘텐츠
+- 토큰 사용량 및 지연 시간 메트릭
+
+![Langfuse 트레이스 예시](https://langfuse.com/images/cookbook/integration-fireworks-ai/fireworks-ai-example-trace.png)
+
+_[Langfuse의 공개 예시 트레이스 링크](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/2c11b0e4-eb40-49de-aee9-2ed11bed2839?timestamp=2025-03-05T13%3A31%3A34.781Z&observation=e9668bb4-29d7-4239-87be-e3019480f71f)_
+
+</Steps>
+
+import LearnMore from "@/components-mdx/integration-learn-more.mdx";
+
+<LearnMore />

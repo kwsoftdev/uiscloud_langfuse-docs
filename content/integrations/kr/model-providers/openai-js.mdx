@@ -1,0 +1,222 @@
+---
+title: OpenAI (JS/TS)
+sidebarTitle: OpenAI (JS/TS)
+seoTitle: Open Source Observability for OpenAI (JS/TS)
+description: OpenAI SDK(JS/TS)를 감싸는 간단한 래퍼로 Langfuse에서 완전한 옵저버빌리티를 확보하세요
+logo: /images/integrations/openai_icon.svg
+logoAppearance: dark
+---
+
+# OpenAI SDK(JS/TS)의 옵저버빌리티
+
+<Callout type="info">
+  Python 버전을 찾고 계신가요? [여기서
+  확인하세요](/integrations/kr/model-providers/openai-py).
+</Callout>
+
+Langfuse JS/TS SDK는 OpenAI SDK를 감싸는 래퍼 함수를 제공하여 OpenAI 호출에 손쉽게 옵저버빌리티를 추가할 수 있게 해줍니다. 여기에는 지연 시간, 스트리밍 응답의 첫 토큰까지 걸리는 시간, 오류, 모델 사용량 추적이 포함됩니다.
+
+```ts {2, 4}
+import OpenAI from "openai";
+import { observeOpenAI } from "@langfuse/openai";
+
+const openai = observeOpenAI(new OpenAI());
+
+const res = await openai.chat.completions.create({
+  messages: [{ role: "system", content: "Tell me a story about a dog." }],
+});
+```
+
+Langfuse는 다음을 자동으로 추적합니다.
+
+- 스트리밍 및 함수 호출을 지원하는 모든 프롬프트/완료
+- 총 지연 시간과 첫 토큰까지 걸리는 시간
+- OpenAI API 오류
+- 모델 사용량(토큰)과 비용(USD) ([더 알아보기](/docs/model-usage-and-cost))
+
+## 작동 방식
+
+<Steps>
+
+### Langfuse SDK 설치
+
+이 통합은 OpenAI SDK 버전 `>=4.0.0`과 호환됩니다.
+
+```sh
+npm install @langfuse/openai openai
+```
+
+### 자격 증명 등록하기
+
+Langfuse 자격 증명을 환경 변수에 추가하세요. 프로젝트 루트에 `.env` 파일과 이를 로드할 `dotenv` 같은 패키지가 있는지 확인하세요.
+
+import EnvJS from "@/components-mdx/env-js.mdx";
+
+<EnvJS />
+
+### OpenTelemetry 초기화하기
+
+Langfuse TypeScript SDK의 트레이싱은 OpenTelemetry 위에 구축되어 있으므로 OpenTelemetry SDK를 설정해야 합니다. `LangfuseSpanProcessor`는 Langfuse로 트레이스를 전송하는 핵심 구성 요소입니다.
+
+```typescript
+import { NodeSDK } from "@opentelemetry/sdk-node";
+import { LangfuseSpanProcessor } from "@langfuse/otel";
+
+const sdk = new NodeSDK({
+  spanProcessors: [new LangfuseSpanProcessor()],
+});
+
+sdk.start();
+```
+
+### 래핑된 클라이언트로 OpenAI 메서드 호출하기
+
+환경을 설정했다면, 래핑된 클라이언트에서 평소처럼 OpenAI SDK 메서드를 호출하세요.
+
+```ts
+import OpenAI from "openai";
+import { observeOpenAI } from "@langfuse/openai";
+
+const openai = observeOpenAI(new OpenAI());
+
+const res = await openai.chat.completions.create({
+  messages: [{ role: "system", content: "Tell me a story about a dog." }],
+  model: "gpt-4o",
+  max_tokens: 300,
+});
+```
+
+완료!✨ 이제 Langfuse에서 OpenAI 호출에 대한 완전한 옵저버빌리티를 확보했습니다.
+
+</Steps>
+
+통합의 엔드투엔드 예제는 노트북을 확인하세요.
+
+import { FileCode } from "lucide-react";
+
+<Cards>
+  <Card
+    title="Example notebook"
+    href="/guides/cookbook/js_integration_openai"
+    icon={<FileCode />}
+  />
+</Cards>
+
+## 문제 해결
+
+### 이벤트 큐잉 및 배치 처리
+
+Langfuse SDK는 네트워크 요청 수를 줄이고 전반적인 성능을 개선하기 위해 백그라운드에서 이벤트를 큐에 쌓고 배치 처리합니다. 장시간 실행되는 애플리케이션에서는 추가 설정 없이 잘 동작합니다.
+
+단기 실행 애플리케이션을 운영하는 경우, 애플리케이션이 종료되기 전에 모든 이벤트가 플러시되도록 Langfuse를 플러시해야 합니다.
+
+```ts
+await langfuseSpanProcessor.forceFlush();
+
+// If you have previously initialized a Langfuse client, you can use that for the flush call
+await langfuse.flush();
+```
+
+이벤트 큐잉 및 배치 처리에 대해 [여기](/docs/observability/features/queuing-batching)에서 더 알아보세요.
+
+### Assistants API
+
+이 통합은 OpenAI Assistants가 추가 API 요청 없이는 쉽게 캡처할 수 없는 서버 측 상태를 가지고 있기 때문에 assistants api의 트레이싱을 지원하지 않습니다. assistants api 사용량을 가장 잘 트레이싱하는 방법에 대한 자세한 내용은 이 [FAQ](/faq/all/openai-assistant-api)에서 확인하세요.
+
+## 고급 사용법
+
+### 커스텀 트레이스 속성
+
+`observeOpenAI` 함수의 `langfuseConfig`에 다음 속성을 추가하여 추가적인 Langfuse 기능을 사용할 수 있습니다.
+
+| 속성                 | 설명                                                                                        |
+| -------------------- | ------------------------------------------------------------------------------------------- |
+| `generationName`     | 특정 유형의 생성을 식별하려면 `generationName`을 설정하세요.                                |
+| `langfusePrompt`     | 생성된 결과와 연결하려면 생성했거나 조회한 Langfuse 프롬프트를 전달하세요                   |
+| `generationMetadata` | Langfuse에서 확인하고 싶은 추가 정보로 `generationMetadata`를 설정하세요.                   |
+| `sessionId`          | 현재 [세션](/docs/observability/features/sessions).                                         |
+| `userId`             | 현재 [user_id](/docs/observability/features/users).                                         |
+| `tags`               | 트레이스를 분류하고 필터링하기 위한 [태그](/docs/observability/features/tags)를 설정하세요. |
+
+예제:
+
+```ts
+const res = await observeOpenAI(new OpenAI(), {
+  generationName: "Traced generation",
+  generationMetadata: { someMetadataKey: "someValue" },
+  sessionId: "session-id",
+  userId: "user-id",
+  tags: ["tag1", "tag2"],
+}).chat.completions.create({
+  messages: [{ role: "system", content: "Tell me a story about a dog." }],
+  model: "gpt-3.5-turbo",
+  max_tokens: 300,
+});
+```
+
+<Callout type="info">
+  커스텀 속성을 추가하려면 `observeOpenAI` 함수로 OpenAI SDK를 감싸고, 두 번째
+  `langfuseConfig` 인수로 속성을 전달해야 합니다. 여기서 Langfuse 클라이언트는
+  싱글턴이며 모든 호출에 동일한 클라이언트가 사용되므로, 실수로 여러 클라이언트가
+  실행되는 것을 걱정할 필요가 없습니다.
+</Callout>
+
+### Langfuse 프롬프트에 연결하기
+
+[Langfuse 프롬프트 관리](/docs/prompt-management/get-started)를 사용하면 프롬프트를 효과적으로 관리하고 버전 관리할 수 있습니다. `observeOpenAI` 함수에 `langfusePrompt` 속성을 전달하여 OpenAI 생성을 프롬프트에 연결할 수 있습니다.
+
+```ts
+import { observeOpenAI } from "@langfuse/openai";
+import OpenAI from "openai";
+
+const langfusePrompt = await langfuse.prompt.get("my-prompt"); // Fetch a previously created prompt
+
+const res = await observeOpenAI(new OpenAI(), {
+  langfusePrompt,
+}).completions.create({
+  prompt: langfusePrompt.prompt,
+  model: "gpt-3.5-turbo-instruct",
+  max_tokens: 300,
+});
+```
+
+이제 결과로 생성된 생성 결과가 Langfuse의 프롬프트에 연결되어, 프롬프트 사용량과 성능을 추적할 수 있습니다.
+
+채팅 프롬프트로 작업할 때는, Langfuse 메시지 역할은 임의의 문자열일 수 있지만 OpenAI 타입 정의는 더 제한적이므로, 컴파일된 프롬프트 메시지를 `OpenAI.ChatCompletionMessageParam[]`로 타입 캐스팅하거나 타입 가드 유틸리티 함수를 사용해야 합니다.
+
+### 스트리밍 응답에서의 OpenAI 토큰 사용량
+
+OpenAI는 `stream_options`의 `include_usage` 파라미터가 `true`로 설정된 경우에만 스트리밍 응답에서 토큰 사용량을 반환합니다. OpenAI가 직접 제공하는 토큰 사용량을 활용하려면 `stream_options` 인수에 `{ include_usage: true }`를 설정하세요.
+
+```typescript /{"include_usage": True}/
+import OpenAI from "openai";
+import { observeOpenAI } from "@langfuse/openai";
+
+const openai = observeOpenAI(new OpenAI());
+
+const stream = await openai.chat.completions.create({
+  model: "gpt-4",
+  messages: [{ role: "user", content: "How are you?" }],
+  stream: true,
+  stream_options: { include_usage: true },
+});
+
+let result = "";
+
+for await (const chunk of stream) {
+  // Check if chunk choices are not empty. OpenAI returns token usage in a final chunk with an empty choices list.
+  result += chunk.choices[0]?.delta?.content || "";
+}
+```
+
+## FAQ
+
+import { FaqPreview } from "@/components/faq/FaqPreview";
+
+<FaqPreview tags={["integration"]} />
+
+## GitHub Discussions
+
+import { GhDiscussionsPreview } from "@/components/gh-discussions/GhDiscussionsPreview";
+
+<GhDiscussionsPreview labels={["integration-openai"]} />

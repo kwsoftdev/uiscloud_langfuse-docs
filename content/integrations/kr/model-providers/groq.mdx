@@ -1,0 +1,172 @@
+---
+source: ⚠️ Jupyter Notebook
+title: Langfuse 통합을 통한 Groq 모델의 옵저버빌리티
+description: Langfuse를 사용하여 Groq 언어 모델의 트레이서빌리티와 옵저버빌리티를 확보하세요. 이 쿡북은 OpenAI SDK와 Groq SDK를 사용하여 Groq 모델과 상호작용하고 이를 Langfuse로 트레이싱하는 방법에 대한 예제를 제공합니다.
+category: Integrations
+sidebarTitle: Groq
+logo: /images/integrations/groq_icon.png
+---
+
+# 쿡북: Groq 모델의 옵저버빌리티 (Python)
+
+이 쿡북은 Groq 모델과 상호작용하고 이를 Langfuse로 트레이싱하는 두 가지 방법을 보여줍니다.
+
+1. OpenAI SDK를 사용하여 Groq 모델과 상호작용하기
+2. OpenInference 계측 라이브러리를 사용하여 Groq 모델과 상호작용하기
+
+이 예제들을 따라가면서 Groq 언어 모델과의 상호작용을 로깅하고 트레이싱하는 방법을 배워, AI 기반 애플리케이션의 성능을 디버그하고 평가할 수 있습니다.
+
+<Callout type="info" emoji="ℹ️">
+**참고:** *Langfuse는 [LangChain](https://langfuse.com/integrations/frameworks/langchain), [LlamaIndex](https://langfuse.com/integrations/frameworks/llamaindex), [LiteLLM](https://langfuse.com/integrations/gateways/litellm) 및 [기타 프레임워크](https://langfuse.com/integrations)와도 네이티브로 통합되어 있습니다. 이 중 하나를 사용하는 경우 Groq 모델을 사용하는 즉시 계측이 이루어집니다.*
+
+</Callout>
+
+시작하려면 Langfuse와 Groq를 위한 환경 변수를 설정하세요.
+
+```python
+import os
+
+# Get keys for your project from the project settings page: https://cloud.langfuse.com
+os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-lf-...")
+os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-lf-...")
+os.environ.setdefault("LANGFUSE_BASE_URL", "https://cloud.langfuse.com") # 🇪🇺 EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+
+# Your Groq API key
+os.environ.setdefault("GROQ_API_KEY", "gsk_...")
+```
+
+## 옵션 1: OpenAI SDK를 사용하여 Groq 모델과 상호작용하기
+
+**참고**: _이 예제는 OpenAI Python SDK를 사용하는 방법을 보여줍니다. JS/TS를 사용하는 경우 [OpenAI JS/TS SDK](https://langfuse.com/integrations/model-providers/openai-js)를 참고하세요._
+
+### 필수 패키지 설치
+
+```python
+%pip install langfuse openai --upgrade
+```
+
+### 필요한 모듈 임포트
+
+`openai`를 직접 임포트하는 대신 `langfuse.openai`에서 임포트하세요. 필요한 다른 모듈도 임포트합니다.
+
+```python
+# Instead of: import openai
+from langfuse.openai import OpenAI
+```
+
+### Groq 모델을 위한 OpenAI 클라이언트 초기화
+
+OpenAI 클라이언트를 초기화하되 Groq 모델 엔드포인트를 가리키도록 하세요. 액세스 토큰을 자신의 것으로 교체하세요.
+
+```python
+client = OpenAI(
+    base_url="https://api.groq.com/openai/v1",
+    api_key=os.environ.get("GROQ_API_KEY")
+)
+```
+
+### 채팅 완료 요청
+
+`client`를 사용하여 Groq 모델에 채팅 완료 요청을 보냅니다.
+
+```python
+completion = client.chat.completions.create(
+    model="llama3-8b-8192",
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant."},
+        {
+            "role": "user",
+            "content": "Write a poem about language models"
+        }
+    ]
+)
+print(completion.choices[0].message.content)
+```
+
+_[Langfuse의 예제 트레이스](https://cloud.langfuse.com/project/cm0nywmaa005c3ol2msoisiho/traces/8c0fe015-2d87-46a8-87e6-e6bd439b35b5?timestamp=2025-01-10T12%3A55%3A11.990Z)_
+
+## 옵션 2: OpenInference 계측 사용하기
+
+이 옵션은 [OpenInference 계측 라이브러리](https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-groq)를 사용하여 Langfuse로 트레이스를 전송합니다.
+
+Groq SDK에 대한 더 자세한 안내는 [Groq 문서](https://console.groq.com/docs)와 [Langfuse 문서](https://langfuse.com/docs/sdk/python/decorators#log-any-llm-call)를 참고하세요.
+
+### 필수 패키지 설치
+
+```python
+%pip install groq langfuse openinference-instrumentation-groq
+```
+
+```python
+import os
+
+# Get keys for your project from the project settings page: https://cloud.langfuse.com
+os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-lf-...")
+os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-lf-...")
+os.environ.setdefault("LANGFUSE_BASE_URL", "https://cloud.langfuse.com") # 🇪🇺 EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+
+# Your Groq API key
+os.environ.setdefault("GROQ_API_KEY", "gsk_...")
+```
+
+환경 변수를 설정했으니 이제 Langfuse 클라이언트를 초기화할 수 있습니다. `get_client()`는 환경 변수에 제공된 자격 증명을 사용하여 Langfuse 클라이언트를 초기화합니다.
+
+```python
+from langfuse import get_client
+
+# Initialise Langfuse client and verify connectivity
+langfuse = get_client()
+assert langfuse.auth_check(), "Langfuse auth failed - check your keys ✋"
+```
+
+### OpenTelemetry 계측
+
+[OpenInference 계측 라이브러리](https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-groq)를 사용하여 Groq SDK 호출을 래핑하고 OpenTelemetry 스팬을 Langfuse로 전송합니다.
+
+```python
+from openinference.instrumentation.groq import GroqInstrumentor
+
+GroqInstrumentor().instrument()
+```
+
+### 예제 LLM 호출
+
+```python
+from groq import Groq
+
+# Initialize Groq client
+groq_client = Groq(api_key=os.environ["GROQ_API_KEY"])
+```
+
+```python
+chat_completion = groq_client.chat.completions.create(
+    messages=[
+        {
+            "role": "user",
+            "content": "Explain the importance of fast language models",
+        }
+    ],
+    model="llama-3.3-70b-versatile",
+)
+
+print(chat_completion.choices[0].message.content)
+```
+
+### Langfuse에서 트레이스 확인하기
+
+예제 모델 호출을 실행한 후 Langfuse에서 트레이스를 확인할 수 있습니다. Groq API 호출에 대한 다음과 같은 상세 정보를 확인할 수 있습니다.
+
+- 요청 파라미터 (모델, 메시지, temperature 등)
+- 응답 내용
+- 토큰 사용량 통계
+- 지연 시간 지표
+
+![Example trace in Langfuse](https://langfuse.com/images/cookbook/integration-groq/single-trace-example.png)
+
+_[Langfuse의 예제 트레이스](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/986dec33c084f29a2cf57fc35eec8668?timestamp=2025-08-06T07%3A41%3A00.503Z&display=details)_
+
+import LearnMore from "@/components-mdx/integration-learn-more.mdx";
+
+<LearnMore />

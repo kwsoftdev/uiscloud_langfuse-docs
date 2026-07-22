@@ -1,0 +1,107 @@
+---
+source: ⚠️ Jupyter Notebook
+title: Langfuse를 통한 Strands Agents 옵저버빌리티
+sidebarTitle: Strands Agents
+logo: /images/integrations/strands_agents_icon.svg
+logoAppearance: dark
+description: OpenTelemetry를 사용하여 Langfuse를 Strands Agents와 통합하여 AI 에이전트의 포괄적인 트레이싱과 디버깅을 수행하는 방법을 알아보세요.
+category: Integrations
+---
+
+# Langfuse와 Strands Agents SDK 통합하기
+
+이 노트북은 **Langfuse**를 사용하여 Strands Agent를 효과적으로 모니터링하고 디버깅하는 방법을 보여줍니다. 이 가이드를 따라가면서 에이전트의 작업을 트레이싱하고 동작과 성능에 대한 인사이트를 얻을 수 있게 됩니다.
+
+> **Strands Agents SDK란 무엇인가요?** AWS가 개발한 Strands Agents SDK([문서](https://strandsagents.com))는 AWS Bedrock을 포함한 다양한 도구 및 서비스와 상호작용할 수 있는 AI 에이전트를 구축하기 위한 툴킷입니다.
+
+> **Langfuse란 무엇인가요?** [Langfuse](https://langfuse.com)는 오픈소스 AI 엔지니어링 플랫폼입니다. AI 에이전트와 LLM 애플리케이션을 위한 강력한 트레이싱, 디버깅, 평가, 모니터링 기능을 제공합니다. Langfuse는 네이티브 통합, OpenTelemetry, SDK를 통해 다양한 도구 및 프레임워크와 매끄럽게 통합됩니다.
+
+## 시작하기
+
+Strands 에이전트를 사용하고 Langfuse와 통합하여 옵저버빌리티를 확보하는 간단한 예제를 안내해 드리겠습니다.
+
+<Steps>
+### 1단계: 종속성 설치
+
+<Callout type="info" emoji="ℹ️">
+OTEL 내보내기를 활성화하려면 otel 추가 종속성과 함께 Strands Agents를 설치하세요: pip install 'strands-agents[otel]'
+
+</Callout>
+
+```python
+%pip install "strands-agents[otel]" strands-agents-tools langfuse
+```
+
+### 2단계: 환경 변수 설정
+
+다음으로 Langfuse와 AWS(Bedrock 모델용)에 대한 환경 변수를 구성해야 합니다.
+
+```python
+import os
+
+# Get keys for your project from the project settings page: https://cloud.langfuse.com
+os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-lf-...")
+os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-lf-...")
+os.environ.setdefault("LANGFUSE_BASE_URL", "https://cloud.langfuse.com") # 🇪🇺 EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+
+# Your openai key
+os.environ.setdefault("OPENAI_API_KEY", "sk-proj-...")
+```
+
+환경 변수를 설정했으니 이제 Langfuse 클라이언트를 초기화할 수 있습니다. `get_client()`는 환경 변수에 제공된 자격 증명을 사용하여 Langfuse 클라이언트를 초기화합니다.
+
+```python
+from langfuse import get_client
+
+langfuse = get_client()
+
+# Verify connection
+if langfuse.auth_check():
+    print("Langfuse client is authenticated and ready!")
+else:
+    print("Authentication failed. Please check your credentials and host.")
+```
+
+### 3단계: Strands 에이전트 초기화
+
+환경을 설정했으니 이제 Strands 에이전트를 초기화할 수 있습니다. 여기에는 에이전트의 동작 정의, 기본 LLM 구성, Langfuse용 트레이싱 속성 설정이 포함됩니다.
+
+```python
+from strands import Agent
+from strands.models.openai import OpenAIModel
+
+
+# Configure the OpenAI model to be used by the agent
+model = OpenAIModel(
+    model_id="gpt-5", # Example model ID
+)
+
+# Configure the agent
+agent = Agent(
+    model=model,
+    system_prompt="You are a helpful assistant that can answer questions and help with tasks.",
+)
+```
+
+### 4단계: 에이전트 실행하기
+
+이제 초기화된 에이전트를 샘플 쿼리로 실행할 차례입니다. 에이전트가 입력을 처리하는 동안 Langfuse는 앞서 구성된 OpenTelemetry 통합을 통해 실행을 자동으로 트레이싱합니다.
+
+```python
+results = agent("Hi, where can I eat in San Francisco?")
+```
+
+### 5단계: Langfuse에서 트레이스 보기
+
+에이전트를 실행한 후 Langfuse 프로젝트로 이동하여 상세한 트레이스를 확인할 수 있습니다. 이 트레이스는 LLM 호출, 도구 사용(있는 경우), 입력, 출력, 지연 시간, 비용을 포함하여 에이전트 실행에 대한 단계별 세부 정보를 제공합니다.
+
+![Langfuse에서 Strands 에이전트 상호작용의 예시 트레이스](https://langfuse.com/images/cookbook/integration_aws_strands_agents/strands-agents-trace.png)
+
+[공개 Strands 에이전트 트레이스 예제](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/0ae7922f829ca2f4562f89b3de8c395d?observation=c25fa54dfca06243&timestamp=2026-03-11T09:25:37.373Z&traceId=0ae7922f829ca2f4562f89b3de8c395d)
+
+</Steps>
+
+import LearnMore from "@/components-mdx/integration-learn-more.mdx";
+
+<LearnMore />

@@ -1,0 +1,165 @@
+---
+title: "Agentic Data Stack: LibreChat + ClickHouse + Langfuse"
+sidebarTitle: ClickHouse Agentic Data Stack
+logo: /images/logos/clickhouse_icon.svg
+description: ClickHouse, LibreChat, Langfuse로 구성된 오픈 소스 Agentic Data Stack을 배포하세요. 에이전틱 분석을 위한 완전한 LLM 옵저버빌리티 — Docker Compose로 셀프 호스팅합니다.
+category: Integrations
+---
+
+# Agentic Data Stack
+
+[Agentic Data Stack](https://clickhouse.com/ai)은 [ClickHouse](https://clickhouse.com)가 만든 에이전틱 분석을 위한 오픈 소스 셀프 호스팅 스택입니다. 채팅 UI([LibreChat](https://www.librechat.ai/))를 [MCP](https://modelcontextprotocol.io)를 통해 데이터([ClickHouse](https://clickhouse.com))에 연결하며, Langfuse가 완전한 LLM 옵저버빌리티를 제공합니다 — 모두 `docker compose up` 명령 한 번으로 배포할 수 있습니다.
+
+| Component                                                          | Role                                                         |
+| ------------------------------------------------------------------ | ------------------------------------------------------------ |
+| [**LibreChat**](https://www.librechat.ai/)                         | 다양한 모델을 지원하는 채팅 UI(OpenAI, Anthropic, Google 등) |
+| [**ClickHouse**](https://clickhouse.com)                           | 데이터 조회를 위한 빠른 분석 데이터베이스                    |
+| [**ClickHouse MCP**](https://github.com/ClickHouse/mcp-clickhouse) | AI 에이전트가 ClickHouse에 접근할 수 있게 해주는 MCP 서버    |
+| [**Langfuse**](https://langfuse.com)                               | LLM 옵저버빌리티 — 트레이스, 평가, 프롬프트 관리             |
+
+<Frame className="my-10 max-w-2xl mx-auto">
+  ![Agentic Data Stack architecture — LibreChat connects to LLMs, ClickHouse via MCP, and Langfuse for observability](/images/docs/agentic-data-stack/architecture.png)
+</Frame>
+
+사용자는 LibreChat과 상호작용하며, LibreChat은 프롬프트를 LLM으로 라우팅하고 MCP를 통해 ClickHouse를 조회합니다. Langfuse는 모든 LLM 호출을 캡처하므로 에이전트 워크플로를 추적하고, 문제를 디버깅하고, 비용과 지연 시간을 모니터링할 수 있습니다.
+
+Agentic Data Stack에서 Langfuse를 사용하는 방법은 두 가지입니다.
+
+1. **기존 LibreChat 인스턴스에 Langfuse 추가** — 실행 중인 LibreChat 배포에 [Langfuse Cloud](https://cloud.langfuse.com) 또는 셀프 호스팅 Langfuse 인스턴스를 연결합니다.
+2. **전체 Agentic Data Stack 배포** — 공식 [Docker Compose 설정](https://github.com/ClickHouse/agentic-data-stack)으로 모든 것(LibreChat, ClickHouse, Langfuse, 지원 서비스)을 한 번에 실행합니다.
+
+---
+
+## 옵션 1: Langfuse로 LibreChat 트레이싱하기 [#trace-librechat]
+
+이미 LibreChat 인스턴스를 실행 중이라면 환경 변수 세 개만으로 Langfuse 트레이싱을 추가할 수 있습니다. LibreChat은 [네이티브 Langfuse 지원](https://www.librechat.ai/docs/configuration/langfuse)을 내장하고 있습니다.
+
+<Steps>
+
+### Langfuse API 키 발급받기
+
+[Langfuse Cloud](https://cloud.langfuse.com)에 가입하거나([셀프 호스팅 인스턴스](/self-hosting)를 사용할 수도 있습니다) 새 프로젝트를 생성합니다. 프로젝트 설정에서 공개 키와 비밀 키를 복사합니다.
+
+### LibreChat 구성하기
+
+LibreChat 설치 디렉터리의 `.env` 파일에 다음을 추가합니다.
+
+```bash
+LANGFUSE_PUBLIC_KEY=pk-lf-...
+LANGFUSE_SECRET_KEY=sk-lf-...
+
+# EU region
+LANGFUSE_BASE_URL=https://cloud.langfuse.com
+
+# US region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+```
+
+셀프 호스팅 Langfuse의 경우 `LANGFUSE_BASE_URL`을 인스턴스 URL(예: `http://localhost:3000`)로 설정하세요.
+
+### LibreChat 재시작하기
+
+```bash
+docker compose down
+docker compose up -d
+```
+
+### Langfuse에서 트레이스 확인하기
+
+이제 모든 채팅 메시지가 Langfuse에 트레이스를 생성합니다. Langfuse 프로젝트를 열어 프롬프트, 완성 결과, 지연 시간, 비용, 전체 호출 계층을 확인하세요.
+
+<Frame className="my-10" fullWidth>
+  ![LibreChat trace in Langfuse showing an agent run with LLM calls, latency, and cost](/images/cookbook/integration_librechat/librechat-example-trace.png)
+</Frame>
+
+</Steps>
+
+---
+
+## 옵션 2: 전체 Agentic Data Stack 배포하기 [#deploy-agentic-data-stack]
+
+[Agentic Data Stack 저장소](https://github.com/ClickHouse/agentic-data-stack)는 모든 것을 함께 배포하는 Docker Compose 설정을 제공합니다. Langfuse 트레이싱은 사전 구성되어 있으며, LibreChat이 함께 배포된 Langfuse 인스턴스로 트레이스를 자동으로 전송합니다.
+
+<Steps>
+
+### 사전 준비 사항
+
+- [Docker](https://docs.docker.com/get-docker/) 및 Docker Compose v2+
+- 최소 하나의 LLM 제공업체(OpenAI, Anthropic, Google)에 대한 API 키
+
+### 저장소 클론하기
+
+```bash
+git clone https://github.com/ClickHouse/agentic-data-stack.git
+cd agentic-data-stack
+```
+
+### 환경 준비하기
+
+대화형 설정 스크립트를 실행합니다. 모든 서비스에 대한 보안 자격 증명을 생성하고 LLM API 키를 구성하도록 안내합니다.
+
+```bash
+./scripts/prepare-demo.sh
+```
+
+건너뛴 제공업체는 `user_provided`로 설정되어 사용자가 LibreChat UI에서 직접 키를 입력할 수 있습니다.
+
+비대화형 방식으로도 자격 증명을 생성할 수 있습니다.
+
+```bash
+USER_EMAIL="you@example.com" USER_PASSWORD="supersecret" USER_NAME="YourName" ./scripts/generate-env.sh
+```
+
+### 스택 시작하기
+
+```bash
+docker compose up -d
+```
+
+이 명령은 LibreChat, ClickHouse, ClickHouse MCP, Langfuse, PostgreSQL, MongoDB, Redis, MinIO 및 지원 서비스 등 모든 서비스를 시작합니다.
+
+### 서비스 접속하기
+
+| Service                            | URL                                            |
+| ---------------------------------- | ---------------------------------------------- |
+| **LibreChat** (Chat UI)            | [http://localhost:3080](http://localhost:3080) |
+| **Langfuse** (Observability)       | [http://localhost:3000](http://localhost:3000) |
+| **MinIO Console** (Object storage) | [http://localhost:9091](http://localhost:9091) |
+
+설정 과정에서 구성한 자격 증명으로 로그인하세요. LibreChat과 Langfuse 모두 동일한 이메일과 비밀번호를 사용합니다.
+
+### Langfuse에서 트레이스 확인하기
+
+[http://localhost:3000](http://localhost:3000)에서 Langfuse를 엽니다. 스택은 LibreChat이 자동으로 사용하는 API 키가 포함된 프로젝트를 미리 구성해 둡니다. LibreChat에서의 모든 대화가 Langfuse에 트레이스를 생성하므로 다음을 할 수 있습니다.
+
+- **에이전트 워크플로 추적** — 프롬프트부터 도구 호출과 응답까지 전체 실행 경로를 확인합니다
+- **문제 디버깅** — 입력/출력, 지연 시간, 오류를 포함한 개별 LLM 호출을 검사합니다
+- **비용 및 지연 시간 모니터링** — 모델별 토큰 사용량과 지출을 추적합니다
+- **품질 평가** — [LLM-as-a-judge](/docs/evaluation/evaluation-methods/llm-as-a-judge) 또는 [사람이 직접 하는 어노테이션](/docs/evaluation/evaluation-methods/annotation-queues)으로 출력을 채점합니다
+
+<Frame className="my-10" fullWidth>
+  ![LibreChat trace in Langfuse showing an agent run with LLM calls, latency, and cost](/images/cookbook/integration_librechat/librechat-example-trace.png)
+</Frame>
+
+### 초기화 후 새로 시작하기
+
+모든 컨테이너를 해체하고 모든 데이터를 삭제하려면 다음을 실행합니다.
+
+```bash
+./scripts/reset-all.sh
+./scripts/prepare-demo.sh
+docker compose up -d
+```
+
+</Steps>
+
+---
+
+## 더 알아보기
+
+- [Agentic Data Stack 저장소](https://github.com/ClickHouse/agentic-data-stack) — 소스 코드 및 전체 문서
+- [clickhouse.com/ai](https://clickhouse.com/ai) — Agentic Data Stack
+- [LibreChat 문서](https://www.librechat.ai/docs) — LibreChat 설정 및 구성
+- [LibreChat Langfuse 통합](https://www.librechat.ai/docs/configuration/langfuse) — LibreChat을 위한 Langfuse 옵저버빌리티
+- [ClickHouse MCP 서버](https://github.com/ClickHouse/mcp-clickhouse) — AI 에이전트를 ClickHouse에 연결
+- [Langfuse 셀프 호스팅](/self-hosting) — 자체 인프라에 Langfuse 배포

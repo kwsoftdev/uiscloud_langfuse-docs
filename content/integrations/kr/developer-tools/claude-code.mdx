@@ -1,0 +1,1056 @@
+---
+title: "Trace Claude Code with Langfuse"
+sidebarTitle: Claude Code
+logo: /images/integrations/anthropic_icon.png
+logoAppearance: dark
+description: "Trace Claude Code AI coding assistant conversations, user inputs, and tool usage with Langfuse for comprehensive observability."
+category: Integrations
+---
+
+import { Details, Summary } from "@/components/Details";
+
+# Claude Code Tracing with Langfuse
+
+<iframe
+  width="100%"
+  className="aspect-[16/9] rounded border w-full"
+  src="https://www.youtube-nocookie.com/embed/fsoBHf_WNmQ?si=XFUGjR6dE84oj2Ga"
+  title="YouTube video player"
+  frameBorder="0"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+  referrerPolicy="strict-origin-when-cross-origin"
+  allowFullScreen
+></iframe>
+
+> **Claude Code란 무엇인가요?**: [Claude Code](https://claude.com/product/claude-code)는 터미널에서 동작하는 Anthropic의 에이전틱 코딩 도구입니다. 여러분의 코드베이스를 이해하고, 코드를 작성 및 수정하고, 명령을 실행하고, 테스트를 만들고 실행하며, 자연어로 복잡한 코딩 작업을 수행하도록 도와줍니다. Claude Code는 Claude의 AI 역량을 여러분의 개발 워크플로우에 직접 가져다줍니다.
+
+> **Langfuse란 무엇인가요?**: [Langfuse](https://langfuse.com/)는 오픈소스 AI 엔지니어링 플랫폼입니다. 팀이 LLM 애플리케이션을 추적하고, 문제를 디버깅하고, 품질을 평가하고, 프로덕션에서 비용을 모니터링할 수 있도록 돕습니다.
+
+<Callout type="info" title="NEW: Install via the Claude Code plugin marketplace">
+지금은 [Langfuse Observability Plugin](https://github.com/langfuse/Claude-Observability-Plugin)을 사용하는 것이 이를 설정하는 가장 쉬운 방법입니다. 다음 두 명령을 실행하고 Claude Code를 재시작하세요:
+
+```bash
+claude plugin marketplace add langfuse/Claude-Observability-Plugin
+claude plugin install langfuse-observability@langfuse-observability
+```
+
+활성화하면 `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL`을 입력하라는 메시지가 표시됩니다. 비밀 키는 OS 키체인에 저장됩니다. Python 3.9+와 `pip install "langfuse>=4.0,<5"`가 필요합니다.
+
+AI 지원 설정이나 수동 설정은 아래 단계를 참고하세요.
+
+</Callout>
+
+## 이 인테그레이션으로 무엇을 추적할 수 있나요?
+
+Claude Code의 [훅 시스템](https://code.claude.com/docs/en/hooks-guide)을 사용해, 이 인테그레이션은 전체 대화 상호작용을 캡처해 Langfuse로 전송합니다. 다음을 모니터링할 수 있습니다:
+
+- **사용자 입력**: Claude Code에 보낸 모든 프롬프트와 메시지를 캡처합니다
+- **어시스턴트 응답**: Claude의 응답과 추론 과정을 추적합니다
+- **도구 호출**: Claude Code가 파일 편집, bash 명령, 웹 검색 등의 도구를 사용하는 시점을 확인합니다
+- **도구 입력 및 출력**: 각 도구로 전달되고 반환되는 데이터를 검사합니다
+- **세션 정보**: 관련된 상호작용을 논리적인 세션으로 그룹화합니다
+- **타이밍 정보**: 작업 수행에 걸리는 시간을 파악합니다
+
+## 작동 방식
+
+Claude Code는 라이프사이클의 여러 시점에서 커스텀 스크립트를 실행할 수 있는 [훅 시스템](https://code.claude.com/docs/en/hooks-guide)을 제공합니다. 이 인테그레이션은 Claude Code가 응답할 때마다 실행되는 **Stop 훅**을 사용합니다.
+
+1. 전역 "Stop" 훅이 Claude Code가 응답할 때마다 실행되도록 구성됩니다
+2. 훅이 Claude Code가 생성한 대화 트랜스크립트를 읽습니다
+3. 메시지가 Langfuse 트레이스로 변환되어 여러분의 Langfuse 프로젝트로 전송됩니다
+4. 같은 세션의 모든 턴은 공유된 `session_id`를 사용해 그룹화됩니다
+
+트레이싱은 프로젝트의 `.claude/settings.json`에 있는 환경 변수를 통해 **프로젝트별로 옵트인**됩니다.
+
+## 빠른 시작
+
+<Callout type="info">
+**가장 쉬운 방법: Claude Code가 직접 설정하도록 하세요.** 아무 프로젝트에서나 Claude Code 세션을 열고 이 페이지의 URL과 *"Implement this integration."*이라는 지시를 함께 붙여넣으세요. Claude가 페이지를 읽고, 훅 스크립트를 생성하고, 설정에 등록합니다. 다만 API 키는 직접 추가해야 합니다(아래 [프로젝트별로 트레이싱 활성화하기](#enable-tracing-per-project) 단계에서 다룹니다) — 이런 키는 절대 LLM이 생성해서는 안 됩니다. 모든 것을 수동으로 설치하고 싶다면 아래 단계를 따르세요.
+</Callout>
+
+<Steps>
+
+### Langfuse 설정하기
+
+1. [Langfuse Cloud](https://cloud.langfuse.com)에 가입하거나 [Langfuse를 직접 호스팅](/self-hosting)하세요.
+2. 새 프로젝트를 생성하고 프로젝트 설정에서 API 키를 복사하세요.
+
+### 의존성 설치하기
+
+Langfuse Python SDK를 설치하세요:
+
+```bash
+pip install "langfuse>=4.0,<5"
+```
+
+<Callout type="info">
+훅 스크립트는 관찰을 과거 타임스탬프로 소급 적용하기 위해 Langfuse SDK 4.x의 내부 요소(`_otel_tracer`, `_create_observation_from_otel_span`)에 접근합니다. 이런 속성은 구현 세부 사항이므로 — SDK를 `>=4.0,<5`로 고정하면 향후 마이너 버전에서 이름이 바뀌어 훅이 조용히 깨지는 것을 방지할 수 있습니다. `4.x`보다 상위 버전으로 업그레이드하고 싶다면 먼저 스크립트를 업데이트하세요.
+</Callout>
+
+### 훅 스크립트 만들기
+
+`~/.claude/hooks/langfuse_hook.py`에 훅 스크립트를 생성하세요:
+
+```bash
+mkdir -p ~/.claude/hooks
+```
+
+<Callout type="info">
+macOS에서는 기본적으로 `.claude` 디렉터리가 숨겨져 있습니다. Finder에서 GUI로 탐색하고 싶다면 `Cmd + Shift + .`를 눌러 숨김 폴더를 표시하세요.
+</Callout>
+
+<Details>
+<Summary>View full langfuse_hook.py script</Summary>
+
+```python
+#!/usr/bin/env python3
+"""
+Claude Code -> Langfuse hook
+
+"""
+
+import json
+import logging
+import os
+import sys
+import threading
+import time
+import hashlib
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+# --- Langfuse import (fail-open) ---
+try:
+    from langfuse import Langfuse, propagate_attributes
+    from opentelemetry import trace as otel_trace_api
+except Exception:
+    sys.exit(0)
+
+# --- Paths ---
+STATE_DIR = Path.home() / ".claude" / "state"
+LOG_FILE = STATE_DIR / "langfuse_hook.log"
+STATE_FILE = STATE_DIR / "langfuse_state.json"
+LOCK_FILE = STATE_DIR / "langfuse_state.lock"
+
+DEBUG = os.environ.get("CC_LANGFUSE_DEBUG", "").lower() == "true"
+try:
+    MAX_CHARS = int(os.environ.get("CC_LANGFUSE_MAX_CHARS", "20000"))
+except ValueError:
+    MAX_CHARS = 20000
+
+# ----------------- Logging -----------------
+_logger: Optional[logging.Logger] = None
+
+def _get_logger() -> Optional[logging.Logger]:
+    global _logger
+    if _logger is not None:
+        return _logger
+    try:
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
+        lg = logging.getLogger("langfuse_hook")
+        lg.setLevel(logging.DEBUG if DEBUG else logging.INFO)
+        if not lg.handlers:
+            h = RotatingFileHandler(str(LOG_FILE), maxBytes=5_000_000, backupCount=3)
+            h.setFormatter(logging.Formatter(
+                "%(asctime)s [%(levelname)s] %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S",
+            ))
+            lg.addHandler(h)
+        _logger = lg
+        return _logger
+    except Exception:
+        return None
+
+def debug(msg: str) -> None:
+    if not DEBUG:
+        return
+    lg = _get_logger()
+    if lg is not None:
+        try:
+            lg.debug(msg)
+        except Exception:
+            pass
+
+def info(msg: str) -> None:
+    lg = _get_logger()
+    if lg is not None:
+        try:
+            lg.info(msg)
+        except Exception:
+            pass
+
+# ----------------- State locking (best-effort) -----------------
+class FileLock:
+    def __init__(self, path: Path, timeout_s: float = 2.0):
+        self.path = path
+        self.timeout_s = timeout_s
+        self._fh = None
+
+    def __enter__(self):
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
+        self._fh = open(self.path, "a+", encoding="utf-8")
+        self.acquired = False
+        try:
+            import fcntl  # Unix only
+        except ImportError:
+            # No fcntl available (e.g. Windows) — proceed without lock.
+            return self
+        deadline = time.time() + self.timeout_s
+        try:
+            while True:
+                try:
+                    fcntl.flock(self._fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    self.acquired = True
+                    return self
+                except BlockingIOError:
+                    if time.time() > deadline:
+                        raise TimeoutError(
+                            f"could not acquire {self.path} within {self.timeout_s}s"
+                        )
+                    time.sleep(0.05)
+        except BaseException:
+            # __exit__ is not called when __enter__ raises — close the fh
+            # we just opened so it doesn't leak.
+            try:
+                self._fh.close()
+            except Exception:
+                pass
+            raise
+
+    def __exit__(self, exc_type, exc, tb):
+        try:
+            import fcntl
+            fcntl.flock(self._fh.fileno(), fcntl.LOCK_UN)
+        except Exception:
+            pass
+        try:
+            self._fh.close()
+        except Exception:
+            pass
+
+def load_state() -> Dict[str, Any]:
+    try:
+        if not STATE_FILE.exists():
+            return {}
+        return json.loads(STATE_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+def save_state(state: Dict[str, Any]) -> None:
+    try:
+        # Drop session entries older than 30 days to keep the file bounded.
+        cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+        for k in list(state.keys()):
+            entry = state.get(k)
+            if not isinstance(entry, dict):
+                continue
+            updated = entry.get("updated")
+            if not isinstance(updated, str):
+                continue
+            try:
+                ts = datetime.fromisoformat(updated.replace("Z", "+00:00"))
+            except Exception:
+                continue
+            if ts < cutoff:
+                del state[k]
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
+        tmp = STATE_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(state, indent=2, sort_keys=True), encoding="utf-8")
+        os.replace(tmp, STATE_FILE)
+    except Exception as e:
+        debug(f"save_state failed: {e}")
+
+def state_key(session_id: str, transcript_path: str) -> str:
+    # stable key even if session_id collides
+    raw = f"{session_id}::{transcript_path}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+# ----------------- Hook payload -----------------
+def read_hook_payload() -> Dict[str, Any]:
+    """
+    Claude Code hooks pass a JSON payload on stdin.
+    This script tolerates missing/empty stdin by returning {}.
+    """
+    try:
+        data = sys.stdin.read()
+        debug(f"stdin received {len(data)} chars")
+        if not data.strip():
+            return {}
+        parsed = json.loads(data)
+        if isinstance(parsed, dict):
+            debug(f"payload top-level keys: {sorted(parsed.keys())}")
+        return parsed
+    except Exception as e:
+        debug(f"read_hook_payload exception: {e!r}")
+        return {}
+
+def extract_session_and_transcript(payload: Dict[str, Any]) -> Tuple[Optional[str], Optional[Path]]:
+    """
+    Tries a few plausible field names; exact keys can vary across hook types/versions.
+    Prefer structured values from stdin over heuristics.
+    """
+    session_id = (
+        payload.get("sessionId")
+        or payload.get("session_id")
+        or payload.get("session", {}).get("id")
+    )
+
+    transcript = (
+        payload.get("transcriptPath")
+        or payload.get("transcript_path")
+        or payload.get("transcript", {}).get("path")
+    )
+
+    if transcript:
+        try:
+            transcript_path = Path(transcript).expanduser().resolve()
+        except Exception:
+            transcript_path = None
+    else:
+        transcript_path = None
+
+    return session_id, transcript_path
+
+# ----------------- Transcript parsing helpers -----------------
+def get_content(msg: Dict[str, Any]) -> Any:
+    if not isinstance(msg, dict):
+        return None
+    if "message" in msg and isinstance(msg.get("message"), dict):
+        return msg["message"].get("content")
+    return msg.get("content")
+
+def get_role(msg: Dict[str, Any]) -> Optional[str]:
+    # Claude Code transcript lines commonly have type=user/assistant OR message.role
+    t = msg.get("type")
+    if t in ("user", "assistant"):
+        return t
+    m = msg.get("message")
+    if isinstance(m, dict):
+        r = m.get("role")
+        if r in ("user", "assistant"):
+            return r
+    return None
+
+def is_tool_result(msg: Dict[str, Any]) -> bool:
+    role = get_role(msg)
+    if role != "user":
+        return False
+    content = get_content(msg)
+    if isinstance(content, list):
+        return any(isinstance(x, dict) and x.get("type") == "tool_result" for x in content)
+    return False
+
+def iter_tool_results(content: Any) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    if isinstance(content, list):
+        for x in content:
+            if isinstance(x, dict) and x.get("type") == "tool_result":
+                out.append(x)
+    return out
+
+def iter_tool_uses(content: Any) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    if isinstance(content, list):
+        for x in content:
+            if isinstance(x, dict) and x.get("type") == "tool_use":
+                out.append(x)
+    return out
+
+def extract_text(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: List[str] = []
+        for x in content:
+            if isinstance(x, dict) and x.get("type") == "text":
+                parts.append(x.get("text", ""))
+            elif isinstance(x, str):
+                parts.append(x)
+        return "\n".join([p for p in parts if p])
+    return ""
+
+def truncate_text(s: str, max_chars: int = MAX_CHARS) -> Tuple[str, Dict[str, Any]]:
+    if s is None:
+        return "", {"truncated": False, "orig_len": 0}
+    orig_len = len(s)
+    if orig_len <= max_chars:
+        return s, {"truncated": False, "orig_len": orig_len}
+    head = s[:max_chars]
+    return head, {"truncated": True, "orig_len": orig_len, "kept_len": len(head), "sha256": hashlib.sha256(s.encode("utf-8")).hexdigest()}
+
+def get_model(msg: Dict[str, Any]) -> str:
+    m = msg.get("message")
+    if isinstance(m, dict):
+        return m.get("model") or "claude"
+    return "claude"
+
+def get_usage(msg: Dict[str, Any]) -> Optional[Dict[str, int]]:
+    """Extract Anthropic token usage from an assistant message, if present."""
+    m = msg.get("message")
+    if not isinstance(m, dict):
+        return None
+    u = m.get("usage")
+    if not isinstance(u, dict):
+        return None
+    details: Dict[str, int] = {}
+    for src, dst in (
+        ("input_tokens", "input"),
+        ("output_tokens", "output"),
+        ("cache_read_input_tokens", "cache_read_input_tokens"),
+        ("cache_creation_input_tokens", "cache_creation_input_tokens"),
+    ):
+        v = u.get(src)
+        if isinstance(v, int) and v > 0:
+            details[dst] = v
+    return details or None
+
+def get_message_id(msg: Dict[str, Any]) -> Optional[str]:
+    m = msg.get("message")
+    if isinstance(m, dict):
+        mid = m.get("id")
+        if isinstance(mid, str) and mid:
+            return mid
+    return None
+
+def parse_ts(value: Any) -> Optional[datetime]:
+    """Parse a Claude Code jsonl row timestamp (ISO 8601 with trailing Z)."""
+    if isinstance(value, dict):
+        value = value.get("timestamp")
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+# ----------------- Incremental reader -----------------
+@dataclass
+class SessionState:
+    offset: int = 0
+    buffer: str = ""
+    turn_count: int = 0
+
+def load_session_state(global_state: Dict[str, Any], key: str) -> SessionState:
+    s = global_state.get(key, {})
+    return SessionState(
+        offset=int(s.get("offset", 0)),
+        buffer=str(s.get("buffer", "")),
+        turn_count=int(s.get("turn_count", 0)),
+    )
+
+def write_session_state(global_state: Dict[str, Any], key: str, ss: SessionState) -> None:
+    global_state[key] = {
+        "offset": ss.offset,
+        "buffer": ss.buffer,
+        "turn_count": ss.turn_count,
+        "updated": datetime.now(timezone.utc).isoformat(),
+    }
+
+def read_new_jsonl(transcript_path: Path, ss: SessionState) -> Tuple[List[Dict[str, Any]], SessionState]:
+    """
+    Reads only new bytes since ss.offset. Keeps ss.buffer for partial last line.
+    Returns parsed JSON lines (best-effort) and updated state.
+    """
+    if not transcript_path.exists():
+        return [], ss
+
+    try:
+        file_size = transcript_path.stat().st_size
+        if file_size < ss.offset:
+            # Transcript was rotated or truncated — restart from the beginning.
+            debug(f"transcript shrank ({file_size} < {ss.offset}); restarting")
+            ss.offset = 0
+            ss.buffer = ""
+        with open(transcript_path, "rb") as f:
+            f.seek(ss.offset)
+            chunk = f.read()
+            new_offset = f.tell()
+    except Exception as e:
+        debug(f"read_new_jsonl failed: {e}")
+        return [], ss
+
+    if not chunk:
+        return [], ss
+
+    try:
+        text = chunk.decode("utf-8", errors="replace")
+    except Exception:
+        text = chunk.decode(errors="replace")
+
+    combined = ss.buffer + text
+    lines = combined.split("\n")
+    # last element may be incomplete
+    ss.buffer = lines[-1]
+    ss.offset = new_offset
+
+    msgs: List[Dict[str, Any]] = []
+    for line in lines[:-1]:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            msgs.append(json.loads(line))
+        except Exception:
+            continue
+
+    return msgs, ss
+
+# ----------------- Turn assembly -----------------
+@dataclass
+class Turn:
+    user_msg: Dict[str, Any]
+    assistant_msgs: List[Dict[str, Any]]
+    tool_results_by_id: Dict[str, Any]
+
+def build_turns(messages: List[Dict[str, Any]]) -> List[Turn]:
+    """
+    Groups incremental transcript rows into turns:
+    user (non-tool-result) -> assistant messages -> (tool_result rows, possibly interleaved)
+    Uses:
+    - assistant message dedupe by message.id (latest row wins)
+    - tool results dedupe by tool_use_id (latest wins)
+    """
+    turns: List[Turn] = []
+    current_user: Optional[Dict[str, Any]] = None
+
+    # assistant messages for current turn:
+    assistant_order: List[str] = []             # message ids in order of first appearance (or synthetic)
+    assistant_latest: Dict[str, Dict[str, Any]] = {}  # id -> latest msg
+
+    tool_results_by_id: Dict[str, Any] = {}     # tool_use_id -> content
+
+    def flush_turn():
+        nonlocal current_user, assistant_order, assistant_latest, tool_results_by_id, turns
+        if current_user is None:
+            return
+        if not assistant_latest:
+            return
+        assistants = [assistant_latest[mid] for mid in assistant_order if mid in assistant_latest]
+        turns.append(Turn(user_msg=current_user, assistant_msgs=assistants, tool_results_by_id=dict(tool_results_by_id)))
+
+    for msg in messages:
+        role = get_role(msg)
+
+        # tool_result rows show up as role=user with content blocks of type tool_result
+        if is_tool_result(msg):
+            row_ts = msg.get("timestamp")
+            for tr in iter_tool_results(get_content(msg)):
+                tid = tr.get("tool_use_id")
+                if tid:
+                    tool_results_by_id[str(tid)] = {"content": tr.get("content"), "timestamp": row_ts}
+            continue
+
+        if role == "user":
+            # new user message -> finalize previous turn
+            flush_turn()
+
+            # start a new turn
+            current_user = msg
+            assistant_order = []
+            assistant_latest = {}
+            tool_results_by_id = {}
+            continue
+
+        if role == "assistant":
+            if current_user is None:
+                # ignore assistant rows until we see a user message
+                continue
+
+            mid = get_message_id(msg) or f"noid:{len(assistant_order)}"
+            if mid not in assistant_latest:
+                assistant_order.append(mid)
+            assistant_latest[mid] = msg
+            continue
+
+        # ignore unknown rows
+
+    # flush last
+    flush_turn()
+    return turns
+
+# ----------------- Langfuse emit -----------------
+def _to_ns(ts: Optional[datetime]) -> Optional[int]:
+    """Convert a datetime to OTel-style nanoseconds since epoch."""
+    if ts is None:
+        return None
+    return int(ts.timestamp() * 1_000_000_000)
+
+
+def _start_backdated(langfuse: Langfuse, *, name: str, as_type: str,
+                     start_time: Optional[datetime],
+                     parent_otel_span: Any = None,
+                     **obs_kwargs: Any) -> Any:
+    """Create a Langfuse observation with an explicit OTel start_time.
+
+    Bypasses langfuse.start_observation() (which has no start_time kwarg in
+    SDK 4.x) by talking to the underlying OTel tracer directly and then
+    wrapping the resulting span with the Langfuse observation type.
+
+    Depends on SDK 4.x internals: langfuse._otel_tracer and
+    langfuse._create_observation_from_otel_span. If a future SDK version
+    renames or removes these, raise a clear error instead of letting an
+    AttributeError get swallowed by the broad emit_turn handler.
+    """
+    if not hasattr(langfuse, "_otel_tracer") or not hasattr(langfuse, "_create_observation_from_otel_span"):
+        try:
+            sdk_version = getattr(__import__("langfuse"), "__version__", "unknown")
+        except Exception:
+            sdk_version = "unknown"
+        raise RuntimeError(
+            f"Langfuse SDK {sdk_version} is missing _otel_tracer or "
+            f"_create_observation_from_otel_span. This hook targets SDK 4.x; "
+            f"pin with `pip install \"langfuse>=4.0,<5\"` or update the hook script."
+        )
+    start_ns = _to_ns(start_time)
+    if parent_otel_span is not None:
+        with otel_trace_api.use_span(parent_otel_span, end_on_exit=False):
+            otel_span = langfuse._otel_tracer.start_span(name=name, start_time=start_ns)
+    else:
+        otel_span = langfuse._otel_tracer.start_span(name=name, start_time=start_ns)
+    return langfuse._create_observation_from_otel_span(
+        otel_span=otel_span,
+        as_type=as_type,
+        **obs_kwargs,
+    )
+
+
+def emit_turn(langfuse: Langfuse, session_id: str, turn_num: int, turn: Turn, transcript_path: Path) -> None:
+    user_text_raw = extract_text(get_content(turn.user_msg))
+    user_text, user_text_meta = truncate_text(user_text_raw)
+
+    last_assistant = turn.assistant_msgs[-1]
+    final_assistant_text, _ = truncate_text(extract_text(get_content(last_assistant)))
+
+    user_ts = parse_ts(turn.user_msg)
+    last_assistant_ts = parse_ts(last_assistant)
+    # Pick a turn end_time: latest among final assistant message or any tool result
+    candidate_end_ts = [t for t in [last_assistant_ts] if t is not None]
+    for tr in turn.tool_results_by_id.values():
+        t = parse_ts(tr)
+        if t is not None:
+            candidate_end_ts.append(t)
+    turn_end_ts = max(candidate_end_ts) if candidate_end_ts else None
+
+    with propagate_attributes(
+        session_id=session_id,
+        trace_name=f"Claude Code - Turn {turn_num}",
+        tags=["claude-code"],
+    ):
+        trace_span = _start_backdated(
+            langfuse,
+            name=f"Claude Code - Turn {turn_num}",
+            as_type="span",
+            start_time=user_ts,
+            input={"role": "user", "content": user_text},
+            metadata={
+                "source": "claude-code",
+                "session_id": session_id,
+                "turn_number": turn_num,
+                "transcript_path": str(transcript_path),
+                "user_text": user_text_meta,
+                "assistant_message_count": len(turn.assistant_msgs),
+            },
+        )
+        parent_otel_span = trace_span._otel_span
+
+        # Iterate each assistant message: emit generation, then its tool_use children.
+        # prev_ts = the moment the next generation could have started (= when the previous
+        # batch of tool results all returned, or the original user message timestamp).
+        prev_ts = user_ts
+        prev_tool_results: List[Dict[str, Any]] = []  # populated after each batch, surfaced as next gen's input
+
+        for idx, am in enumerate(turn.assistant_msgs):
+            am_ts = parse_ts(am)
+            am_text_raw = extract_text(get_content(am))
+            am_text, am_text_meta = truncate_text(am_text_raw)
+            model = get_model(am)
+            tool_uses = iter_tool_uses(get_content(am))
+
+            # Build generation input: user message for first generation, otherwise tool results from
+            # the prior batch (best partial reconstruction of the prompt context).
+            if idx == 0:
+                gen_input: Any = {"role": "user", "content": user_text}
+            elif prev_tool_results:
+                gen_input = {"role": "tool", "tool_results": prev_tool_results}
+            else:
+                gen_input = None
+
+            # Build generation output: include both the text response and any tool calls the LLM
+            # decided to make. Most assistant messages in tool-using turns are tool-call-only, so
+            # without tool_calls in the output, the observation looks empty.
+            gen_tool_calls = []
+            for tu in tool_uses:
+                tu_input = tu.get("input")
+                if isinstance(tu_input, str):
+                    tu_input_serialized, _ = truncate_text(tu_input)
+                else:
+                    tu_input_serialized = tu_input
+                gen_tool_calls.append({
+                    "id": tu.get("id"),
+                    "name": tu.get("name"),
+                    "input": tu_input_serialized,
+                })
+
+            gen_output: Dict[str, Any] = {"role": "assistant"}
+            if am_text:
+                gen_output["content"] = am_text
+            if gen_tool_calls:
+                gen_output["tool_calls"] = gen_tool_calls
+
+            gen_kwargs: Dict[str, Any] = dict(
+                model=model,
+                input=gen_input,
+                output=gen_output,
+                metadata={
+                    "assistant_index": idx,
+                    "assistant_text": am_text_meta,
+                    "tool_count": len(tool_uses),
+                },
+            )
+            usage_details = get_usage(am)
+            if usage_details is not None:
+                gen_kwargs["usage_details"] = usage_details
+
+            gen_span = _start_backdated(
+                langfuse,
+                name=f"Claude Generation {idx + 1}",
+                as_type="generation",
+                start_time=prev_ts or am_ts,
+                parent_otel_span=parent_otel_span,
+                **gen_kwargs,
+            )
+
+            # Tool observations: nested under this generation. Each starts when the assistant
+            # emitted the tool_use (am_ts) and ends when its tool_result row arrived.
+            batch_result_ts: List[datetime] = []
+            batch_tool_results: List[Dict[str, Any]] = []
+            for tu in tool_uses:
+                tid = str(tu.get("id") or "")
+                tname = tu.get("name") or "unknown"
+                tinput_raw = tu.get("input") if isinstance(tu.get("input"), (dict, list, str, int, float, bool)) else {}
+                if isinstance(tinput_raw, str):
+                    tinput, tinput_meta = truncate_text(tinput_raw)
+                else:
+                    tinput, tinput_meta = tinput_raw, None
+
+                tr_entry = turn.tool_results_by_id.get(tid) if tid else None
+                if tr_entry:
+                    out_raw = tr_entry.get("content")
+                    out_str = out_raw if isinstance(out_raw, str) else json.dumps(out_raw, ensure_ascii=False)
+                    out_trunc, out_meta = truncate_text(out_str)
+                    tr_ts = parse_ts(tr_entry.get("timestamp"))
+                else:
+                    out_trunc, out_meta, tr_ts = None, None, None
+                if tr_ts is not None:
+                    batch_result_ts.append(tr_ts)
+
+                tool_span = _start_backdated(
+                    langfuse,
+                    name=f"Tool: {tname}",
+                    as_type="tool",
+                    start_time=am_ts,
+                    parent_otel_span=gen_span._otel_span,
+                    input=tinput,
+                    metadata={
+                        "tool_name": tname,
+                        "tool_id": tid,
+                        "input_meta": tinput_meta,
+                        "output_meta": out_meta,
+                    },
+                )
+                tool_span.update(output=out_trunc)
+                tool_span.end(end_time=_to_ns(tr_ts or am_ts))
+
+                batch_tool_results.append({
+                    "tool_use_id": tid,
+                    "tool_name": tname,
+                    "output": out_trunc,
+                })
+
+            # End the generation AFTER its tools so the timeline cleanly contains them.
+            # If there were tool calls, gen ends with the last result; otherwise at am_ts.
+            gen_end_ts = max(batch_result_ts) if batch_result_ts else am_ts
+            gen_span.end(end_time=_to_ns(gen_end_ts or am_ts or prev_ts))
+
+            # Carry this batch's results into the next generation's input.
+            prev_tool_results = batch_tool_results
+
+            # Advance prev_ts: next generation can only start after this batch's tool results returned.
+            if batch_result_ts:
+                prev_ts = max(batch_result_ts)
+            elif am_ts is not None:
+                prev_ts = am_ts
+
+        trace_span.update(output={"role": "assistant", "content": final_assistant_text})
+        trace_span.end(end_time=_to_ns(turn_end_ts or last_assistant_ts or user_ts))
+
+# ----------------- Main -----------------
+def main() -> int:
+    start = time.time()
+    debug("Hook started")
+
+    if os.environ.get("TRACE_TO_LANGFUSE", "") != "true":
+        return 0
+
+    public_key = os.environ.get("CC_LANGFUSE_PUBLIC_KEY") or os.environ.get("LANGFUSE_PUBLIC_KEY")
+    secret_key = os.environ.get("CC_LANGFUSE_SECRET_KEY") or os.environ.get("LANGFUSE_SECRET_KEY")
+    host = os.environ.get("CC_LANGFUSE_BASE_URL") or os.environ.get("LANGFUSE_BASE_URL") or "https://cloud.langfuse.com"
+
+    if not public_key or not secret_key:
+        return 0
+
+    payload = read_hook_payload()
+    session_id, transcript_path = extract_session_and_transcript(payload)
+
+    if not session_id or not transcript_path:
+        # No structured payload; fail open (do not guess)
+        debug("Missing session_id or transcript_path from hook payload; exiting.")
+        return 0
+
+    if not transcript_path.exists():
+        debug(f"Transcript path does not exist: {transcript_path}")
+        return 0
+
+    langfuse = None
+    try:
+        langfuse = Langfuse(public_key=public_key, secret_key=secret_key, host=host)
+    except Exception:
+        return 0
+
+    try:
+        with FileLock(LOCK_FILE):
+            state = load_state()
+            key = state_key(session_id, str(transcript_path))
+            ss = load_session_state(state, key)
+
+            msgs, ss = read_new_jsonl(transcript_path, ss)
+            if not msgs:
+                write_session_state(state, key, ss)
+                save_state(state)
+                return 0
+
+            turns = build_turns(msgs)
+            if not turns:
+                write_session_state(state, key, ss)
+                save_state(state)
+                return 0
+
+            # emit turns
+            emitted = 0
+            for t in turns:
+                emitted += 1
+                turn_num = ss.turn_count + emitted
+                try:
+                    emit_turn(langfuse, session_id, turn_num, t, transcript_path)
+                except Exception as e:
+                    # Log at INFO so SDK incompatibilities (and other emit failures)
+                    # are visible without needing CC_LANGFUSE_DEBUG=true.
+                    info(f"emit_turn failed: {type(e).__name__}: {e}")
+                    # continue emitting other turns
+
+            ss.turn_count += emitted
+            write_session_state(state, key, ss)
+            save_state(state)
+
+        dur = time.time() - start
+        info(f"Processed {emitted} turns in {dur:.2f}s (session={session_id})")
+        return 0
+
+    except TimeoutError as e:
+        debug(f"lock timeout, skipping: {e}")
+        return 0
+
+    except Exception as e:
+        debug(f"Unexpected failure: {e}")
+        return 0
+
+    finally:
+        # Cap flush+shutdown at 5s so a slow/unreachable Langfuse can't stall Claude Code.
+        if langfuse is not None:
+            try:
+                def _flush_and_shutdown():
+                    try:
+                        langfuse.flush()
+                    except Exception:
+                        pass
+                    langfuse.shutdown()
+                t = threading.Thread(target=_flush_and_shutdown, daemon=True)
+                t.start()
+                t.join(5.0)
+            except Exception:
+                pass
+
+if __name__ == "__main__":
+    sys.exit(main())
+```
+
+</Details>
+
+### 훅 등록하기
+
+기존의 전역 Claude Code 설정 파일 `~/.claude/settings.json`을 여세요(Claude Code가 처음 실행할 때 이 파일을 생성합니다). 그리고 Stop 훅 항목을 추가하세요. 파일에 이미 `hooks` 블록이 있다면, 덮어쓰지 말고 `Stop` 배열을 병합하세요:
+
+```json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/hooks/langfuse_hook.py"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+이렇게 하면 훅이 전역으로 등록되어 모든 Claude Code 세션에서 실행됩니다.
+
+### 프로젝트별로 트레이싱 활성화하기 [#enable-tracing-per-project]
+
+프로젝트 루트에 있는 Claude Code의 프로젝트별 설정 파일 `.claude/settings.json`에 Langfuse 자격 증명을 추가하세요. 비밀 키가 커밋되지 않도록 이 파일이 프로젝트의 `.gitignore`에 등록되어 있는지 확인하세요. `env` 블록을 추가하세요:
+
+```json
+{
+  "env": {
+    "TRACE_TO_LANGFUSE": "true",
+    "LANGFUSE_PUBLIC_KEY": "pk-lf-...",
+    "LANGFUSE_SECRET_KEY": "sk-lf-...",
+    "LANGFUSE_BASE_URL": "https://cloud.langfuse.com"
+  }
+}
+```
+
+<Callout type="info">
+트레이싱은 프로젝트별로 옵트인됩니다. 훅은 전역으로 실행되지만, 해당 프로젝트에 `TRACE_TO_LANGFUSE`가 `"true"`로 설정되어 있지 않으면 즉시 종료됩니다.
+</Callout>
+
+**환경 변수:**
+
+| 변수                  | 설명                                                                                                                                                                        | 필수 여부            |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| `TRACE_TO_LANGFUSE`   | 트레이싱을 활성화하려면 `"true"`로 설정하세요                                                                                                                               | 예                   |
+| `LANGFUSE_PUBLIC_KEY` | Langfuse 공개 키                                                                                                                                                            | 예                   |
+| `LANGFUSE_SECRET_KEY` | Langfuse 비밀 키                                                                                                                                                            | 예                   |
+| `LANGFUSE_BASE_URL`   | Langfuse 기본 URL. EU: `https://cloud.langfuse.com`, US: `https://us.cloud.langfuse.com`, Japan: `https://jp.cloud.langfuse.com`, HIPAA: `https://hipaa.cloud.langfuse.com` | 아니요 (기본값은 EU) |
+| `CC_LANGFUSE_DEBUG`   | 자세한 디버그 로깅을 원하면 `"true"`로 설정하세요                                                                                                                           | 아니요               |
+
+### Claude Code 사용 시작하기
+
+이제 트레이싱이 활성화된 프로젝트에서 Claude Code를 사용하면, 대화가 Langfuse로 전송됩니다:
+
+```bash
+cd your-project
+claude
+```
+
+### Langfuse에서 트레이스 확인하기
+
+Langfuse 프로젝트를 열어 캡처된 트레이스를 확인하세요. 구조는 Claude Code가 실제로 동작하는 방식을 그대로 반영합니다:
+
+- **턴 트레이스** (`Claude Code - Turn N`): 여러분의 프롬프트부터 최종 어시스턴트 응답까지, 대화 턴당 하나의 트레이스입니다.
+- **생성 스팬** (`Claude Generation 1`, `Claude Generation 2`, …): 턴 안의 어시스턴트 메시지마다 하나씩입니다. 각 생성에는 받은 입력(프롬프트 또는 이전 도구 결과 배치), 텍스트 응답, LLM이 결정한 모든 도구 호출이 담겨 있습니다.
+- **도구 스팬** (`Tool: Read`, `Tool: Bash`, …): 트리거한 생성 아래 중첩됩니다. 각각 도구 입력, 출력, 소요 시간을 보여줍니다.
+- **세션 그룹화**: 같은 Claude Code 세션의 모든 턴은 [`session_id`](/docs/observability/features/sessions)를 통해 그룹화됩니다 — Sessions 탭을 열어 전체 실행을 확인하세요.
+
+#### 확인할 사항
+
+트레이스 화면은 Claude Code를 블랙박스가 아닌 진단 화면으로 바꿔줍니다. 살펴볼 만한 일반적인 항목:
+
+- Claude가 세션 내내 같은 파일을 여러 번 읽는다면 → 프로젝트 루트에 `CLAUDE.md`를 추가해 처음부터 맥락을 제공하세요.
+- 거의 동일한 입력으로 도구 호출이 반복된다면(같은 웹 검색, 같은 grep) → 프롬프트나 성공 기준을 더 명확히 하세요.
+- 코드를 작성하기 전에 파일 읽기가 길게 이어진다면 → 작업이 충분히 구체화되지 않았을 수 있습니다.
+
+</Steps>
+
+## 문제 해결
+
+### Langfuse에 트레이스가 나타나지 않음
+
+대부분의 문제는 다음 네 가지 중 하나로 귀결됩니다:
+
+1. **훅이 실행되지 않고 있습니다.** 로그를 확인하세요:
+
+```bash
+tail -f ~/.claude/state/langfuse_hook.log
+```
+
+Claude Code 세션 후 파일이 비어 있다면, 훅이 등록되지 않았을 가능성이 있습니다 — `~/.claude/settings.json`을 다시 확인하고 Stop 훅 항목이 있는지 확인하세요. 기본(비디버그) 로그 수준에서는, 훅이 실행되었지만 조기에 종료된 경우(예: `TRACE_TO_LANGFUSE` 미설정, 키 누락, Langfuse 초기화 실패)에도 파일이 비어 있을 수 있으므로, Stop 훅이 있다면 3단계로 이동해 디버그 로깅을 활성화하세요.
+
+2. **`TRACE_TO_LANGFUSE`가 정확히 문자열 `"true"`가 아닙니다.** `.claude/settings.json`에서는 반드시 JSON 문자열 `"true"`(소문자, 따옴표 포함)여야 하며, 불리언이나 `"True"`가 아닙니다. 훅은 이 정확한 값을 확인하며, 그렇지 않으면 조용히 종료됩니다. 공개 키가 `pk-lf-`로 시작하는지도 확인하세요.
+
+3. **디버그 모드를 활성화해 자세한 로그를 확인하세요.** 실제 원인을 찾는 가장 빠른 방법입니다:
+
+```json
+{
+  "env": {
+    "CC_LANGFUSE_DEBUG": "true"
+  }
+}
+```
+
+4. **잘못된 Python, 잘못된 디렉터리, 또는 SDK 누락.** `python3`이 최신 Python(3.9+)을 가리키는지, 해당 인터프리터에 대해 `pip show langfuse`가 결과를 반환하는지, 그리고 환경 변수가 설정된 `.claude/settings.json`이 있는 프로젝트 디렉터리 안에서 `claude`를 실행했는지 확인하세요.
+
+### 권한 오류
+
+훅 스크립트가 실행 가능한지 확인하세요:
+
+```bash
+chmod +x ~/.claude/hooks/langfuse_hook.py
+```
+
+### 훅 스크립트 오류
+
+오류를 확인하기 위해 스크립트를 수동으로 테스트하세요:
+
+```bash
+TRACE_TO_LANGFUSE=true \
+LANGFUSE_PUBLIC_KEY="pk-lf-..." \
+LANGFUSE_SECRET_KEY="sk-lf-..." \
+python3 ~/.claude/hooks/langfuse_hook.py
+```
+
+로그 파일에서 오류를 확인하세요:
+
+```bash
+cat ~/.claude/state/langfuse_hook.log
+```
+
+### Langfuse SDK 버전 불일치
+
+훅 스크립트는 Langfuse Python SDK `4.x`를 대상으로 하며, 관찰을 과거 타임스탬프로 소급 적용하기 위해 내부 속성(`_otel_tracer`, `_create_observation_from_otel_span`)을 사용합니다. `~/.claude/state/langfuse_hook.log`에 다음이 표시된다면:
+
+```
+emit_turn failed: RuntimeError: Langfuse SDK X.Y.Z is missing _otel_tracer ...
+```
+
+호환되는 버전을 다시 설치하세요:
+
+```bash
+pip install "langfuse>=4.0,<5"
+```
+
+의도적으로 `4.x`보다 상위 버전으로 업그레이드했다면, 훅 스크립트의 `_start_backdated`를 새 SDK 구조에 맞게 업데이트해야 합니다.
+
+### 인증 오류
+
+Langfuse API 키가 올바른지, 기본 URL이 여러분의 리전과 일치하는지 확인하세요:
+
+- **EU 리전**: `https://cloud.langfuse.com`
+- **US 리전**: `https://us.cloud.langfuse.com`
+- **Japan 리전**: `https://jp.cloud.langfuse.com`
+- **HIPAA 리전**: `https://hipaa.cloud.langfuse.com`
+
+## 리소스
+
+- [Claude Code 문서](https://code.claude.com/docs/en/overview)
+- [Claude Code 훅](https://code.claude.com/docs/en/hooks-guide)
+- [Claude Code GitHub 저장소](https://github.com/anthropics/claude-code)
+- [Langfuse SDK 계측](/docs/observability/sdk/instrumentation)
+- [Langfuse Python SDK 레퍼런스](https://python.reference.langfuse.com)

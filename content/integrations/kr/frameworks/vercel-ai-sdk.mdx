@@ -1,0 +1,396 @@
+---
+source: ⚠️ Jupyter Notebook
+title: Vercel AI SDK를 위한 옵저버빌리티와 트레이싱
+sidebarTitle: Vercel AI SDK
+logo: /images/integrations/vercel_ai_sdk_icon.png
+logoAppearance: multicolor
+description: Langfuse를 통한 Vercel AI SDK 애플리케이션의 오픈소스 옵저버빌리티 - 메트릭, 평가, 프롬프트 관리, 플레이그라운드, 데이터셋.
+category: Integrations
+---
+
+# Vercel AI SDK를 위한 옵저버빌리티와 트레이싱
+
+<iframe
+  width="100%"
+  className="aspect-video rounded border mt-6"
+  src="https://www.youtube-nocookie.com/embed/fIDmoE1Ywcs"
+  title="Observability and Tracing for the Vercel AI SDK with Langfuse"
+  frameborder="0"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+  referrerpolicy="strict-origin-when-cross-origin"
+  allowFullScreen
+></iframe>
+
+이 노트북은 LLM 기반 애플리케이션과 AI 에이전트를 모니터링, 디버깅, 평가하기 위해 **Vercel AI SDK**에 **Langfuse**를 **통합**하는 방법을 보여줍니다.
+
+> **Vercel AI SDK란 무엇인가요?**: [Vercel AI SDK](https://vercel.com/docs/ai-sdk)는 간단한 서버/클라이언트 함수를 사용하여 웹 앱에서 직접 AI 모델(OpenAI, Anthropic 또는 호환되는 모든 제공업체)을 호출하고 응답을 스트리밍할 수 있게 해주는 경량 툴킷입니다.
+
+> **Langfuse란 무엇인가요?**: [Langfuse](https://langfuse.com/)는 AI 에이전트와 LLM 애플리케이션을 위한 오픈소스 옵저버빌리티 플랫폼입니다. LLM 호출, 도구 사용, 비용, 지연 시간 등을 시각화하고 모니터링하는 데 도움을 줍니다.
+
+> **이 둘은 어떻게 함께 작동하나요?** Vercel AI SDK는 [OpenTelemetry](https://opentelemetry.io/docs/what-is-opentelemetry/)를 기반으로 한 내장 텔레메트리를 갖추고 있습니다. Langfuse도 OpenTelemetry를 사용하므로 둘은 매끄럽게 통합됩니다. AI SDK 7의 경우, Langfuse 텔레메트리 통합을 AI SDK에 등록하고 Langfuse 스팬 프로세서로 스팬을 내보내세요. AI SDK v6의 경우 트레이싱하려는 호출에서 `experimental_telemetry`를 활성화하세요.
+
+## AI SDK 7 [#ai-sdk-7]
+
+AI SDK 7은 콜백 기반 텔레메트리 시스템을 사용합니다. AI SDK 7 패키지와 함께 Langfuse가 제공하는 텔레메트리 통합을 설치하세요:
+
+```bash
+npm install ai @ai-sdk/openai @langfuse/client @langfuse/vercel-ai-sdk @langfuse/tracing @langfuse/otel @opentelemetry/sdk-node zod
+```
+
+<Callout type="info">
+  `@langfuse/vercel-ai-sdk` 패키지는 AI SDK 7을 대상으로 하며 Node.js 22 이상이 필요합니다. 아직 업그레이드할 수 없다면 아래의 AI SDK v6 레거시 설정을 사용하세요.
+
+</Callout>
+
+OpenTelemetry 익스포터 설정으로 `instrumentation.ts` 파일을 만들고 애플리케이션 시작 시 한 번 Langfuse Vercel AI SDK 통합을 등록하세요.
+
+```typescript filename="instrumentation.ts"
+import { registerTelemetry } from "ai";
+import { LangfuseSpanProcessor } from "@langfuse/otel";
+import { LangfuseVercelAiSdkIntegration } from "@langfuse/vercel-ai-sdk";
+import { NodeSDK } from "@opentelemetry/sdk-node";
+
+const sdk = new NodeSDK({
+  spanProcessors: [new LangfuseSpanProcessor()],
+});
+
+sdk.start();
+
+registerTelemetry(new LangfuseVercelAiSdkIntegration());
+```
+
+AI SDK 호출을 실행하는 파일에서 먼저 `instrumentation.ts`를 임포트하세요. 통합이 등록되면 AI SDK 7은 기본적으로 텔레메트리를 방출합니다. 함수 이름을 설정하거나, 선택한 런타임 컨텍스트 키를 포함하거나, 특정 호출에 대한 텔레메트리를 선택 해제하려면 `telemetry`를 사용하세요.
+
+```typescript filename="app.ts"
+import "./instrumentation";
+
+import { generateText, tool } from "ai";
+import { openai } from "@ai-sdk/openai";
+import { LangfuseClient } from "@langfuse/client";
+import { propagateAttributes } from "@langfuse/tracing";
+import { z } from "zod";
+
+const langfuseClient = new LangfuseClient();
+const langfusePrompt = await langfuseClient.getPrompt("weather-chat/default");
+
+const { text } = await propagateAttributes(
+  {
+    traceName: "weather-chat",
+    userId: "user-123",
+    sessionId: "session-456",
+    tags: ["production", "chat"],
+    metadata: {
+      feature: "weather-assistant",
+    },
+  },
+  () =>
+    generateText({
+      model: openai("gpt-5.1"),
+      prompt: langfusePrompt.compile({ location: "San Francisco" }),
+      tools: {
+        getWeather: tool({
+          description: "Get the weather in a location",
+          inputSchema: z.object({
+            location: z.string().describe("The location to get the weather for"),
+          }),
+          execute: async ({ location }) => ({
+            location,
+            temperature: 72 + Math.floor(Math.random() * 21) - 10,
+          }),
+        }),
+      },
+      runtimeContext: {
+        route: "weather-chat",
+        langfusePrompt,
+      },
+      telemetry: {
+        functionId: "weather-chat",
+        includeRuntimeContext: {
+          route: true,
+          langfusePrompt: true,
+        },
+      },
+    }),
+);
+```
+
+AI SDK 7은 각 최상위 키가 명시적으로 포함되지 않는 한 텔레메트리 이벤트에서 `runtimeContext`를 제외합니다. Langfuse는 포함된 런타임 컨텍스트 키를 observation 메타데이터에 매핑하지만, `langfusePrompt`는 예외로서 Langfuse 프롬프트 관리 버전을 모델 호출 observation에 연결합니다.
+
+특정 호출에 대해 텔레메트리를 비활성화하려면 `telemetry: { isEnabled: false }`를 설정하세요.
+
+## AI SDK v6 레거시 설정
+
+### 요약
+
+Langfuse와 레거시 AI SDK v6 통합이 함께 작동하는 흐름은 다음과 같습니다:
+
+1. **텔레메트리 활성화**: AI SDK에서 텔레메트리를 활성화합니다 (`experimental_telemetry: { isEnabled: true }`)
+2. **AI SDK가 스팬을 생성**합니다: 각 작업(모델 호출, 도구 실행 등)에 대해 스팬을 생성합니다
+3. **LangfuseSpanProcessor가 가로챕니다**: 이 스팬들을 가로채서 Langfuse로 전송합니다
+4. **Langfuse가 저장 및 시각화**합니다: 탐색할 수 있는 트레이스로 데이터를 저장하고 시각화합니다
+
+이 통합은 옵저버빌리티 표준인 [OpenTelemetry](https://opentelemetry.io/docs/what-is-opentelemetry/)를 사용합니다. Vercel AI SDK의 텔레메트리 기능은 [Vercel AI SDK 문서의 텔레메트리 섹션](https://ai-sdk.dev/docs/ai-sdk-core/telemetry)에 문서화되어 있습니다.
+
+레거시 AI SDK v6 설정을 더 자세히 살펴보겠습니다.
+
+<Steps>
+
+## 1. 종속성 설치
+
+Vercel AI SDK, OpenTelemetry, Langfuse를 설치하세요:
+
+```bash
+npm install ai
+npm install @ai-sdk/openai
+npm install @langfuse/tracing @langfuse/otel @opentelemetry/sdk-node
+```
+
+<Callout type="info">
+  _**참고:** 이 예제에서는 `@ai-sdk/openai`를 사용하지만, Vercel AI SDK가 지원하는 모든 AI 제공업체(Anthropic, Google, Mistral 등)를 사용할 수 있습니다. 통합 방식은 동일합니다._
+
+</Callout>
+
+## 2. 환경 및 API 키 구성
+
+Langfuse와 LLM 제공업체 자격 증명을 설정하세요(이 예제는 OpenAI를 사용합니다). 무료 [Langfuse Cloud](https://langfuse.com/cloud) 계정에 가입하거나 [Langfuse를 셀프 호스팅](https://langfuse.com/self-hosting)하여 Langfuse 키를 얻을 수 있습니다.
+
+```bash filename=".env"
+LANGFUSE_SECRET_KEY = "sk-lf-..."
+LANGFUSE_PUBLIC_KEY = "pk-lf-..."
+LANGFUSE_BASE_URL = "https://cloud.langfuse.com" # 🇪🇺 EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+
+OPENAI_API_KEY = "sk-proj-"
+```
+
+## 3. OpenTelemetry로 Langfuse 초기화하기
+
+Langfuse의 트레이싱은 **[OpenTelemetry](https://opentelemetry.io)**를 기반으로 구축되었습니다. Langfuse를 Vercel AI SDK와 연결하려면 **LangfuseSpanProcessor**로 OpenTelemetry SDK를 설정해야 합니다.
+
+**LangfuseSpanProcessor**는 텔레메트리 데이터(OpenTelemetry에서 "스팬"이라고 부름)를 캡처하여 저장 및 시각화를 위해 Langfuse로 전송하는 컴포넌트입니다.
+
+```typescript
+import { NodeSDK } from "@opentelemetry/sdk-node";
+import { LangfuseSpanProcessor } from "@langfuse/otel";
+
+const sdk = new NodeSDK({
+  spanProcessors: [new LangfuseSpanProcessor()],
+});
+
+sdk.start();
+```
+
+## 4. AI SDK v6 호출에서 텔레메트리 활성화하기
+
+AI SDK 함수에 `{ experimental_telemetry: { isEnabled: true }}`를 전달하기만 하면 됩니다. AI SDK는 자동으로 텔레메트리 스팬을 생성하고, 이를 (3단계의) `LangfuseSpanProcessor`가 캡처하여 Langfuse로 전송합니다.
+
+```typescript
+import { generateText, tool } from 'ai';
+import { openai } from '@ai-sdk/openai';
+import { z } from 'zod';
+
+const { text } = await generateText({
+  model: openai("gpt-5.1"),
+  prompt: 'What is the weather like today in San Francisco?',
+  tools: {
+    getWeather: tool({
+      description: 'Get the weather in a location',
+      inputSchema: z.object({
+        location: z.string().describe('The location to get the weather for'),
+      }),
+      execute: async ({ location }) => ({
+        location,
+        temperature: 72 + Math.floor(Math.random() * 21) - 10,
+      }),
+    }),
+  },
+  experimental_telemetry: { isEnabled: true },
+});
+```
+
+이것으로 끝입니다! 이는 `generateText`, `streamText`, `generateObject`, 도구 호출을 포함한 모든 AI SDK 함수에 적용됩니다.
+
+## 5. Langfuse에서 트레이스 확인하기
+
+워크플로우를 실행한 후 Langfuse에서 전체 트레이스를 확인할 수 있습니다:
+
+![Langfuse의 예시 트레이스](https://langfuse.com/images/cookbook/integration_vercel-ai-sdk/ai-sdk_example-trace.png)
+
+**예시 트레이스**: [Langfuse에서 보기](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/df41e597d0a85e0d7a6ae8ebfaa70aa0?observation=91a17a2274bfd23f&timestamp=2025-11-17T14%3A55%3A18.786Z)
+
+</Steps>
+
+## AI SDK v6에서 프롬프트 관리와 결합하기
+
+프롬프트를 버전 관리하고 관리하기 위해 [Langfuse 프롬프트 관리](/docs/prompt-management)를 사용하고 있다면, 프롬프트를 트레이스에 연결하는 것을 권장합니다. 이를 통해 트레이스에서 각 생성에 사용된 프롬프트 버전을 확인할 수 있습니다.
+프롬프트를 트레이스에 연결하려면 `experimental_telemetry` 필드에 프롬프트 메타데이터를 전달하세요:
+
+```typescript
+import { generateText } from "ai";
+import { openai } from "@ai-sdk/openai";
+import { LangfuseClient } from "@langfuse/client"; // Add this import
+
+const langfuse = new LangfuseClient();
+
+// Get current `production` version
+const prompt = await langfuse.prompt.get("movie-critic");
+
+// Insert variables into prompt template
+const compiledPrompt = prompt.compile({
+  someVariable: "example-variable",
+});
+
+const { text } = await generateText({
+  model: openai("gpt-5"),
+  prompt: compiledPrompt,
+  experimental_telemetry: {
+    isEnabled: true,
+    metadata: {
+      langfusePrompt: prompt.toJSON() // This links the Generation to your prompt in Langfuse
+    },
+  },
+});
+```
+
+연결되면 Langfuse의 트레이스 세부 정보에서 프롬프트 버전이 표시됩니다.
+
+## AI SDK v6에서 Next.js로 설정하기
+
+프로덕션 Next.js 애플리케이션의 경우 스트리밍 응답을 제대로 처리하고 서버리스 함수가 종료되기 전에 트레이스가 전송되도록 하려면 몇 가지 추가 구성이 필요합니다.
+
+이 예제는 다음 방법을 보여줍니다:
+
+- Next.js에서 OpenTelemetry 계측 설정하기(`instrumentation.ts` 파일 사용)
+- 적절한 스팬 라이프사이클로 스트리밍 응답 처리하기
+- 트레이스에 세션 및 사용자 트래킹 추가하기
+- 서버리스 환경에서 트레이스가 플러시되도록 보장하기
+
+### 계측 설정하기
+
+프로젝트 루트에 새 파일 [`instrumentation.ts`](https://nextjs.org/docs/app/api-reference/file-conventions/instrumentation)를 만드세요. 이 파일은 Next.js 앱이 시작될 때 실행되어 OpenTelemetry 설정을 초기화합니다:
+
+```typescript
+// instrumentation.ts
+
+import { LangfuseSpanProcessor } from "@langfuse/otel";
+import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
+
+// Default smart filter exports Langfuse + GenAI/LLM spans
+export const langfuseSpanProcessor = new LangfuseSpanProcessor();
+
+const tracerProvider = new NodeTracerProvider({
+  spanProcessors: [langfuseSpanProcessor],
+});
+
+tracerProvider.register();
+```
+
+<Callout>
+  Next.js를 사용하는 경우 `@vercel/otel` v2 이상이라면 `@vercel/otel`의
+  `registerOTel`을 통해 `LangfuseSpanProcessor`를 등록할 수 있습니다. [이전
+  버전은 OpenTelemetry JS SDK
+  v2를 지원하지 않았으며](https://github.com/vercel/otel/issues/154), `@langfuse/tracing`과
+  `@langfuse/otel` 패키지는 이 SDK를 기반으로 합니다. 이는
+  `@vercel/otel` v2에서 해결되었습니다. 위에 표시된 수동 `NodeTracerProvider` 설정도
+  작동하며 버전 요구 사항이 없습니다.
+
+</Callout>
+
+### 스트리밍을 지원하는 API 라우트 만들기
+
+아래 예제는 Langfuse `observe()` 래퍼를 사용하여 트레이스를 생성하고, 세션 및 사용자 메타데이터를 추가하고, 스트리밍 응답을 적절히 처리하는 채팅 엔드포인트를 보여줍니다. 구체적으로:
+
+- `observe()`는 핸들러 주변에 루트 observation을 생성합니다
+- `propagateAttributes()`는 더 나은 트레이스 구성을 위해 세션 및 사용자 메타데이터를 추가합니다
+- `updateActiveObservation()`은 루트 observation에 입력과 출력을 설정합니다
+- `forceFlush()`는 서버리스 함수가 종료되기 전에 트레이스가 전송되도록 보장합니다
+- `endOnExit: false`는 스트리밍 응답이 완료될 때까지 observation을 열린 상태로 유지합니다
+
+```typescript
+// app/api/chat/route.ts
+
+import { streamText } from "ai";
+import { after } from "next/server";
+
+import { openai } from "@ai-sdk/openai";
+import {
+  observe,
+  propagateAttributes,
+  updateActiveObservation,
+} from "@langfuse/tracing";
+import { trace } from "@opentelemetry/api";
+
+import { langfuseSpanProcessor } from "@/src/instrumentation";
+
+const handler = async (req: Request) => {
+  const {
+    messages,
+    chatId,
+    userId,
+  }: { messages: UIMessage[]; chatId: string; userId: string } =
+    await req.json();
+
+  const inputText = messages[messages.length - 1].parts.find(
+    (part) => part.type === "text"
+  )?.text;
+
+  // Set input on the root observation
+  updateActiveObservation({
+    input: inputText,
+  });
+
+  // Add session and user context to the trace
+  await propagateAttributes(
+    {
+      traceName: "chat-message",
+      sessionId: chatId,  // Groups related messages together
+      userId,             // Track which user made the request
+    },
+    async () => {
+      const result = streamText({
+        model: openai("gpt-5.1"),
+        messages,
+        experimental_telemetry: {
+          isEnabled: true,
+        },
+        onFinish: async (result) => {
+          // Set final output on the root observation after stream completes
+          updateActiveObservation({
+            output: result.content,
+          });
+
+          // End span manually after stream has finished
+          trace.getActiveSpan()?.end();
+        },
+        onError: async (error) => {
+          updateActiveObservation({
+            output: error,
+          });
+
+          // Manually end the span since we're streaming
+          trace.getActiveSpan()?.end();
+        },
+      });
+
+      // Critical for serverless: flush traces before function terminates
+      after(async () => await langfuseSpanProcessor.forceFlush());
+
+      return result.toUIMessageStreamResponse();
+    }
+  );
+};
+
+// Wrap handler with observe() to create a Langfuse trace
+export const POST = observe(handler, {
+  name: "handle-chat-message",
+  endOnExit: false, // Don't end observation until stream finishes
+});
+```
+
+## 다른 옵저버빌리티 도구와 함께 사용하기
+
+Vercel AI SDK는 트레이싱을 위해 OpenTelemetry를 사용합니다(계측 스코프: `ai`). Sentry, Datadog 또는 기타 OTEL 기반 도구도 함께 사용하는 경우, 충돌을 피하기 위해 추가 구성이 필요할 수 있습니다. [기존 OpenTelemetry 설정과 함께 Langfuse 사용하기](/faq/all/existing-otel-setup)를 참고하세요.
+
+import LearnMore from "@/components-mdx/integration-learn-more-js.mdx";
+
+<LearnMore />

@@ -1,0 +1,178 @@
+---
+title: Langfuse로 AI SDK C++ 트레이싱하기
+sidebarTitle: AI SDK C++
+logo: /images/integrations/clickhouse_icon.svg
+description: LLM 호출, 도구 호출, 다단계 에이전트 실행을 트레이싱하기 위해 Langfuse로 AI SDK C++ 애플리케이션을 계측하는 방법을 알아보세요.
+category: Integrations
+---
+
+# Langfuse로 AI SDK C++ 트레이싱하기
+
+이 가이드는 [AI SDK C++](https://github.com/ClickHouse/ai-sdk-cpp)에 내장된 **Langfuse 트레이싱 모듈**을 사용하여 `ai::Client::generate_text` 호출에 대한 트레이스를 캡처하는 방법을 보여줍니다. 여기에는 LLM 왕복 호출과 모든 도구 호출이 포함됩니다.
+
+> **AI SDK C++란 무엇인가요?** [AI SDK C++](https://github.com/ClickHouse/ai-sdk-cpp)는 [ClickHouse](https://github.com/ClickHouse)가 유지 관리하는 현대적인 C++20 툴킷으로, OpenAI 및 Anthropic과 같은 공급자를 사용하여 AI 기반 애플리케이션을 구축하기 위한 것입니다. 텍스트 생성, 스트리밍, 도구, 다단계 에이전트 루프를 위한 통합 `ai::Client` API를 제공합니다.
+
+> **Langfuse란 무엇인가요?** [Langfuse](/)는 LLM 애플리케이션을 디버그하고 개선하기 위한 트레이싱, 평가, 프롬프트 관리, 메트릭을 제공하는 오픈 소스 AI 엔지니어링 플랫폼입니다.
+
+## 트레이스 구조
+
+`ai::langfuse` 컴포넌트는 다음과 같은 구조로 논리적 작업당 하나의 트레이스를 생성합니다:
+
+- **트레이스 1개** – 호출자가 입력, 출력, 메타데이터, 태그를 설정합니다.
+- **`generation` observation 1개** – 모델, 모델 파라미터, 입력 메시지, 출력 텍스트, 집계된 사용량, 종료 사유를 포함합니다.
+- **도구 호출당 `span` 1개** – generation의 하위로 연결되며, 도구 인자를 입력으로, 결과(또는 오류)를 출력으로 가집니다.
+
+<Steps>
+
+## Langfuse 컴포넌트로 AI SDK C++ 설치하기
+
+CMake 프로젝트에 AI SDK C++를 추가하고 `ai::langfuse` 타겟에 링크하세요. Langfuse 컴포넌트는 코어, OpenAI, Anthropic 타겟과 함께 빌드됩니다:
+
+```cmake
+find_package(ai-sdk-cpp CONFIG REQUIRED)
+
+target_link_libraries(my_app
+  PRIVATE
+    ai::sdk        # umbrella target (core + providers + langfuse)
+    ai::langfuse   # or link this directly if you prefer fine-grained deps
+)
+```
+
+빌드는 `AI_SDK_HAS_LANGFUSE=1`을 정의하므로, 필요한 경우 컴파일 타임 체크 뒤에 트레이싱 코드를 보호할 수 있습니다. 전체 설치 방법은 [AI SDK C++ README](https://github.com/ClickHouse/ai-sdk-cpp#readme)를 참조하세요.
+
+## Langfuse 자격 증명 구성하기
+
+예제를 위해 Langfuse 자격 증명을 설정합니다. 이 키들은 [Langfuse Cloud](/) 프로젝트 설정 또는 [셀프 호스팅된 Langfuse](/self-hosting) 인스턴스에서 얻을 수 있습니다.
+
+```bash
+# LLM provider (required by the example)
+export OPENAI_API_KEY="sk-..."
+
+# Langfuse credentials
+export LANGFUSE_PUBLIC_KEY="pk-lf-..."
+export LANGFUSE_SECRET_KEY="sk-lf-..."
+
+# Langfuse host (optional, defaults to https://cloud.langfuse.com)
+# 🇪🇺 EU cloud:  https://cloud.langfuse.com
+# 🇺🇸 US cloud:  https://us.cloud.langfuse.com
+# 🇯🇵 Japan:     https://jp.cloud.langfuse.com
+# ⚕️ HIPAA:     https://hipaa.cloud.langfuse.com
+# Self-host:    http://localhost:3000
+export LANGFUSE_HOST="https://cloud.langfuse.com"
+```
+
+## generate_text 호출 계측하기
+
+프로세스당 한 번 `Tracer`를 생성하고, 각 논리적 작업마다 `tracer.start_trace(...)`를 호출하세요. 트레이스를 `ai::langfuse::generate_text`에 전달하면 `ai::Client::generate_text`를 래핑하여 LLM 호출과 도구 호출을 자동으로 기록합니다.
+
+```cpp
+#include <ai/langfuse.h>
+#include <ai/openai.h>
+#include <ai/tools.h>
+
+#include <cstdlib>
+#include <iostream>
+
+int main() {
+  // 1. Create a Tracer once and reuse it for all traces.
+  ai::langfuse::Tracer tracer({
+      .host = std::getenv("LANGFUSE_HOST")
+                ? std::getenv("LANGFUSE_HOST")
+                : "https://cloud.langfuse.com",
+      .public_key = std::getenv("LANGFUSE_PUBLIC_KEY"),
+      .secret_key = std::getenv("LANGFUSE_SECRET_KEY"),
+      .environment = "ai-sdk-cpp-example",
+  });
+  if (!tracer.is_valid()) {
+    std::cerr << "Langfuse tracer not configured.\n";
+    return 1;
+  }
+
+  // 2. Configure the LLM client and tools as usual.
+  auto client = ai::openai::create_client();
+
+  ai::GenerateOptions options;
+  options.model = ai::openai::models::kGpt4oMini;
+  options.system =
+      "You are a concise assistant. Use the available tools when helpful.";
+  options.prompt = "Look up alice and tell me the weather where she lives.";
+  options.max_steps = 4;
+  options.temperature = 0.0;
+  // options.tools = ... ;  // register your ai::ToolSet here
+
+  // 3. Start a trace and attach input/metadata.
+  auto trace = tracer.start_trace("langfuse_tracing_example");
+  trace->set_input(options.prompt);
+  trace->set_metadata({{"example", "langfuse_tracing"}, {"sdk", "ai-sdk-cpp"}});
+
+  // 4. Run generate_text via the Langfuse wrapper.
+  auto result = ai::langfuse::generate_text(client, std::move(options), *trace);
+
+  if (result) {
+    std::cout << "Output: " << result.text << "\n";
+    trace->set_output(result.text);
+  } else {
+    trace->set_output(ai::JsonValue{{"error", result.error_message()}});
+  }
+
+  // 5. Flush the batch synchronously to Langfuse.
+  trace->end();
+  return result ? 0 : 2;
+}
+```
+
+이 래퍼는 `GenerateOptions`의 기존 `on_tool_call_start` / `on_tool_call_finish` 콜백에 연결되며, 이미 설치된 콜백들을 체인으로 연결하므로 트레이싱이 여러분의 인스트루멘테이션과 깔끔하게 조합됩니다.
+
+</Steps>
+
+## Tracer 구성
+
+`ai::langfuse::Config`는 다음 옵션을 지원합니다:
+
+| 필드                     | 설명                                                                                     |
+| ------------------------ | ---------------------------------------------------------------------------------------- |
+| `host`                   | Langfuse 인스턴스의 기본 URL입니다. 기본값은 `https://cloud.langfuse.com`입니다.         |
+| `public_key`             | 공개 API 키(`pk-lf-...`)입니다.                                                          |
+| `secret_key`             | 비밀 API 키(`sk-lf-...`)입니다.                                                          |
+| `release`                | 모든 트레이스에 첨부되는 선택적 릴리스 식별자입니다(예: 커밋 SHA).                       |
+| `environment`            | 모든 트레이스에 첨부되는 환경 태그입니다. 기본값은 `default`입니다.                      |
+| `connection_timeout_sec` | 수집 요청에 대한 HTTP 연결 타임아웃입니다. 기본값은 10초입니다.                          |
+| `read_timeout_sec`       | 수집 요청에 대한 HTTP 읽기 타임아웃입니다. 기본값은 30초입니다.                          |
+| `error_policy`           | `kStrict`는 HTTP/JSON 실패를 `Trace::end()`를 통해 드러내고, `kBestEffort`는 무시합니다. |
+
+## Trace API
+
+`Trace`는 메모리에 이벤트를 축적하고 `end()`가 호출되면 `/api/public/ingestion`으로 POST합니다.
+
+```cpp
+auto trace = tracer.start_trace("sql-generation");
+
+trace->set_input(user_prompt);
+trace->set_user_id("user-123");
+trace->set_session_id("session-abc");
+trace->set_metadata({{"feature", "sql-assistant"}});
+trace->add_tag("beta");
+
+auto result = ai::langfuse::generate_text(client, std::move(options), *trace);
+
+if (result) {
+  trace->set_output(result.text);
+} else {
+  trace->set_output(ai::JsonValue{{"error", result.error_message()}});
+}
+trace->end();  // idempotent, synchronous flush
+```
+
+`Trace` 메서드는 스레드 안전하므로, `generate_text`의 워커 스레드에서 발생한 콜백이 동일한 트레이스에 동시에 기록할 수 있습니다.
+
+## 참고 사항 및 제한 사항
+
+- `Trace::end()`는 동기적으로 플러시됩니다. (아직) 백그라운드 워커 스레드가 없습니다.
+- 중간 `on_step_finish` 이벤트는 별도의 generation으로 발생되지 않습니다. 단계별 텍스트와 사용량은 단일 부모 generation observation으로 롤업됩니다.
+- 이 통합은 AI SDK C++에 선택적 CMake 타겟으로 제공됩니다. `ai::langfuse`를 링크하지 않으면 바이너리에 추가 HTTP 및 JSON 코드 경로가 포함되지 않습니다.
+
+## 더 알아보기
+
+- [GitHub의 AI SDK C++](https://github.com/ClickHouse/ai-sdk-cpp)
+- [Langfuse 트레이싱 모듈 PR](https://github.com/ClickHouse/ai-sdk-cpp/pull/42)
+- [Langfuse 트레이싱 개념](/docs/observability/get-started)

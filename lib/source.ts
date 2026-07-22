@@ -12,6 +12,7 @@ import {
   faq,
   faqKr,
   integrations,
+  integrationsKr,
   security,
   securityKr,
   library,
@@ -157,6 +158,15 @@ export const integrationsSource = loader({
   baseUrl: baseUrl("integrations"),
   source: integrations.toFumadocsSource(),
   pageTree: { idPrefix: "integrations", transformers: [shortTitleTransformer] },
+});
+
+export const integrationsKrSource = loader({
+  baseUrl: "/integrations/kr",
+  source: integrationsKr.toFumadocsSource(),
+  pageTree: {
+    idPrefix: "integrations-kr",
+    transformers: [shortTitleTransformer],
+  },
 });
 
 export const securitySource = loader({

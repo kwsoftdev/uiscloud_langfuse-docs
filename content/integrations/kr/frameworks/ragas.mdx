@@ -1,0 +1,44 @@
+---
+title: "Langfuse와 Ragas 통합"
+sidebarTitle: Ragas
+logo: /images/integrations/ragas_icon.svg
+description: "효율적인 평가, 모니터링, 성능 향상을 위해 Langfuse와 Ragas 통합으로 RAG 파이프라인을 최적화하세요."
+---
+
+# Ragas와 Langfuse를 활용한 RAG 파이프라인 평가
+
+Ragas와 Langfuse는 검색 증강 생성(RAG) 파이프라인을 평가하고 모니터링하는 데 도움이 되는 강력한 조합입니다.
+
+## Langfuse란 무엇인가요?
+
+Langfuse([GitHub](https://github.com/langfuse/langfuse))는 LLM [트레이싱](/docs/tracing), [프롬프트 관리](/docs/prompts/get-started), [평가](/docs/scores/overview)를 위한 플랫폼입니다. 트레이스와 스팬에 점수를 매길 수 있어 RAG 파이프라인의 성능에 대한 인사이트를 제공합니다. Langfuse는 [OpenAI](/integrations/kr/model-providers/openai-py), [Langchain](/integrations/kr/frameworks/langchain), [그 외 다양한 통합](/integrations)을 지원합니다.
+
+## Ragas란 무엇인가요?
+
+[Ragas](https://docs.ragas.io/)는 RAG 파이프라인의 모델 기반 평가를 위해 설계된 오픈소스 도구입니다. 참조 없는(reference-free) 평가를 수행하므로 시스템 성능을 평가하기 위한 정답(ground-truth) 데이터가 필요하지 않습니다. Ragas는 충실도(faithfulness), 답변 관련성(answer relevancy), 문맥 정밀도(context precision)와 같은 RAG 파이프라인의 다양한 측면을 평가할 수 있습니다.
+
+**Ragas의 일반적인 사용 사례:**
+
+- **RAG 파이프라인 평가:** 합성 테스트 세트를 생성하고 충실도 및 답변 관련성과 같은 메트릭을 사용하여 파이프라인 성능을 평가합니다.
+- **커스텀 프롬프트 적응:** 검색 및 생성 향상을 위한 자동 적응 기능으로 커스텀 프롬프트를 작성하고 최적화합니다.
+- **CI 파이프라인 통합:** Pytest를 사용하여 Ragas를 CI 파이프라인에 통합하여 자동화된 평가와 모니터링을 수행합니다.
+
+## Langfuse와 Ragas를 함께 사용하는 주요 이점
+
+- **트레이스 점수 매기기**: RAG 파이프라인의 성능에 대한 인사이트를 제공하도록 트레이스와 스팬에 [점수](/docs/scores/overview)를 매깁니다.
+- **상세 분석**: 트레이스를 세분화하고 [분석](/docs/analytics/overview)하여 품질이 낮은 점수를 식별하고 시스템 성능을 개선합니다.
+- **점수 리포팅**: 특정 사용 사례와 사용자 세그먼트에 대한 상세 리포트를 자세히 살펴봅니다.
+
+## 시작하기
+
+Ragas와 Langfuse를 활용한 RAG 평가의 엔드투엔드 예제는 노트북을 확인하세요:
+
+import { FileCode } from "lucide-react";
+
+<Cards>
+  <Card
+    title="Ragas를 활용한 RAG 파이프라인 평가"
+    href="/guides/cookbook/evaluation_of_rag_with_ragas"
+    icon={<FileCode />}
+  />
+</Cards>

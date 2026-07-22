@@ -1,0 +1,81 @@
+---
+title: "Open Source Observability for Vapi (Voice AI)"
+sidebarTitle: Vapi
+logo: /images/integrations/vapi_icon.png
+description: "Discover how to integrate Vapi with Langfuse for enhanced voice AI telemetry monitoring, enabling improved performance and reliability of your AI applications."
+---
+
+# Vapi Integration
+
+Vapi는 Langfuse와 네이티브로 통합되어, 향상된 텔레메트리 모니터링을 위해 트레이스를 Langfuse로 직접 전송할 수 있습니다. 이 인테그레이션을 통해 여러분의 음성 AI 애플리케이션에 대한 더 깊은 인사이트를 얻고 성능과 안정성을 개선할 수 있습니다.
+
+<Video
+  src="https://static.langfuse.com/docs-videos/vapi-integration.mp4"
+  aspectRatio={1652 / 1080}
+/>
+
+## Vapi란 무엇인가요?
+
+[Vapi](https://docs.vapi.ai/introduction)는 개발자를 위한 음성 AI 플랫폼입니다. 다음과 같은 복잡성을 추상화해 몇 분 만에 음성 AI 에이전트를 구축, 테스트, 배포할 수 있게 해줍니다:
+
+- **자연스러운 인간 대화 시뮬레이션**: 말차례 넘기기, 끼어들기, 백채널링 등을 처리합니다.
+- **실시간/저지연 요구 사항**: 낮은 지연 시간(< 500-800ms voice-to-voice)으로 반응성 있는 대화를 보장합니다.
+- **함수 호출**: 대화 중 작업을 수행하고 커스텀 작업을 위해 여러분의 서비스와 인터페이스합니다.
+- **대화 데이터 추출**: 대화 오디오, 트랜스크립트, 메타데이터를 검토합니다.
+
+## Langfuse란 무엇인가요?
+
+Langfuse는 LLM 애플리케이션에 더 나은 **[관측 가능성](/docs/tracing)**과 **[평가](/docs/scores/overview)**를 제공하도록 설계된 오픈소스 AI 엔지니어링 플랫폼입니다. 개발자가 AI 상호작용의 트레이스를 추적, 분석, 시각화할 수 있도록 도와 AI 에이전트의 성능 튜닝, 디버깅, 최적화를 더 잘 할 수 있게 합니다.
+
+## 시작하기
+
+<Steps>
+
+### Langfuse 자격 증명 받기
+
+먼저, Langfuse 자격 증명이 필요합니다:
+
+- **Secret Key**
+- **Public Key**
+- **Host URL**
+
+[Langfuse Cloud](https://langfuse.com/cloud)에 가입하거나 [Langfuse를 셀프 호스팅](https://langfuse.com/docs/deployment/self-host)해서 받을 수 있습니다.
+
+### Langfuse 자격 증명 추가하기
+
+Vapi 대시보드에 로그인해 [Provider Credentials 페이지](https://dashboard.vapi.ai/keys)로 이동하세요.
+
+**Observability Providers** 섹션에서 **Langfuse** 옵션을 찾을 수 있습니다. Langfuse 자격 증명을 입력하세요:
+
+- **Secret Key**
+- **Public Key**
+- **Host URL** (EU: `https://cloud.langfuse.com`, US: `https://us.cloud.langfuse.com`, Japan: `https://jp.cloud.langfuse.com`, HIPAA: `https://hipaa.cloud.langfuse.com`)
+
+**Save**를 클릭해 자격 증명을 업데이트하세요.
+
+<Frame className="sm:w-1/2">
+  ![Vapi Provider Credentials](/images/docs/vapi-integration-credentials.png)
+</Frame>
+
+### Langfuse에서 트레이스 확인하기
+
+자격 증명을 추가한 뒤에는, 에이전트가 나누는 모든 대화에 대한 트레이스가 Langfuse 대시보드에 나타나기 시작할 것입니다.
+
+<Callout type="info" emoji="💡">
+
+Langfuse의 `Generation` 유형 스팬의 콘텐츠는 텍스트-투-스피치 모델의 트랜스크립션이 아니라 텍스트 모델의 출력 그 자체입니다.
+
+</Callout>
+
+<Frame>
+  ![Example trace of Vapi conversation in
+  Langfuse](/images/docs/vapi-integration-example-trace.png)
+</Frame>
+
+Langfuse의 예시 트레이스: https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/50163c14-9784-4cb9-b18e-23e924d0bb66
+
+### 에이전트를 평가하고 디버깅하기
+
+이 인테그레이션을 최대한 활용하려면, 이제 Langfuse의 [평가](/docs/scores/overview) 및 [디버깅](/docs/analytics/overview) 도구를 사용해 음성 AI 에이전트의 성능을 분석하고 개선할 수 있습니다.
+
+</Steps>

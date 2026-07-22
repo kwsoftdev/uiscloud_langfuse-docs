@@ -1,0 +1,118 @@
+---
+title: OpenTelemetry를 사용하여 Langfuse와 Embabel 에이전트 통합하기
+sidebarTitle: Embabel
+logo: /images/integrations/embabel_icon.jpg
+description: AI 에이전트 애플리케이션에서 향상된 관찰 가능성과 성능 모니터링을 위해 OpenTelemetry를 사용하여 Langfuse와 Embabel Agents를 통합하는 방법을 알아보세요.
+---
+
+# Langfuse와 Embabel 에이전트 통합하기
+
+이 가이드는 OpenTelemetry를 사용하여 [Langfuse](/)를 [Embabel](https://embabel.com)과 통합하는 방법을 보여줍니다.
+
+**Embabel**: Spring Framework의 창시자인 Rod Johnson이 만든, 에이전틱 AI 애플리케이션 구축을 위한 JVM 프레임워크입니다. 에이전트가 동적으로 행동을 결정할 수 있게 해주는 모듈형 계획 시스템(GOAP, Utility AI, 상태 머신)을 특징으로 하며, OpenTelemetry를 통한 제로 코드 관찰 가능성을 포함합니다.
+
+**Langfuse**: 관찰 가능성, 평가, 프롬프트 관리를 위한 오픈 소스 AI 엔지니어링 플랫폼입니다.
+
+## 1단계: Langfuse 설정
+
+- [Langfuse Cloud](https://langfuse.com/cloud)에 가입하거나 [Langfuse를 셀프 호스팅](https://langfuse.com/self-hosting)하세요.
+- Langfuse에서 새 프로젝트를 생성하고 **Public Key**와 **Secret Key**를 복사하세요.
+
+## 2단계: 의존성 추가
+
+`pom.xml`에 Embabel 관찰 가능성 스타터와 Langfuse OpenTelemetry exporter를 추가하세요:
+
+먼저 `pom.xml`에 Embabel 버전 속성을 설정하세요:
+
+```xml
+<properties>
+    <embabel-agent.version>0.3.4</embabel-agent.version>
+</properties>
+```
+
+그런 다음 다음 의존성을 추가하세요:
+
+```xml
+<dependencies>
+    <!-- Embabel Agent Observability Starter -->
+    <dependency>
+        <groupId>com.embabel.agent</groupId>
+        <artifactId>embabel-agent-starter-observability</artifactId>
+        <version>${embabel-agent.version}</version>
+    </dependency>
+
+    <!-- Langfuse OpenTelemetry Exporter (you can use Zipkin too) -->
+    <dependency>
+        <groupId>com.quantpulsar</groupId>
+        <artifactId>opentelemetry-exporter-langfuse</artifactId>
+        <version>0.4.0</version>
+    </dependency>
+</dependencies>
+```
+
+## 3단계: 관찰 가능성 구성
+
+`application.properties`에 다음을 추가하세요:
+
+```properties
+# Enable observability
+embabel.observability.enabled=true
+embabel.observability.service-name=observability
+
+# Enable Spring Boot tracing
+management.tracing.enabled=true
+management.tracing.sampling.probability=1.0
+
+# Langfuse
+management.langfuse.enabled=true
+management.langfuse.endpoint=https://cloud.langfuse.com/api/public/otel
+management.langfuse.public-key=pk-lf-…
+management.langfuse.secret-key=sk-lf-…
+```
+
+`pk-lf-…`와 `sk-lf-…`를 실제 Langfuse 프로젝트 키로 교체하세요. Langfuse를 셀프 호스팅하는 경우 엔드포인트 URL을 그에 맞게 업데이트하세요.
+
+<Callout type="info">
+  이것으로 끝입니다 — 코드 변경이 필요하지 않습니다. Embabel 관찰 가능성 스타터가
+  모든 OpenTelemetry 인스트루멘테이션을 자동으로 처리합니다. 더 자세한 내용은
+  [Embabel Observability
+  README](https://github.com/embabel/embabel-agent/blob/main/embabel-agent-observability/README.md)를 참조하세요.
+</Callout>
+
+## 4단계: 테스트 실행
+
+애플리케이션을 시작하세요:
+
+```bash
+mvn spring-boot:run
+```
+
+에이전트 실행을 트리거하세요 — 예를 들어 엔드포인트를 호출하거나 Embabel 에이전트를 호출하는 `CommandLineRunner`를 실행하는 방식으로요. 애플리케이션 로그에 트레이스 데이터가 내보내지는 것을 확인할 수 있습니다.
+
+## 5단계: Langfuse에서 트레이스 탐색하기
+
+트레이스가 흐르기 시작하면 [Langfuse 대시보드](https://cloud.langfuse.com)를 여세요:
+
+- **트레이스 목록**: 타임스탬프, 지연 시간, 토큰 수와 함께 모든 에이전트 실행을 확인합니다.
+- **트레이스 타임라인**: 단일 트레이스로 들어가 에이전트 작업, LLM 호출, 도구 호출, 계획 단계를 포함한 전체 스팬 계층 구조를 확인합니다.
+- **입력/출력 상세 정보**: 모델에 전송된 프롬프트와 수신된 완료 결과를 모델 이름 및 토큰 사용량과 같은 메타데이터와 함께 검사합니다.
+- **분석 대시보드**: 시간에 따른 비용, 지연 시간, 사용량 추세를 추적합니다.
+
+## 문제 해결
+
+**트레이스가 없는 경우:**
+
+- `embabel.observability.enabled`가 `true`로 설정되어 있는지 확인하세요.
+- OTLP 엔드포인트와 자격 증명이 올바른지 확인하세요.
+- 에이전트 작업이 실제로 실행되었는지 확인하세요.
+
+**프롬프트/완료가 누락된 경우:**
+
+- 개발 중에는 샘플링 확률이 `1.0`으로 설정되어 있는지 확인하세요.
+- Langfuse OpenTelemetry exporter 의존성이 classpath에 있는지 확인하세요.
+
+## GitHub Discussions
+
+import { GhDiscussionsPreview } from "@/components/gh-discussions/GhDiscussionsPreview";
+
+<GhDiscussionsPreview labels={["integration-embabel"]} />

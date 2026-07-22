@@ -1,0 +1,101 @@
+---
+title: "Langfuse Integration with Cognee"
+sidebarTitle: Cognee
+logo: /images/integrations/cognee_icon.png
+description: "AI 에이전트에서 포괄적인 옵저버빌리티를 위해 Langfuse로 Cognee 파이프라인과 AI 메모리를 모니터링하세요."
+category: Integrations
+---
+
+# Cognee Integration with Langfuse
+
+> **Cognee란 무엇인가요?** [Cognee](https://www.cognee.ai/)는 데이터를 검색 가능하고 추론 준비가 된 지식 그래프로 변환하는 오픈 소스 AI 메모리입니다. Cognee를 Langfuse와 함께 사용하면 모든 파이프라인 단계와 검색 쿼리에 대해 프로덕션급 트레이싱, 평가, 분석을 얻을 수 있습니다. 자세한 내용은 [GitHub 저장소](https://github.com/topoteretes/cognee)나 [문서](https://docs.cognee.ai)를 확인하세요.
+
+> **Langfuse란 무엇인가요?** [Langfuse](https://langfuse.com)는 오픈 소스 AI 엔지니어링 플랫폼입니다. 팀이 애플리케이션을 추적하고, 문제를 디버깅하고, 품질을 평가하고, 프로덕션에서 비용을 모니터링할 수 있도록 돕습니다.
+
+## 빠른 시작 가이드
+
+<Steps>
+
+### Step&nbsp;1: Cognee 설치하기 (Langfuse 포함)
+
+```bash
+pip install cognee  # langfuse is declared as a dependency and will be installed automatically
+```
+
+### Step&nbsp;2: Langfuse 프로젝트 생성하기
+
+1. [Langfuse Cloud](https://cloud.langfuse.com)에 가입합니다.
+2. 새 프로젝트를 생성하고 **공개(public)** 및 **비밀(secret)** API 키를 복사합니다.
+
+### Step&nbsp;3: 환경 변수 구성하기
+
+`.env` 파일을 생성하거나 셸에서 직접 변수를 export합니다.
+
+```txt filename=".env"
+LANGFUSE_PUBLIC_KEY=<your public key>
+LANGFUSE_SECRET_KEY=<your secret key>
+LANGFUSE_HOST=https://cloud.langfuse.com   # 🇪🇺 EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+```
+
+### Step&nbsp;4: Cognee 함수 트레이싱하기
+
+`cognee`는 Langfuse를 감싸는 작은 래퍼를 함께 제공합니다. `get_observe()`를 임포트하고 모니터링하려는 함수에 데코레이터로 적용하세요.
+
+```python
+from cognee.modules.observability.get_observe import get_observe
+
+observe = get_observe()
+
+@observe(as_type="generation")  # optional label
+async def acreate_structured_output(...):
+    ...  # your business logic
+```
+
+함수가 실행될 때마다 데코레이터가 Langfuse에서 **스팬**을 자동으로 열고, 지속 시간, 토큰 사용량, 사용자 지정 메타데이터 같은 지표를 스트리밍합니다.
+
+### Step&nbsp;5: Cognify 시작하고 트레이스 확인하기
+
+평소처럼 Cognee 워크플로를 실행하세요.
+
+```python
+import cognee
+import asyncio
+from cognee.modules.observability.get_observe import get_observe
+
+observe = get_observe()
+
+@observe(name="simple_example_run", as_type="example")
+async def main():
+    await cognee.add("Natural language processing (NLP) is ...")
+    await cognee.cognify()
+    results = await cognee.search("Tell me about NLP")
+    for r in results:
+        print(r)
+
+asyncio.run(main())
+```
+
+Langfuse UI를 열면 `@observe`로 데코레이트한 헬퍼 함수들에 대한 트레이스가 표시됩니다.
+
+</Steps>
+
+## 나만의 스팬 추가하기
+
+cognee 내부 함수뿐 아니라 코드베이스의 **어떤** 함수도 계측할 수 있습니다.
+
+```python
+from cognee.modules.observability.get_observe import get_observe
+
+observe = get_observe()
+
+@observe(as_type="my_tool", metadata={"foo": "bar"})
+def my_helper(arg1, arg2):
+    ...
+```
+
+## 리소스
+
+- [Cognee 홈페이지](https://www.cognee.ai/)
+- [Cognee GitHub 저장소](https://github.com/topoteretes/cognee)
+- 이 통합에 대한 [Cognee 문서](https://docs.cognee.ai/how-to-guides/cognee-sdk/integrations/langfuse-integration)

@@ -1,0 +1,147 @@
+---
+source: ⚠️ Jupyter Notebook
+title: Hermes Agent tracing with Langfuse
+sidebarTitle: Hermes Agent
+logo: /images/integrations/hermes_icon.png
+description: Langfuse 옵저버빌리티로 Hermes Agent의 대화, LLM 호출, 도구 사용을 추적하고 디버깅하세요.
+category: Integrations
+---
+
+# Hermes Agent tracing with Langfuse
+
+이 노트북은 **Langfuse**를 **Hermes Agent**와 통합하여 에이전트의 대화, LLM 호출, 도구 사용을 추적하고, 디버깅하고, 평가하는 방법을 보여줍니다.
+
+> **Hermes Agent란 무엇인가요?** [Hermes Agent](https://github.com/NousResearch/hermes-agent)는 [Nous Research](https://nousresearch.com)가 만든 자가 개선형 AI 에이전트입니다. 내장된 학습 루프, 영구 메모리, 자율적인 스킬 생성, 모든 LLM 제공업체에 대한 지원을 특징으로 합니다. Hermes는 모든 대화 턴, LLM 요청, 도구 호출을 추적하는 번들형 Langfuse 옵저버빌리티 플러그인을 함께 제공합니다.
+
+> **Langfuse란 무엇인가요?** [Langfuse](https://langfuse.com)는 팀이 LLM 애플리케이션을 추적하고, 디버깅하고, 평가할 수 있도록 돕는 오픈 소스 AI 엔지니어링 플랫폼입니다.
+
+아래 단계는 Hermes의 [공식 Langfuse 플러그인 문서](https://hermes-agent.nousresearch.com/docs/user-guide/features/built-in-plugins#observabilitylangfuse)를 따릅니다. 최신 정보는 해당 문서를 참고하세요.
+
+<Steps>
+## Step 1: 종속성 설치하기
+
+```python
+%pip install git+https://github.com/NousResearch/hermes-agent.git langfuse -U
+```
+
+## Step 2: 환경 변수 설정하기
+
+[Langfuse Cloud](https://langfuse.com/cloud)의 프로젝트 설정에서 Langfuse 키를 얻거나 [셀프 호스팅](https://langfuse.com/self-hosting)을 설정하세요.
+
+Hermes는 `~/.hermes/.env`(Hermes 문서에 명시된 정식 위치, [문서](https://hermes-agent.nousresearch.com/docs/user-guide/features/built-in-plugins#observabilitylangfuse) 참고)에서 자격 증명을 읽습니다. 다음 내용으로 파일을 생성하세요.
+
+```bash
+# ~/.hermes/.env
+HERMES_LANGFUSE_PUBLIC_KEY=pk-lf-...
+HERMES_LANGFUSE_SECRET_KEY=sk-lf-...
+HERMES_LANGFUSE_BASE_URL=https://cloud.langfuse.com   # or your self-hosted URL
+```
+
+플러그인은 표준 SDK 환경 변수(`LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL`)도 받아들입니다. 둘 다 설정되어 있으면 `HERMES_LANGFUSE_*` 변형이 우선합니다.
+
+아래 셀은 Langfuse SDK로 빠르게 검증할 수 있도록 이 Python 커널 내부에도 동일한 자격 증명을 설정합니다. **참고:** 이 `os.environ` 값은 노트북 프로세스에 범위가 한정되며, 별도의 터미널에서 실행되는 `hermes chat` 명령에는 표시되지 않습니다. 그 경우에는 `~/.hermes/.env`를 사용하세요.
+
+```python
+import os
+
+# Get keys for your project from the project settings page: https://langfuse.com/cloud
+os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-lf-...")
+os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-lf-...")
+os.environ.setdefault("LANGFUSE_BASE_URL", "https://cloud.langfuse.com") # 🇪🇺 EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+
+# Reminder: for the Hermes CLI itself, place the same credentials in ~/.hermes/.env
+# (as HERMES_LANGFUSE_PUBLIC_KEY / HERMES_LANGFUSE_SECRET_KEY / HERMES_LANGFUSE_BASE_URL).
+# The plugin also accepts the standard LANGFUSE_* variables above.
+```
+
+환경 변수를 설정했으니 Langfuse 클라이언트를 초기화하여 자격 증명이 올바르게 작동하는지 확인합니다. Hermes는 자체 내부 클라이언트를 사용하므로, 이 단계는 순전히 키가 유효한지 확인하는 검사입니다.
+
+```python
+from langfuse import get_client
+
+langfuse = get_client()
+
+# Verify connection
+if langfuse.auth_check():
+    print("Langfuse client is authenticated and ready!")
+else:
+    print("Authentication failed. Please check your credentials and host.")
+```
+
+## Step 3: Langfuse 플러그인 활성화하기
+
+Hermes는 `plugins/observability/langfuse` 아래에 번들형 Langfuse 옵저버빌리티 플러그인을 제공합니다. 번들형 플러그인은 자동으로 감지되지만 **옵트인** 방식이므로, 명시적으로 활성화하기 전까지는 로드되지 않습니다.
+
+이 플러그인은 Hermes 라이프사이클 이벤트(`pre_api_request` / `post_api_request`, `pre_tool_call` / `post_tool_call`)에 훅을 걸어 다음을 자동으로 캡처합니다.
+
+- 대화 턴당 하나의 루트 스팬(`"Hermes turn"`)
+- LLM API 호출당 하나의 생성(generation) 옵저베이션
+- 도구 호출당 하나의 도구 옵저베이션
+
+세션 그룹화는 Hermes 세션 ID(하위 에이전트의 경우 태스크 ID)를 사용하므로, `hermes chat` 세션 내의 모든 턴이 하나의 Langfuse 세션 아래에 속하게 됩니다. 이 플러그인은 **fail-open** 방식으로 동작하기도 합니다. SDK 누락, 자격 증명 누락, 일시적인 Langfuse 오류가 발생해도 모두 조용히 아무 동작도 하지 않는 방식으로 처리되어 에이전트 루프에는 영향을 주지 않습니다.
+
+```python
+# Enable the Langfuse plugin (run this in your terminal, not in a notebook)
+# hermes plugins enable observability/langfuse
+
+# Or check the box in the interactive plugin manager:
+# hermes plugins
+
+# Or add it to ~/.hermes/config.yaml:
+# plugins:
+#   enabled:
+#     - observability/langfuse
+
+# Verify it is enabled:
+# hermes plugins list  # observability/langfuse should show "enabled"
+```
+
+## Step 4: Hermes를 실행하고 트레이스 생성하기
+
+플러그인을 활성화하고 자격 증명을 설정하면, 모든 Hermes 대화 턴이 Langfuse에 자동으로 트레이싱됩니다. 각 트레이스는 다음을 캡처합니다.
+
+- **대화 턴**을 루트 스팬("Hermes turn")으로
+- **LLM 호출**을 모델, 사용량, 비용, 지연 시간이 포함된 생성 옵저베이션으로
+- **도구 호출**을 입력 인자와 결과가 포함된 도구 옵저베이션으로
+- 입력, 출력, 캐시, 추론 토큰별로 세분화된 **토큰 사용량과 비용**
+
+CLI에서 대화를 시작할 수 있습니다.
+
+```python
+# Send a one-off message (traces are sent automatically):
+# hermes chat -q "hello"
+
+# Or start a full interactive session:
+# hermes chat
+```
+
+### 선택 사항: 트레이싱 동작 조정하기
+
+Hermes Langfuse 플러그인은 여러 선택적 환경 변수를 지원합니다.
+
+| Variable                      | Description                                    | Default |
+| ----------------------------- | ---------------------------------------------- | ------- |
+| `HERMES_LANGFUSE_ENV`         | Environment tag (e.g. `production`, `staging`) | —       |
+| `HERMES_LANGFUSE_RELEASE`     | Release/version tag                            | —       |
+| `HERMES_LANGFUSE_SAMPLE_RATE` | Sampling rate `0.0`–`1.0`                      | `1.0`   |
+| `HERMES_LANGFUSE_MAX_CHARS`   | Max characters per traced field                | `12000` |
+| `HERMES_LANGFUSE_DEBUG`       | Verbose plugin logging (`true`/`false`)        | `false` |
+
+이 값들은 `~/.hermes/.env`에 설정하거나 Hermes를 시작하기 전에 셸에서 export하세요.
+
+## Step 5: Langfuse에서 트레이스 확인하기
+
+예제를 실행한 후 [Langfuse Cloud](https://langfuse.com/cloud)를 열어 프롬프트, 완성 결과, 도구 호출, 토큰 사용량, 지연 시간이 포함된 전체 트레이스를 확인하세요.
+
+</Steps>
+
+## 더 읽어보기
+
+- [Hermes Langfuse 플러그인 문서](https://hermes-agent.nousresearch.com/docs/user-guide/features/built-in-plugins#observabilitylangfuse) — 플러그인 동작, 훅, 환경 변수, 구성에 대한 정확한 정보
+- [Hermes Agent 저장소](https://github.com/NousResearch/hermes-agent)
+- [Hermes 플러그인 시스템](https://hermes-agent.nousresearch.com/docs/user-guide/features/plugins)
+
+import LearnMore from "@/components-mdx/integration-learn-more.mdx";
+
+<LearnMore />

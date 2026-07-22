@@ -1,0 +1,129 @@
+---
+source: Jupyter Notebook
+title: Langfuse 통합을 이용한 LlamaIndex 관찰 가능성
+sidebarTitle: LlamaIndex Workflows
+description: 향상된 LLM 애플리케이션 모니터링, 디버깅, 트레이싱을 위해 Langfuse를 LlamaIndex와 통합하는 방법을 알아보세요. 지금 바로 AI 개발 워크플로우를 개선하세요.
+category: Integrations
+logo: /images/integrations/llamaindex_icon.png
+---
+
+# LlamaIndex Workflows에 대한 관찰 가능성
+
+이 쿡북은 [Langfuse](https://langfuse.com)를 사용해 [LlamaIndex Workflows](https://docs.llamaindex.ai/en/stable/module_guides/workflow/)에 대한 실시간 관찰 가능성을 확보하는 방법을 보여줍니다.
+
+> **LlamaIndex Workflows란 무엇인가요?** [LlamaIndex Workflows](https://docs.llamaindex.ai/en/stable/module_guides/workflow/)는 견고한 AI 에이전트를 구축하기 위해 설계된 유연한 이벤트 기반 프레임워크입니다. LlamaIndex에서 워크플로우는 각각 `@step` 데코레이터로 정의되고 검증되는 여러 단계를 연결하여 만들어집니다. 각 단계는 특정 이벤트 유형을 처리하며, 이를 통해 AI 에이전트 협업, RAG 흐름, 데이터 추출 등과 같은 복잡한 프로세스를 조율할 수 있습니다.
+
+> **Langfuse란 무엇인가요?** [Langfuse](https://langfuse.com)는 오픈소스 AI 엔지니어링 플랫폼입니다. 팀이 협업하여 프롬프트를 관리하고, 애플리케이션을 트레이싱하고, 문제를 디버그하고, 프로덕션에서 LLM 시스템을 평가할 수 있도록 돕습니다.
+
+## 시작하기
+
+LlamaIndex Workflows를 사용하고 이를 Langfuse와 통합하는 간단한 예제를 살펴보겠습니다.
+
+<Steps>
+### 1단계: 의존성 설치하기
+
+```python
+%pip install langfuse openai llama-index-workflows llama-index-core llama-index-llms-openai openinference-instrumentation-llama_index llama-index-instrumentation
+```
+
+### 2단계: 환경 변수 설정하기
+
+Langfuse API 키를 구성하세요. [Langfuse Cloud](https://cloud.langfuse.com)에 가입하거나 [Langfuse를 셀프 호스팅](https://langfuse.com/self-hosting)하여 키를 받을 수 있습니다.
+
+```python
+import os
+
+# Get keys for your project from the project settings page: https://cloud.langfuse.com
+os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-lf-...")
+os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-lf-...")
+os.environ.setdefault("LANGFUSE_BASE_URL", "https://cloud.langfuse.com") # 🇪🇺 EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+
+# Your openai key
+os.environ.setdefault("OPENAI_API_KEY", "sk-proj-...")
+```
+
+환경 변수가 설정되면 이제 Langfuse 클라이언트를 초기화할 수 있습니다. `get_client()`는 환경 변수로 제공된 자격 증명을 사용해 Langfuse 클라이언트를 초기화합니다.
+
+```python
+from langfuse import get_client
+
+langfuse = get_client()
+
+# Verify connection
+if langfuse.auth_check():
+    print("Langfuse client is authenticated and ready!")
+else:
+    print("Authentication failed. Please check your credentials and host.")
+
+```
+
+### 3단계: LlamaIndex 계측 초기화하기
+
+이제 [OpenInference LlamaIndex 계측](https://docs.arize.com/phoenix/tracing/integrations-tracing/llamaindex)을 초기화합니다. 이 서드파티 계측은 LlamaIndex 작업을 자동으로 캡처하고 OpenTelemetry(OTel) span을 Langfuse로 내보냅니다.
+
+```python
+from openinference.instrumentation.llama_index import LlamaIndexInstrumentor
+
+# Initialize LlamaIndex instrumentation
+LlamaIndexInstrumentor().instrument()
+```
+
+### 4단계: 간단한 LlamaIndex Workflows 애플리케이션 만들기
+
+LlamaIndex Workflows에서는 `@step` 데코레이터로 단계를 정의하여 이벤트 기반 AI 에이전트를 구축합니다. 각 단계는 이벤트를 처리하고, 적절한 경우 새로운 이벤트를 발생시킵니다. 이 예제에서는 두 단계로 이루어진 간단한 워크플로우를 만듭니다. 하나는 들어오는 이벤트를 전처리하고, 다른 하나는 답변을 생성합니다.
+
+```python
+from llama_index.core.llms import ChatMessage
+from llama_index.llms.openai import OpenAI
+from typing import Annotated
+
+from workflows import Workflow, step
+from workflows.events import StartEvent, StopEvent
+from workflows.resource import Resource
+
+
+def get_llm(**kwargs):
+    return OpenAI(model="gpt-4.1-mini")
+
+
+class MyWorkflow(Workflow):
+    @step
+    async def step1(
+        self, ev: StartEvent, llm: Annotated[OpenAI, Resource(get_llm)]
+    ) -> StopEvent:
+        msg = ChatMessage(role="user", content=ev.get("input"))
+        response = await llm.achat([msg])
+        return StopEvent(result=response.message.content)
+
+
+w = MyWorkflow()
+```
+
+```python
+response = await w.run(input="Hello, what is Langfuse?")
+print(response)
+```
+
+### 5단계: Langfuse에서 트레이스 확인하기
+
+워크플로우를 실행한 후, [Langfuse](https://cloud.langfuse.com)에 로그인하여 생성된 트레이스를 확인하세요. 토큰 수, 지연 시간, 실행 경로와 같은 메트릭과 함께 각 워크플로우 단계에 대한 로그를 볼 수 있습니다.
+
+![Langfuse 트레이스 예제](https://langfuse.com/images/cookbook/integration-llamaindex-workflows/llamaindex-workflows-example-trace.png)
+
+_[Langfuse의 공개 예제 트레이스](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/e0987dce85c8c49602030599b84e77e8?timestamp=2025-07-01T09%3A42%3A54.701Z&display=details)_
+
+</Steps>
+
+<Callout type="info" emoji="ℹ️">
+_**참고:** 태그나 메타데이터와 같은 추가 트레이스 속성을 더하거나 LlamaIndex Workflows를 다른 Langfuse 기능과 함께 사용하려면 [이 가이드](https://langfuse.com/integrations/frameworks/llamaindex)를 참고하세요._
+
+</Callout>
+
+import LearnMore from "@/components-mdx/integration-learn-more.mdx";
+
+<LearnMore />
+
+## 참고 자료
+
+- [LlamaIndex Workflows 문서](https://docs.llamaindex.ai/en/stable/module_guides/workflow/)\

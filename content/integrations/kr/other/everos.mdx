@@ -1,0 +1,138 @@
+---
+title: "Langfuse Integration with EverOS"
+sidebarTitle: EverOS
+logo: /images/integrations/everos_icon.png
+description: "OpenTelemetry를 사용해 AI 에이전트의 메모리 레이어(쓰기, LLM 추출, 품질 점수를 포함한 리콜, 리플렉션)를 Langfuse에서 관찰하세요."
+category: Integrations
+---
+
+import LearnMore from "@/components-mdx/integration-learn-more.mdx";
+
+# EverOS와 Langfuse로 메모리 레이어 관찰하기
+
+메모리는 일반적으로 옵저버빌리티가 볼 수 없는 에이전트 스택의 한 계층입니다. 이 통합은 에이전트의 **메모리 연산**을 Langfuse에서 볼 수 있게 해줍니다. 무엇이 저장되었는지, 쿼리가 무엇을 리콜했는지, 그 리콜이 얼마나 확신할 수 있는 것인지, 그리고 메모리 레이어가 토큰 측면에서 얼마나 비용이 들었는지를 보여줍니다.
+
+> **이 페이지의 범위(v1).** 이 문서는 EverOS 저장소의 [`examples/langfuse/`](https://github.com/EverMind-AI/EverOS/tree/main/examples/langfuse) 아래에 제공되는 얇은 OpenTelemetry 래퍼를 사용합니다. EverOS에는 네이티브 옵트인 계측이 곧 도입될 예정이며, 도입되면 설정 플래그로 트레이싱을 활성화할 수 있고 이 페이지도 업데이트될 것입니다. 스팬 모델과 Langfuse 규칙은 두 경우 모두 동일합니다.
+
+## EverOS란 무엇인가요?
+
+[EverOS](https://github.com/EverMind-AI/EverOS)는 AI 에이전트를 위한 오픈 소스(Apache-2.0), 로컬 우선 메모리 런타임입니다. 대화와 에이전트 궤적은 LLM에 의해 사용자 프로필, 에피소드 메모리, 에이전트 케이스, 재사용 가능한 에이전트 스킬로 추출되고, 사람이 읽을 수 있는 Markdown으로 저장되며, SQLite + LanceDB에 인덱싱되고, 하이브리드 BM25 + 벡터 리콜과 재순위화(reranking)를 통해 검색되며, 오프라인 리플렉션 엔진에 의해 시간이 지남에 따라 통합됩니다. HTTP 서비스(`pip install everos`)로 실행됩니다.
+
+## Langfuse란 무엇인가요?
+
+[Langfuse](https://langfuse.com)는 LLM 옵저버빌리티, 평가, 프롬프트 관리를 위한 오픈 소스 플랫폼입니다. OpenTelemetry 트레이스를 네이티브로 수집하므로, EverOS를 포함해 OTLP를 사용하는 모든 시스템이 모델 사용량/비용 뷰, 점수, 대시보드와 함께 나머지 에이전트 트레이스 옆에 표시됩니다.
+
+## 매핑 방식
+
+각 EverOS API 호출은 하나의 Langfuse 트레이스가 되며, 서버 측 파이프라인 단계는 타입이 지정된 자식 옵저베이션으로 표현됩니다.
+
+| EverOS operation                             | Langfuse observation                  | What becomes visible                             |
+| -------------------------------------------- | ------------------------------------- | ------------------------------------------------ |
+| `POST /api/v1/memory/add`                    | span `everos.memory.add`              | messages buffered per session                    |
+| `POST /api/v1/memory/flush` → LLM extraction | generation `everos.extract`           | model + tokens, so Langfuse can compute the cost |
+| markdown persistence                         | span `everos.persist.markdown`        | the `.md` files written                          |
+| `POST /api/v1/memory/search`                 | retriever `everos.memory.search`      | query, top_k → episodes/facts + fused scores     |
+| query embedding                              | embedding `everos.search.embed_query` | embedding model + tokens                         |
+| hybrid recall + rerank                       | retriever / span                      | BM25 + vector candidate funnel, rerank scores    |
+| `POST /api/v1/ome/trigger`                   | agent `everos.ome.<strategy>`         | reflection / consolidation / skill evolution     |
+
+인덱스 동기화(SQLite → LanceDB)는 EverOS에서 비동기로 실행되므로, `add`의 자식이 아니라 독립적으로 연관된(correlated) 트레이스로 나타납니다. 리콜 품질 신호는 Langfuse **점수(scores)**로 전송됩니다(이는 스팬 속성이 아니라 일급(first-class) 객체입니다).
+
+## 빠른 시작
+
+> **EverOS를 배포하지 않고도 실행할 수 있습니다.** 이 예제는 EverOS API 형태의 응답을 반환하는 모의(mock) 트랜스포트를 함께 제공하므로, 몇 분 안에 Langfuse에서 실제 트레이스를 볼 수 있습니다. 준비가 되면 실제 서버를 가리키도록 설정하세요([실제 EverOS 서버와 함께 실행하기](#run-against-a-real-everos-server) 참고).
+
+<Steps>
+
+### 설치하기
+
+```bash
+pip install opentelemetry-sdk opentelemetry-exporter-otlp requests
+```
+
+### Langfuse 프로젝트를 생성하고 키 발급받기
+
+[Langfuse Cloud](https://cloud.langfuse.com)에 가입하거나(또는 셀프 호스팅) 프로젝트를 생성하고 프로젝트 설정에서 API 키를 복사합니다.
+
+### 환경 변수 설정하기
+
+```bash filename=".env"
+LANGFUSE_PUBLIC_KEY="pk-lf-..."
+LANGFUSE_SECRET_KEY="sk-lf-..."
+LANGFUSE_HOST="https://cloud.langfuse.com"  # 🇪🇺 EU; US region: https://us.cloud.langfuse.com
+
+# Optional: leave unset to use the built-in mock; set to trace a real server
+# EVEROS_BASE_URL="http://localhost:8000"
+```
+
+### 예제 가져오기
+
+두 파일 모두 EverOS 저장소의 [`examples/langfuse/`](https://github.com/EverMind-AI/EverOS/tree/main/examples/langfuse) 아래에 있습니다.
+
+- `everos_langfuse.py`: OpenTelemetry 래퍼(순수 OTel SDK, Langfuse 패키지 의존성 없음)
+- `demo.py`: 내장 모의 기능이 있는 실행 가능한 엔드투엔드 예제
+
+이 파일들을 여러분의 코드 옆에 복사하거나(또는 저장소를 클론하세요).
+
+### 메모리 라이프사이클 실행하기
+
+```bash
+python demo.py
+```
+
+`EVEROS_BASE_URL`을 설정하지 않으면 `demo.py`는 내장 모의 기능을 사용하므로, 아무것도 배포하지 않고도 Langfuse에서 실제 트레이스를 얻을 수 있습니다. 전체 라이프사이클을 재현합니다: 수집 → 추출 → 리콜(업데이트된 사실이 오래된 사실보다 우선순위가 높아지는 경우와, 의도적인 미스 포함) → 에이전트 스킬 리콜 → 리플렉션. `demo.py`의 핵심 부분은 다음과 같습니다(실제 서버를 대상으로 표시됨. `EVEROS_BASE_URL`이 없으면 내장 모의 기능으로 대체됩니다).
+
+```python
+from everos_langfuse import HTTPTransport, InstrumentedEverOS, init_tracing, force_flush
+
+init_tracing(service_name="everos")   # exports to Langfuse when LANGFUSE_* env is set
+ev = InstrumentedEverOS(HTTPTransport("http://localhost:8000"))
+
+session, user = "sess-cafe-chat-001", "alice"
+ev.add(session, [{"sender_id": user, "role": "user", "timestamp": 0,
+                  "content": "Actually, I moved from SOMA to Oakland last month."}],
+       user_id=user)
+ev.flush(session, user_id=user)                       # extraction (generation w/ tokens) → persist → index
+ev.search("Where does Alice live now?",               # recall + recall_top_score / recall_hit
+          user_id=user, session_id=session)
+ev.trigger_ome("reflect_episodes", user_id=user, session_id=session)   # reflection
+force_flush()
+```
+
+Langfuse 프로젝트를 열면, 각 호출이 `everos` 서비스 아래의 트레이스로 나타나고, `everos` / `memory` 태그가 붙으며, `session.id`와 `user.id`로 그룹화됩니다. 검색에는 `recall_top_score` / `recall_hit` 점수가 함께 표시됩니다.
+
+</Steps>
+
+## Langfuse에서 확인하기
+
+![EverOS memory search traced in Langfuse, with recall scores on the retriever span](/images/integrations/everos_search_trace.png)
+
+![EverOS extraction as a generation, with model and token usage](/images/integrations/everos_extract_trace.png)
+
+## 실제 EverOS 서버와 함께 실행하기 [#run-against-a-real-everos-server]
+
+위의 빠른 시작에서는 즉시 트레이스를 볼 수 있도록 기본적으로 모의 기능을 사용합니다. 실제 배포를 트레이싱하려면 `EVEROS_BASE_URL`을 실행 중인 서버로 설정하세요. 그러면 `demo.py`는 모의 기능 대신 `HTTPTransport`를 통해 호출을 라우팅합니다.
+
+실제 서버가 **오늘** 시점에 보여주는 것: 메모리 연산(`add` / `flush` / `search` / reflection)당 하나의 트레이스로, 실제 엔드투엔드 지연 시간과 입력/출력을 포함하고, `session.id` / `user.id`로 그룹화되며, `search`의 경우 실제 리콜 품질 점수(응답에서 도출됨, 아래 참고)를 포함합니다. 단계별 자식 옵저베이션(토큰 사용량이 포함된 LLM 추출, 임베딩, 하이브리드 리콜, 재순위화)은 모의 데모에서 렌더링되며, EverOS의 네이티브 옵트인 계측이 도입되면(위 범위 참고) 실제 배포에서도 나타날 것입니다. 이 래퍼는 아직 이를 노출하지 않는 서버로부터 의도적으로 이러한 데이터를 만들어내지 않습니다.
+
+모델 백엔드(추출/리플렉션용 LLM, 그리고 임베딩과 재순위화 모델)가 구성된 EverOS 서버가 필요합니다. 서버를 시작하려면 [EverOS 빠른 시작](https://github.com/EverMind-AI/EverOS#quickstart)(`pip install everos`)을 참고하세요.
+
+## Langfuse에서 볼 수 있는 것
+
+모의 데모는 아래의 전체 그림을 보여줍니다. 실제 서버는 오늘 시점에 최상위 연산 스팬과 실제 리콜 점수를 보여줍니다([실제 EverOS 서버와 함께 실행하기](#run-against-a-real-everos-server) 참고).
+
+- **트레이스 트리로 표현된 전체 메모리 라이프사이클**: `add` → `extract` → `persist`, 그리고 `search` → `embed` → `hybrid recall` → `rerank`, 각 단계의 시간이 측정됩니다.
+- **기억하는 데 드는 비용**: 추출과 리플렉션은 `model`과 토큰 사용량을 포함하는 `generation` 옵저베이션이므로, Langfuse는 모델 사용량 뷰에서 비용을 계산합니다.
+- **시간에 따른 리콜 품질**: 각 검색은 검색 응답에서 도출된 프록시 점수(융합/재순위화된 최상위 히트 점수, 그리고 임계값에 대한 0/1 히트)를 점수(scores) API를 통해 첨부하므로, 이는 오늘 시점에 실제 서버에서도 동작합니다. 이는 엔진 자체의 신뢰도 신호로, 추세를 그려보는 데 유용하지만 정답(ground-truth) 관련성은 아닙니다. 실제 관련성 평가를 위해서는 트레이스 내 쿼리 + 리콜된 콘텐츠에 대해 LLM-as-judge를 실행하세요([평가](https://langfuse.com/docs/evaluation/overview) 참고).
+- **세션별 / 사용자별 뷰**: `session.id`와 `user.id`로 메모리 활동을 필터링하고 그룹화합니다.
+
+> **프라이버시.** 트레이스는 기본적으로 민감하지 않은 메타데이터(지연 시간, 토큰 수, 모델 이름, 점수)를 포함합니다. 원본 쿼리나 메모리 콘텐츠를 캡처하는 것은 옵트인이며, 데모의 `public_traces` 플래그는 합성 데이터에만 사용하는 것이며 실제 메모리 콘텐츠에는 절대 활성화하지 마세요.
+
+## 리소스
+
+- [GitHub의 EverOS](https://github.com/EverMind-AI/EverOS)
+- [통합 예제 (`examples/langfuse/`)](https://github.com/EverMind-AI/EverOS/tree/main/examples/langfuse)
+- [EverOS 기반으로 구축된 자가 개선 에이전트 하니스인 Raven](https://github.com/EverMind-AI/Raven)
+- [Langfuse OpenTelemetry 문서](https://langfuse.com/integrations/native/opentelemetry)
+
+<LearnMore />

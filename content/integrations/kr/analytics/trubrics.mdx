@@ -1,0 +1,41 @@
+---
+title: "Trubrics 통합"
+sidebarTitle: Trubrics
+logo: /images/integrations/trubrics_icon.svg
+description: "통합 분석과 인사이트를 위해 Langfuse를 Trubrics와 통합하세요"
+---
+
+# Trubrics 통합
+
+Trubrics 통합을 사용하면 Langfuse의 LLM 트레이싱 데이터를 Trubrics로 직접 가져와 통합된 분석과 인사이트를 얻을 수 있습니다.
+
+## 설정
+
+1. Trubrics 프로젝트의 Integrations 섹션으로 이동합니다
+2. Langfuse 자격 증명을 입력합니다:
+   - Langfuse API Key
+   - Langfuse Secret Key
+   - Langfuse Host URL (기본값은 https://cloud.langfuse.com)
+
+## 작동 방식
+
+- 통합이 Langfuse 계정에서 자동으로 트레이스 데이터를 가져옵니다
+- 트레이스는 설정 가능한 매핑 규칙을 통해 Trubrics 이벤트로 매핑됩니다
+- "User Prompt", "LLM Generation" 같은 표준 이벤트가 자동으로 감지됩니다
+- 모든 이벤트에는 Langfuse의 원본 트레이스로 바로 연결되는 링크가 포함됩니다
+
+## 고급 설정
+
+고급 사용자는 매핑 규칙을 커스터마이징하여 Langfuse 데이터가 Trubrics로 임포트되는 방식을 세밀하게 조정함으로써, 맞춤형 분석과 인사이트를 얻을 수 있습니다.
+
+매핑 규칙을 활용한 자동화된 통합에 대한 자세한 내용은 [Trubrics 문서](https://docs.trubrics.com/track_events/integrations/langfuse/)를 참고하세요.
+
+## 진행 안내
+
+<iframe
+  src="https://www.loom.com/embed/cd2d31d2edd1454d9a2169c578b59467?sid=75a7559a-3efa-411c-b520-c9b3a57bce6b"
+  className="w-full aspect-video"
+  frameborder="0"
+  allowfullscreen=""
+  alt="type:video"
+></iframe>

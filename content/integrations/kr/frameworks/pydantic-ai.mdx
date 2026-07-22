@@ -1,0 +1,116 @@
+---
+source: ⚠️ Jupyter Notebook
+title: Langfuse 통합을 통한 Pydantic AI 옵저버빌리티
+sidebarTitle: Pydantic AI
+logo: /images/integrations/pydantic_ai_icon.svg
+description: Langfuse를 Pydantic AI와 통합하여 LLM 애플리케이션 모니터링, 디버깅, 트레이싱을 개선하는 방법을 알아보세요. AI 개발 워크플로우를 오늘 바로 향상시켜 보세요.
+category: Integrations
+---
+
+# Langfuse와 Pydantic AI 통합하기
+
+이 노트북은 LLM 애플리케이션의 옵저버빌리티와 디버깅을 달성하기 위해 **Langfuse**를 **Pydantic AI**와 통합하는 방법을 단계별로 안내합니다.
+
+> **PydanticAI란 무엇인가요:** [PydanticAI](https://ai.pydantic.dev/)는 프로덕션급 생성형 AI 애플리케이션 개발을 단순화하도록 설계된 Python 에이전트 프레임워크입니다. FastAPI에서 볼 수 있는 것과 동일한 타입 안전성, 인체공학적 API 설계, 개발자 경험을 GenAI 앱 개발 세계로 가져옵니다.
+
+> **Langfuse란 무엇인가요?** [Langfuse](https://langfuse.com)는 오픈소스 AI 엔지니어링 플랫폼입니다. LLM 애플리케이션을 위한 트레이싱과 모니터링 기능을 제공합니다. Langfuse는 네이티브 통합, OpenTelemetry, 전용 SDK를 통해 다양한 도구 및 Pydantic AI와 통합하여 개발자가 AI 시스템을 디버깅, 분석, 최적화할 수 있도록 상세한 인사이트를 제공합니다.
+
+## 시작하기
+
+Pydantic AI를 사용하고 이를 포괄적인 트레이싱을 위해 Langfuse와 통합하는 실용적인 예제를 살펴보겠습니다.
+
+<Steps>
+### 1단계: 종속성 설치
+
+```python
+%pip install langfuse pydantic-ai -U
+```
+
+### 2단계: Langfuse SDK 구성
+
+다음으로 Langfuse API 키를 설정합니다. 무료 [Langfuse Cloud](https://langfuse.com/cloud) 계정에 가입하거나 [Langfuse를 셀프 호스팅](https://langfuse.com/self-hosting)하여 이 키를 얻을 수 있습니다. 이 환경 변수들은 Langfuse 클라이언트가 인증하고 Langfuse 프로젝트로 데이터를 전송하는 데 필수적입니다.
+
+```python
+import os
+
+# Get keys for your project from the project settings page: https://cloud.langfuse.com
+os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-lf-...")
+os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-lf-...")
+os.environ.setdefault("LANGFUSE_BASE_URL", "https://cloud.langfuse.com") # 🇪🇺 EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+
+# Your OpenAI key
+os.environ.setdefault("OPENAI_API_KEY", "sk-proj-...")
+```
+
+환경 변수를 설정했으니 이제 Langfuse 클라이언트를 초기화할 수 있습니다. `get_client()`는 환경 변수에 제공된 자격 증명을 사용하여 Langfuse 클라이언트를 초기화합니다.
+
+```python
+from langfuse import get_client
+
+langfuse = get_client()
+
+# Verify connection
+if langfuse.auth_check():
+    print("Langfuse client is authenticated and ready!")
+else:
+    print("Authentication failed. Please check your credentials and host.")
+
+```
+
+### 3단계: Pydantic AI 계측 초기화
+
+이제 [Pydantic AI Instrumentation](https://ai.pydantic.dev/logfire/#logfire-with-an-alternative-otel-backend)을 초기화합니다. 이는 Pydantic AI 작업을 자동으로 캡처하고 OpenTelemetry(OTel) 스팬을 Langfuse로 내보냅니다.
+
+```python
+from pydantic_ai.agent import Agent
+
+# Initialize Pydantic AI instrumentation
+Agent.instrument_all()
+```
+
+### 4단계: 기본 Pydantic AI 애플리케이션
+
+마지막으로 Pydantic AI 에이전트를 실행하고 Langfuse로 전송될 트레이스 데이터를 생성합니다. 아래 예제에서는 에이전트가 종속성 값(당첨 번호)과 자연어 입력으로 실행됩니다. 이후 도구 함수의 출력이 출력됩니다.
+
+`Agent`를 구성할 때 `instrument=True`를 전달하는 것을 잊지 마세요.
+
+```python
+from pydantic_ai import Agent, RunContext
+
+roulette_agent = Agent(
+    'openai:gpt-4o',
+    deps_type=int,
+    system_prompt=(
+        'Use the `roulette_wheel` function to see if the '
+        'customer has won based on the number they provide.'
+    ),
+    instrument=True
+)
+
+@roulette_agent.tool
+async def roulette_wheel(ctx: RunContext[int], square: int) -> str:
+    """check if the square is a winner"""
+    return 'winner' if square == ctx.deps else 'loser'
+```
+
+```python
+# Run the agent - using await since we're in a Jupyter notebook
+success_number = 18
+result = await roulette_agent.run('Put my money on square eighteen', deps=success_number)
+print(result.output)
+```
+
+### 5단계: Langfuse에서 트레이스 보기
+
+애플리케이션을 실행한 후 [Langfuse Trace Table](https://cloud.langfuse.com)로 이동하세요. 애플리케이션 실행에 대한 상세한 트레이스를 확인할 수 있으며, LLM 호출, 검색 작업, 입력, 출력, 성능 메트릭에 대한 인사이트를 얻을 수 있습니다.
+
+![Langfuse의 예시 트레이스](https://langfuse.com/images/cookbook/otel-integration-pydantic-ai/pydanticai-openai-trace-tree.png)
+
+[Langfuse의 예시 트레이스](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/25f4bdeebaab60e6e1bee7e8469554bc?display=details%3Ftimestamp%3D2025-06-06T14%3A39%3A55.786Z%3Ftimestamp%3D2025-06-06T14%3A37%3A30.656Z%3Ftimestamp%3D2025-06-06T14%3A39%3A55.786Z?timestamp=2025-06-06T14%3A40%3A28.562Z)
+
+</Steps>
+
+import LearnMore from "@/components-mdx/integration-learn-more.mdx";
+
+<LearnMore />

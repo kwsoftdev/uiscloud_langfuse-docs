@@ -1,0 +1,154 @@
+---
+source: ⚠️ Jupyter Notebook
+title: Langfuse로 Microsoft Agent Framework 트레이싱하기
+sidebarTitle: Microsoft Agent Framework
+logo: /images/integrations/microsoft_icon.svg
+description: Microsoft Agent Framework를 모니터링하여 AI 에이전트를 디버그하고 평가하기 위해 Langfuse를 사용하는 방법을 알아보세요
+category: Integrations
+---
+
+# Langfuse로 Microsoft Agent Framework 트레이싱하기
+
+이 노트북은 AI 에이전트를 모니터링, 디버그, 평가하기 위해 **Microsoft Agent Framework** 워크플로우에 **Langfuse를 통합**하는 방법을 보여줍니다.
+
+> **Microsoft Agent Framework란 무엇인가요?**: [Microsoft Agent Framework](https://github.com/microsoft/agent-framework)는 지능형 에이전트를 구축하기 위한 오픈소스 프레임워크입니다. 다양한 서비스와 상호작용하고, 작업을 실행하고, 복잡한 워크플로우를 처리할 수 있는 에이전트를 만들기 위한 포괄적인 도구 세트를 제공합니다. 이 프레임워크는 Azure OpenAI와 OpenAI를 포함한 여러 LLM 제공업체를 지원하며, OpenTelemetry를 통한 기본 관찰 가능성을 제공합니다.
+
+> **Langfuse란 무엇인가요?**: [Langfuse](https://langfuse.com/)는 AI 에이전트를 위한 오픈소스 관찰 가능성 플랫폼입니다. LLM 호출, 도구 사용, 비용, 지연 시간 등을 시각화하고 모니터링하는 데 도움을 줍니다.
+
+## 1. 의존성 설치하기
+
+아래에서는 (Microsoft Agent Framework인) `agent-framework` 라이브러리와 관찰 가능성을 위한 `langfuse`를 설치합니다.
+
+```python
+%pip install agent-framework langfuse --pre
+```
+
+## 2. 환경 및 Langfuse 자격 증명 구성하기
+
+다음으로, Langfuse API 키를 설정하세요. 무료 [Langfuse Cloud](https://langfuse.com/cloud) 계정에 가입하거나 [Langfuse를 셀프 호스팅](https://langfuse.com/self-hosting)하여 이 키를 받을 수 있습니다. 이 환경 변수들은 Langfuse 클라이언트가 인증하고 Langfuse 프로젝트로 데이터를 전송하는 데 필수적입니다.
+
+```python
+import os
+
+# Get keys for your project from the project settings page: https://cloud.langfuse.com
+os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-lf-...")
+os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-lf-...")
+os.environ.setdefault("LANGFUSE_BASE_URL", "https://cloud.langfuse.com") # 🇪🇺 EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+
+# Your Azure OpenAI credentials
+os.environ.setdefault("AZURE_OPENAI_API_KEY", "your-azure-openai-key")
+os.environ.setdefault("AZURE_OPENAI_ENDPOINT", "https://your-resource.openai.azure.com/")
+os.environ.setdefault("AZURE_OPENAI_CHAT_DEPLOYMENT_NAME", "gpt-5-mini")
+os.environ.setdefault("OPENAI_CHAT_MODEL_ID", "gpt-5-mini")
+```
+
+## 3. Langfuse 클라이언트 초기화하기
+
+연결을 확인하기 위해 Langfuse 클라이언트를 초기화하세요. `get_client()`는 환경 변수로 제공된 자격 증명을 사용해 Langfuse 클라이언트를 초기화합니다.
+
+```python
+from langfuse import get_client
+
+langfuse = get_client()
+
+# Verify connection
+if langfuse.auth_check():
+    print("Langfuse client is authenticated and ready!")
+else:
+    print("Authentication failed. Please check your credentials and host.")
+```
+
+## 4. 관찰 가능성 활성화하기
+
+Microsoft Agent Framework는 OpenTelemetry를 통한 기본 관찰 가능성 지원을 포함합니다. Langfuse로 트레이스를 자동으로 내보내는 [`configure_otel_providers()`](https://learn.microsoft.com/en-us/agent-framework/user-guide/observability?pivots=programming-language-python#1-standard-opentelemetry-environment-variables-recommended)를 호출하여 이를 활성화하세요.
+
+<Callout type="info" emoji="ℹ️">
+**참고:** 함수 인자와 결과를 포함한 전체 요청/응답 데이터를 캡처하려면 `enable_sensitive_data=True`로 설정하세요.
+
+</Callout>
+
+```python
+from agent_framework.observability import configure_otel_providers
+
+configure_otel_providers(enable_sensitive_data=True)
+```
+
+## 5. 도구를 사용하는 Hello World 예제
+
+아래에서는 Azure OpenAI를 사용해 Microsoft Agent Framework로 **날씨 에이전트**를 만듭니다. 이 에이전트는 날씨 정보를 가져오기 위해 호출할 수 있는 `get_weather` 함수 도구에 접근할 수 있습니다.
+
+```python
+import asyncio
+from random import randint
+from typing import Annotated
+from agent_framework.azure import AzureOpenAIChatClient
+from pydantic import Field
+
+def get_weather(
+    location: Annotated[str, Field(description="The location to get the weather for.")],
+) -> str:
+    """Get the weather for a given location."""
+    conditions = ["sunny", "cloudy", "rainy", "stormy"]
+    return f"The weather in {location} is {conditions[randint(0, 3)]} with a high of {randint(10, 30)}°C."
+
+async def main():
+    # Create an agent with Azure OpenAI
+    async with AzureOpenAIChatClient().create_agent(
+        instructions="You are a helpful weather agent.",
+        tools=get_weather,
+    ) as agent:
+        query = "What's the weather like in Seattle?"
+        print(f"User: {query}")
+        result = await agent.run(query)
+        print(f"Agent: {result}\n")
+
+# Run the agent
+await main()
+```
+
+## 6. OpenAI 직접 사용하기
+
+Microsoft Agent Framework는 (Azure를 거치지 않고) OpenAI를 직접 사용하는 것도 지원합니다. `AzureOpenAIChatClient` 대신 `OpenAIResponsesClient`를 사용하기만 하면 됩니다.
+
+```python
+# Required for OpenAI API access
+os.environ.setdefault("OPENAI_API_KEY", "sk-proj-...")
+os.environ.setdefault("OPENAI_RESPONSES_MODEL_ID", "gpt-5-mini")
+```
+
+```python
+from agent_framework.openai import OpenAIResponsesClient
+from typing import Annotated
+from pydantic import Field
+from random import randint
+
+def get_weather(
+    location: Annotated[str, Field(description="The location to get the weather for.")],
+) -> str:
+    """Get the weather for a given location."""
+    conditions = ["sunny", "cloudy", "rainy", "stormy"]
+    return f"The weather in {location} is {conditions[randint(0, 3)]} with a high of {randint(10, 30)}°C."
+
+async def main():
+    async with OpenAIResponsesClient().create_agent(
+        instructions="You are a helpful assistant.",
+        tools=get_weather,
+    ) as agent:
+        query = "What's the weather in Tokyo?"
+        print(f"User: {query}")
+        result = await agent.run(query)
+        print(f"Agent: {result}\n")
+
+await main()
+```
+
+## 7. Langfuse에서 트레이스 확인하기
+
+![Langfuse의 예제 트레이스](https://langfuse.com/images/cookbook/integration_microsoft-agent-framework/microsoft-agent-framework-example-trace.png)
+
+[Langfuse의 예제 트레이스](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/8e419d3288419b5d944270505640e183?observation=2406e8343fd49c0e&timestamp=2025-12-17T09:37:37.258Z)
+
+import LearnMore from "@/components-mdx/integration-learn-more.mdx";
+
+<LearnMore />

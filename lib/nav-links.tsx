@@ -58,9 +58,9 @@ export const simpleLinks: SimpleLink[] = [{ name: "Docs", href: "/docs" }];
 // Korean counterparts — rendered instead of the above when the current path is
 // under a translated /kr section (see lib/i18n/koPaths.ts). Links point at the
 // /kr version of a page where one exists; sections that aren't translated yet
-// (Workshop, Blog, Changelog, Users, Support, Integrations, Pricing, Library)
-// keep their Korean label but link to the English page, same as everywhere
-// else on the site a translated label can point at untranslated content.
+// (Workshop, Blog, Users, Library) keep their Korean label but link to the
+// English page, same as everywhere else on the site a translated label can
+// point at untranslated content.
 // ---------------------------------------------------------------------------
 
 export const productLinksKo: NavPanelLink[] = [

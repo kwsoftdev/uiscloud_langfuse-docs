@@ -1,0 +1,194 @@
+---
+source: ⚠️ Jupyter Notebook
+title: Monitor Parallel Tasks with Langfuse
+sidebarTitle: Parallel
+logo: /images/integrations/parallel_icon.svg
+logoAppearance: dark
+description: Langfuse를 사용해 Parallel 작업 실행을 추적하고 AI 워크플로 작업에 대한 상세한 옵저버빌리티 데이터를 캡처하는 방법을 알아보세요.
+category: Integrations
+---
+
+# Parallel Integration
+
+이 가이드에서는 [Langfuse](https://langfuse.com)를 [Parallel](https://parallel.ai/)과 통합하여 AI 작업을 추적하는 방법을 보여드립니다. Langfuse의 트레이싱 기능을 활용하면 Parallel 작업의 입력, 출력, 실행 시간과 같은 세부 정보를 자동으로 캡처할 수 있습니다.
+
+> **Parallel이란 무엇인가요?** [Parallel](https://parallel.ai/)은 AI 에이전트, 애플리케이션, 워크플로를 오픈 인터넷에 연결하는 웹 검색 및 웹 에이전트 API 모음을 개발하여, 간단한 검색부터 복잡한 지식 작업까지 프로그래밍 가능한 작업을 가능하게 합니다.
+
+> **Langfuse란 무엇인가요?** [Langfuse](https://langfuse.com)는 팀이 LLM 애플리케이션에서 API 호출을 추적하고, 성능을 모니터링하고, 문제를 디버깅할 수 있도록 돕는 오픈 소스 AI 엔지니어링 플랫폼입니다.
+
+<Steps>
+## 시작하기
+
+먼저 필요한 Python 패키지를 설치합니다.
+
+```python
+%pip install langfuse parallel-web openai
+```
+
+다음으로 Parallel과 Langfuse API 키로 환경을 구성합니다. 무료 [Langfuse Cloud](https://langfuse.com/cloud) 계정에 가입하거나 [Langfuse를 셀프 호스팅](https://langfuse.com/self-hosting)하고 [Parallel 대시보드](https://parallel.ai/)에서 이 키들을 얻을 수 있습니다.
+
+```python
+import os
+
+# Get keys for your project from the project settings page: https://cloud.langfuse.com
+os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-lf-...")
+os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-lf-...")
+os.environ.setdefault("LANGFUSE_BASE_URL", "https://cloud.langfuse.com") # 🇪🇺 EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+
+# Your Parallel key
+os.environ.setdefault("PARALLEL_API_KEY", "...")
+
+# Your openai key
+os.environ.setdefault("OPENAI_API_KEY", "sk-proj-...")
+```
+
+## 예제 1: Parallel Task API 트레이싱하기
+
+Task API 요청을 모니터링하기 위해 [Langfuse `@observe()` 데코레이터](https://langfuse.com/docs/sdk/python/decorators)를 사용합니다. 이 예제에서 `@observe()` 데코레이터는 `parallel_task()` 함수의 입력, 출력, 실행 시간을 캡처합니다. Langfuse로 전송하는 데이터를 더 세밀하게 제어하려면 Python SDK를 사용해 [컨텍스트 관리자를 사용하거나 수동으로 옵저베이션을 생성](https://langfuse.com/docs/observability/sdk/python/instrumentation#custom-instrumentation)할 수 있습니다.
+
+```python
+import os
+from parallel import Parallel
+from parallel.types import TaskSpecParam
+from langfuse import observe
+
+client = Parallel(api_key=os.environ["PARALLEL_API_KEY"])
+
+@observe(as_type="retriever")
+def parallel_task(input: str):
+    task_run = client.task_run.create(
+        input=input,
+        task_spec=TaskSpecParam(
+            output_schema="The founding date of the company in the format MM-YYYY"
+            ),
+        processor="base"
+    )
+    print(f"Run ID: {task_run.run_id}")
+
+    run_result = client.task_run.result(task_run.run_id, api_timeout=3600)
+    print(run_result.output)
+
+    return run_result.output
+
+parallel_task("Langfuse")
+```
+
+## 예제 2: Parallel Chat API 트레이싱하기
+
+[Langfuse OpenAI 래퍼](https://langfuse.com/integrations/model-providers/openai-py)를 사용해 Parallel Chat API와의 상호작용을 트레이싱할 수 있습니다.
+
+```python
+from langfuse.openai import OpenAI
+
+client = OpenAI(
+    api_key=os.environ["PARALLEL_API_KEY"],  # Your Parallel API key
+    base_url="https://api.parallel.ai"  # Parallel's API beta endpoint
+)
+
+response = client.chat.completions.create(
+    model="speed", # Parallel model name
+    name="Parallel Chat",
+    messages=[
+        {"role": "user", "content": "What does Parallel Web Systems do?"}
+    ],
+    response_format={
+        "type": "json_schema",
+        "json_schema": {
+            "name": "reasoning_schema",
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "reasoning": {
+                        "type": "string",
+                        "description": "Think step by step to arrive at the answer",
+                    },
+                    "answer": {
+                        "type": "string",
+                        "description": "The direct answer to the question",
+                    },
+                    "citations": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Sources cited to support the answer",
+                    },
+                },
+            },
+        },
+    },
+)
+
+print(response.choices[0].message.content)
+```
+
+## 예제 3: Parallel Search API와 OpenAI
+
+OpenAI로 검색 결과를 요약하는 좀 더 복잡한 워크플로도 추적할 수 있습니다. 여기서는 [Langfuse `@observe()` 데코레이터](https://langfuse.com/docs/sdk/python/decorators)를 사용해 Parallel 검색과 OpenAI 생성을 하나의 트레이스로 묶습니다.
+
+```python
+import os
+from parallel import Parallel
+from langfuse.openai import OpenAI
+from langfuse import observe
+
+
+@observe()
+def search_and_summarize(objective, search_queries):
+    # 1. Parallel Search API
+    parallel_client = Parallel(api_key=os.environ["PARALLEL_API_KEY"])
+
+    @observe(as_type="retriever")
+    def search_with_parallel(objective, search_queries, num_results: int = 5):
+        """Search the web using Parallel and return results."""
+        search = parallel_client.beta.search(
+            objective=objective,
+            search_queries=search_queries,
+            processor="base",
+            max_results=num_results,
+            max_chars_per_result=6000
+        )
+        return search.results
+
+    results = search_with_parallel(objective, search_queries)
+    results_text = "\n\n".join(str(r) for r in results) if results else "No results."
+
+    # 2. Summarize with OpenAI
+    openai_client = OpenAI()
+    resp = openai_client.chat.completions.create(
+        model="gpt-5-mini",
+        messages=[
+            {"role": "system", "content": "Summarize the following search results clearly and concisely."},
+            {"role": "user", "content": results_text}
+        ]
+    )
+    return resp.choices[0].message.content
+
+# Example usage
+search_and_summarize(
+    objective="Explain what Langfuse is and highlight its main features for LLM application observability.",
+    search_queries=[
+        "Langfuse LLM observability",
+        "Langfuse features and documentation",
+        "Langfuse tracing evaluations dashboards"
+    ],
+)
+```
+
+## Langfuse에서 트레이스 확인하기
+
+트레이싱된 함수를 실행한 후 [Langfuse Dashboard](https://cloud.langfuse.com)에 로그인하여 상세한 트레이스 로그를 확인하세요. 다음을 확인할 수 있습니다.
+
+- 개별 작업 생성 및 조회 작업
+- 병렬 실행 패턴과 타이밍
+- 입력 프롬프트와 출력 결과
+- 각 작업의 성능 지표
+
+![Parallel Example trace in Langfuse UI](https://langfuse.com/images/cookbook/integration_parallel-ai/parallel-ai-example-trace.png)
+
+[Langfuse의 예제 트레이스](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/a664e35ab40a75d04cf6a262d0399f05?timestamp=2025-10-28T15%3A16%3A26.617Z&observation=13fc56583aafeb06)
+
+</Steps>
+
+import LearnMore from "@/components-mdx/integration-learn-more.mdx";
+
+<LearnMore />

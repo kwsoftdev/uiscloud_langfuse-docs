@@ -1,0 +1,922 @@
+---
+title: LangChain 트레이싱 & LangGraph 통합
+sidebarTitle: LangChain & LangGraph
+description: "오픈소스 LangChain 트레이싱 및 모니터링입니다. Langfuse로 LangChain 콜백, LLM 호출, 도구, 리트리버의 트레이스를 자동으로 캡처하세요. Python 및 JS/TS 지원."
+seoTitle: "LangChain 트레이싱 & 콜백 — LangChain & LangGraph를 위한 오픈소스 관찰 가능성"
+logo: /images/integrations/langchain_icon.png
+---
+
+import GetStartedLangchainJsEnv from "@/components-mdx/get-started-langchain-js-env.mdx";
+import Env from "@/components-mdx/env-js.mdx";
+
+# LangChain 트레이싱 & LangGraph 통합
+
+Langfuse는 **LangChain Callbacks**를 사용해 LangChain과 통합됩니다. 이는 LangChain 구성 요소의 실행에 연결하는 표준 메커니즘입니다. Langfuse `CallbackHandler`는 애플리케이션을 평가하고 디버그할 수 있도록 LangChain 실행, LLM, 도구, 리트리버에 대한 상세한 트레이스를 자동으로 캡처합니다.
+
+> **LangChain이란 무엇인가요?** [LangChain](https://python.langchain.com/docs/get_started/introduction/)은 모델을 외부 데이터, API, 로직과 연결하는 도구를 제공함으로써 개발자가 대규모 언어 모델(LLM)로 구동되는 애플리케이션을 구축하도록 돕는 오픈소스 프레임워크입니다.
+
+> **LangGraph란 무엇인가요?** [LangGraph](https://python.langchain.com/docs/get_started/introduction/)는 LangChain 위에 구축된 프레임워크로, 그래프 기반 아키텍처를 사용하여 상태를 가진(stateful) 다단계 AI 에이전트를 더 쉽게 설계하고 실행할 수 있게 해줍니다.
+
+> **Langfuse란 무엇인가요?** [Langfuse](/)는 LLM 애플리케이션의 관찰 가능성 및 트레이싱을 위한 플랫폼입니다. LLM 상호작용 중 발생하는 모든 것—입력, 출력, 도구 사용, 재시도, 지연 시간, 비용—을 캡처하여 애플리케이션을 평가하고 디버그할 수 있게 해줍니다.
+
+## 시작하기
+
+<Tabs
+  items={[
+    "Python SDK",
+    "JS/TS SDK",
+  ]}
+>
+<Tab title="Python SDK">
+
+<Steps>
+### 의존성 설치하기
+
+```bash
+pip install langfuse langchain langchain_openai langgraph
+```
+
+### Langfuse 콜백 핸들러 초기화하기
+
+다음으로, Langfuse API 키를 설정하세요. 무료 [Langfuse Cloud](https://langfuse.com/cloud) 계정에 가입하거나 [Langfuse를 셀프 호스팅](https://langfuse.com/self-hosting)하여 이 키를 받을 수 있습니다. 이 환경 변수들은 Langfuse 클라이언트가 인증하고 Langfuse 프로젝트로 데이터를 전송하는 데 필수적입니다.
+
+```bash filename=".env"
+LANGFUSE_SECRET_KEY = "sk-lf-..."
+LANGFUSE_PUBLIC_KEY = "pk-lf-..."
+LANGFUSE_BASE_URL = "https://cloud.langfuse.com" # 🇪🇺 EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+
+OPENAI_API_KEY = "sk-proj-..."
+```
+
+환경 변수가 설정되면 이제 Langfuse 클라이언트와 CallbackHandler를 초기화할 수 있습니다. Langfuse 클라이언트를 초기화할 때 [생성자 인자](/docs/observability/sdk/overview#initialize-tracing)를 사용할 수도 있습니다.
+
+```python
+from langfuse import get_client
+from langfuse.langchain import CallbackHandler
+
+# Initialize Langfuse client
+langfuse = get_client()
+
+# Initialize Langfuse CallbackHandler for Langchain (tracing)
+langfuse_handler = CallbackHandler()
+```
+
+### LangChain 예제
+
+<Callout type="info" emoji="💡">
+LangGraph를 계측하는 것도 동일한 패턴을 따릅니다. 에이전트 호출에 `langfuse_handler`를 전달하기만 하면 됩니다. ([예제 노트북](/guides/cookbook/integration_langgraph)).
+</Callout>
+
+```python /config={"callbacks": [langfuse_handler]}/
+from langchain.agents import create_agent
+
+def add_numbers(a: int, b: int) -> int:
+    """Add two numbers together and return the result."""
+    return a + b
+
+agent = create_agent(
+    model="openai:gpt-5-mini",
+    tools=[add_numbers],
+    system_prompt="You are a helpful math tutor who can do calculations using the provided tools.",
+)
+
+# Run the agent
+agent.invoke(
+    {"messages": [{"role": "user", "content": "what is 42 + 58?"}]},
+    config={"callbacks": [langfuse_handler]}
+)
+```
+
+### Langfuse에서 트레이스 확인하기
+
+애플리케이션을 실행한 후 [Langfuse Trace Table](https://langfuse.com/cloud)로 이동하세요. LLM 호출, 검색 작업, 입력, 출력, 성능 메트릭에 대한 인사이트를 제공하는 애플리케이션 실행의 상세한 트레이스를 확인할 수 있습니다.
+
+![Langfuse의 예제 트레이스](/images/cookbook/integration-langchain/langchain-example-trace.png)
+
+[Langfuse UI의 예제 트레이스](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/f409d99f1204374f3c12a1b44441f21e?timestamp=2025-10-21T14%3A01%3A18.661Z)
+
+</Steps>
+</Tab>
+<Tab title="JS/TS SDK">
+
+<Steps>
+### 의존성 설치하기
+
+```bash
+npm install @langfuse/core @langfuse/langchain
+```
+
+### 환경 설정하기
+
+다음으로, Langfuse API 키를 설정하세요. 무료 [Langfuse Cloud](https://langfuse.com/cloud) 계정에 가입하거나 [Langfuse를 셀프 호스팅](https://langfuse.com/self-hosting)하여 이 키를 받을 수 있습니다. 이 환경 변수들은 Langfuse 클라이언트가 인증하고 Langfuse 프로젝트로 데이터를 전송하는 데 필수적입니다.
+
+```bash filename=".env"
+LANGFUSE_SECRET_KEY = "sk-lf-..."
+LANGFUSE_PUBLIC_KEY = "pk-lf-..."
+LANGFUSE_BASE_URL = "https://cloud.langfuse.com" # 🇪🇺 EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+
+OPENAI_API_KEY = "sk-proj-..."
+```
+
+환경 변수가 설정되면 이제 트레이싱을 조율하는 메인 OpenTelemetry SDK에 전달되는 `langfuseSpanProcessor`를 초기화할 수 있습니다.
+
+```typescript
+import { NodeSDK } from "@opentelemetry/sdk-node";
+import { LangfuseSpanProcessor } from "@langfuse/otel";
+
+const sdk = new NodeSDK({
+  spanProcessors: [new LangfuseSpanProcessor()],
+});
+
+sdk.start();
+```
+
+### Langfuse 콜백 핸들러 초기화하기
+
+CallbackHandler를 인스턴스화하세요. 선택적으로 `sessionId`, `userId`, `tags`와 같은 추가 속성을 전달할 수 있습니다.
+
+```typescript
+import { CallbackHandler } from "@langfuse/langchain";
+
+// Initialize the Langfuse CallbackHandler
+const langfuseHandler = new CallbackHandler({
+  sessionId: "user-session-123",
+  userId: "user-abc",
+  tags: ["langchain-test"],
+});
+```
+
+### LangChain 예제
+
+<Callout type="info" emoji="💡">
+LangGraph를 계측하는 것도 동일한 패턴을 따릅니다. 에이전트 호출에 `langfuseHandler`를 전달하기만 하면 됩니다.
+</Callout>
+
+```typescript /{ callbacks: [langfuseHandler] }/
+import { createAgent, tool } from "@langchain/core/agents";
+import * as z from "zod";
+
+const getWeather = tool(
+  (input) => `It's always sunny in ${input.city}!`,
+  {
+    name: "get_weather",
+    description: "Get the weather for a given city",
+    schema: z.object({
+      city: z.string().describe("The city to get the weather for"),
+    }),
+  }
+);
+
+const agent = createAgent({
+  model: "openai:gpt-5-mini",
+  tools: [getWeather],
+});
+
+console.log(
+  await agent.invoke(
+    { messages: [{ role: "user", content: "What's the weather in San Francisco?" }] },
+    { callbacks: [langfuseHandler] }
+    )
+);
+```
+
+### Langfuse에서 트레이스 확인하기
+
+애플리케이션을 실행한 후 [Langfuse Trace Table](https://langfuse.com/cloud)로 이동하세요. LLM 호출, 검색 작업, 입력, 출력, 성능 메트릭에 대한 인사이트를 제공하는 애플리케이션 실행의 상세한 트레이스를 확인할 수 있습니다.
+
+![Langfuse 트레이스](https://langfuse.com/images/cookbook/example-js-sdk/js_integration_langchain_trace.png)
+
+[Langfuse UI의 공개 트레이스](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/2c1581dd9cecdafb6ca091b83d7ea99a?timestamp=2025-10-30T08:45:41.319Z)
+
+</Steps>
+</Tab>
+</Tabs>
+
+## 예제 노트북
+
+import { FileCode, GitPullRequestArrow } from "lucide-react";
+
+<Cards num={2}>
+  <Card
+    title="LangChain (Python)"
+    href="/guides/cookbook/integration_langchain"
+    icon={<FileCode />}
+  />
+  <Card
+    title="LangChain (JS/TS)"
+    href="/guides/cookbook/js_integration_langchain"
+    icon={<FileCode />}
+  />
+  <Card
+    title="LangGraph (Python)"
+    href="/guides/cookbook/integration_langgraph"
+    icon={<FileCode />}
+  />
+  <Card
+    title="Evaluate LangGraph Agents (Python)"
+    href="/guides/cookbook/example_langgraph_agents"
+    icon={<FileCode />}
+  />
+  <Card
+    title="LangChain DeepAgents (Python)"
+    href="/integrations/kr/frameworks/langchain-deepagents"
+    icon={<FileCode />}
+  />
+</Cards>
+
+## 추가 구성
+
+### Langfuse SDK와의 상호 운용성 [#interoperability]
+
+Langchain 통합은 Langfuse SDK와 매끄럽게 작동하여 Langchain 작업과 다른 애플리케이션 로직을 결합한 포괄적인 트레이스를 생성합니다.
+
+**일반적인 사용 사례:**
+
+- 트레이스에 Langchain과 관련되지 않은 관찰(observation) 추가하기
+- 여러 Langchain 실행을 하나의 트레이스로 그룹화하기
+- 트레이스 수준 속성 설정하기 ([`user_id`](/docs/observability/features/users), [`session_id`](/docs/observability/features/sessions), [`tags`](/docs/observability/features/tags) 등)
+
+<LangTabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab>
+
+**`@observe()` 데코레이터 사용하기:**
+
+```python /@observe()/ /langfuse.set_current_trace_io/
+from langfuse import observe, get_client, propagate_attributes
+from langfuse.langchain import CallbackHandler
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+
+@observe() # Automatically log function as a trace to Langfuse
+def process_user_query(user_input: str):
+    langfuse = get_client()
+
+    # Propagate trace attributes to all child observations
+    with propagate_attributes(
+        trace_name="user-query-processing",
+        session_id="session-1234",
+        user_id="user-5678",
+    ):
+
+      # Initialize the Langfuse handler - automatically inherits the current trace context
+      langfuse_handler = CallbackHandler()
+
+      # Your Langchain code - will be nested under the @observe trace
+      llm = ChatOpenAI(model_name="gpt-4o")
+      prompt = ChatPromptTemplate.from_template("Respond to: {input}")
+      chain = prompt | llm
+
+      result = chain.invoke({"input": user_input}, config={"callbacks": [langfuse_handler]})
+
+      # Set trace I/O (deprecated — only for backward compat with legacy trace-level LLM-as-a-judge evaluators)
+      langfuse.set_current_trace_io(
+        input={"query": user_input},
+        output={"response": result.content},
+        )
+
+    return result.content
+
+# Usage
+answer = process_user_query("What is the capital of France?")
+```
+
+이것이 실제로 동작하는 예제는 [Langchain + decorator observability 쿡북](/guides/cookbook/example_decorator_openai_langchain)을 참고하세요.
+
+**컨텍스트 매니저 사용하기:**
+
+```python /with langfuse.start_as_current_observation(as_type="span", name="multi-step-process") as root_span:/ /prep_span.update/ /root_span.set_trace_io/ /post_span.update/
+from langfuse import get_client, propagate_attributes
+from langfuse.langchain import CallbackHandler
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+
+langfuse = get_client()
+
+# Create a trace via Langfuse spans and use Langchain within it
+with langfuse.start_as_current_observation(as_type="span", name="multi-step-process") as root_span:
+    # Update trace attributes
+    with propagate_attributes(
+        session_id="session-1234",
+        user_id="user-5678",
+    ):
+
+      # Initialize the Langfuse handler
+      langfuse_handler = CallbackHandler()
+
+      # Step 1: Initial processing (custom logic)
+      with langfuse.start_as_current_observation(as_type="span", name="input-preprocessing") as prep_span:
+          processed_input = "Simplified: Explain quantum computing"
+          prep_span.update(output={"processed_query": processed_input})
+
+      # Step 2: LangChain processing
+      llm = ChatOpenAI(model_name="gpt-4o")
+      prompt = ChatPromptTemplate.from_template("Answer this question: {input}")
+      chain = prompt | llm
+
+      result = chain.invoke(
+          {"input": processed_input},
+          config={"callbacks": [langfuse_handler]}
+      )
+
+      # Step 3: Post-processing (custom logic)
+      with langfuse.start_as_current_observation(as_type="span", name="output-postprocessing") as post_span:
+          final_result = f"Response: {result.content}"
+          post_span.update(output={"final_response": final_result})
+
+      # Set trace I/O (deprecated — only for backward compat with legacy trace-level LLM-as-a-judge evaluators)
+      root_span.set_trace_io(
+        input={"user_query": "Explain quantum computing"},
+        output={"final_answer": final_result}
+        )
+```
+
+</Tab>
+<Tab>
+
+```ts
+import { CallbackHandler } from "@langfuse/langchain";
+import { startActiveObservation, propagateAttributes } from "@langfuse/tracing";
+
+const langfuseHandler = new CallbackHandler();
+
+// Wrap the LangChain run in a Langfuse observation — the handler
+// automatically nests its spans under the active observation
+await startActiveObservation("multi-step-process", async (span) => {
+  span.update({ input: { query: "<user_input>" } });
+
+  // Propagate trace attributes to all child observations
+  await propagateAttributes(
+    {
+      userId: "user-5678",
+      sessionId: "session-1234",
+    },
+    async () => {
+      const result = await chain.invoke(
+        { input: "<user_input>" },
+        { callbacks: [langfuseHandler] },
+      );
+
+      span.update({ output: result });
+    },
+  );
+});
+```
+
+</Tab>
+</LangTabs>
+
+### 트레이스 속성
+
+각 LangChain 실행에 대해 [`user_id`](/docs/observability/features/users), [`session_id`](/docs/observability/features/sessions), [`tags`](/docs/observability/features/tags)와 같은 트레이스 속성을 동적으로 설정할 수 있습니다.
+
+<LangTabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab>
+
+Python SDK에서는 트레이스 속성을 동적으로 설정하는 두 가지 방법이 있습니다:
+
+**옵션 1: 체인 호출 시 메타데이터 필드를 통한 방법(가장 간단한 방식):**
+
+```python
+from langfuse.langchain import CallbackHandler
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+
+langfuse_handler = CallbackHandler()
+
+llm = ChatOpenAI(model_name="gpt-4o")
+prompt = ChatPromptTemplate.from_template("Tell me a joke about {topic}")
+chain = prompt | llm
+
+# Set trace attributes dynamically via metadata
+response = chain.invoke(
+    {"topic": "cats"},
+    config={
+        "callbacks": [langfuse_handler],
+        "metadata": {
+            "langfuse_user_id": "random-user",
+            "langfuse_session_id": "random-session",
+            "langfuse_tags": ["random-tag-1", "random-tag-2"]
+        }
+    }
+)
+```
+
+**옵션 2: [Langfuse SDK](#interoperability) 사용하기**
+
+</Tab>
+<Tab>
+
+```ts
+import { CallbackHandler } from "@langfuse/langchain";
+
+const langfuseHandler = new CallbackHandler();
+
+const traceName = "langchain_trace_name";
+const sessionId = "random-session";
+const userId = "random-user";
+const tags = ["random-tag-1", "random-tag-2"];
+
+await chain.invoke(
+  { animal: "dog" },
+  {
+    callbacks: [langfuseHandler],
+    runName: traceName,
+    tags,
+    metadata: { langfuseUserId: userId, langfuseSessionId: sessionId },
+  }
+);
+```
+
+</Tab>
+
+</LangTabs>
+
+### 트레이스 ID 및 분산 트레이싱
+
+<LangTabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab>
+
+커스텀 [`trace_id`](/docs/observability/features/trace-ids-and-distributed-tracing)를 Langchain 실행에 전달하려면, 미리 정의된 트레이스 ID를 설정하는 span으로 실행을 감싸면 됩니다. 콜백 핸들러가 생성한 마지막 트레이스 ID는 `langfuse_handler.last_trace_id`를 통해 가져올 수도 있습니다.
+
+```python
+from langfuse import get_client, Langfuse
+from langfuse.langchain import CallbackHandler
+
+langfuse = get_client()
+
+# Generate deterministic trace ID from external system
+external_request_id = "req_12345"
+predefined_trace_id = Langfuse.create_trace_id(seed=external_request_id)
+
+langfuse_handler = CallbackHandler()
+
+# Use the predefined trace ID with trace_context
+with langfuse.start_as_current_observation(
+    as_type="span",
+    name="langchain-request",
+    trace_context={"trace_id": predefined_trace_id}
+) as span:
+    # Set trace I/O (deprecated — only for backward compat with legacy trace-level LLM-as-a-judge evaluators)
+    span.set_trace_io(
+        input={"person": "Ada Lovelace"}
+    )
+
+    with propagate_attributes(
+        user_id="user_123",
+    ):
+        # LangChain execution will be part of this trace
+        response = chain.invoke(
+            {"person": "Ada Lovelace"},
+            config={"callbacks": [langfuse_handler]}
+        )
+
+    span.set_trace_io(output={"response": response})
+
+print(f"Trace ID: {predefined_trace_id}")  # Use this for scoring later
+print(f"Trace ID: {langfuse_handler.last_trace_id}") # Care needed in concurrent environments where handler is reused
+```
+
+</Tab>
+<Tab>
+
+```typescript
+import { CallbackHandler } from "langfuse/langchain";
+import { v4 as uuidv4 } from "uuid";
+
+const langfuseHandler = new CallbackHandler();
+
+const predefinedRunId = uuid4();
+
+await chain.invoke(
+  { animal: "dog" },
+  {
+    callbacks: [langfuseHandler],
+    runId: predefinedRunId,
+  }
+);
+```
+
+</Tab>
+</LangTabs>
+
+### 트레이스 평가하기
+
+Langfuse에서 LangChain 트레이스를 평가하는 방법에는 여러 가지가 있습니다. 자세한 내용은 [평가 문서](/docs/evaluation/overview)를 참고하세요.
+
+<LangTabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab>
+
+```python
+from langfuse import get_client
+
+langfuse = get_client()
+
+# Option 1: Use the yielded span object from the context manager
+with langfuse.start_as_current_observation(
+    as_type="span",
+    name="langchain-request",
+    trace_context={"trace_id": predefined_trace_id}
+) as span:
+    # ... LangChain execution ...
+
+    # Score using the span object
+    span.score_trace(
+        name="user-feedback",
+        value=1,
+        data_type="NUMERIC",
+        comment="This was correct, thank you"
+    )
+
+# Option 2: Use langfuse.score_current_trace() if still in context
+with langfuse.start_as_current_observation(as_type="span", name="langchain-request") as span:
+    # ... LangChain execution ...
+
+    # Score using current context
+    langfuse.score_current_trace(
+        name="user-feedback",
+        value=1,
+        data_type="NUMERIC"
+    )
+
+# Option 3: Use create_score() with trace ID (when outside context)
+langfuse.create_score(
+    trace_id=predefined_trace_id,
+    name="user-feedback",
+    value=1,
+    data_type="NUMERIC",
+    comment="This was correct, thank you"
+)
+```
+
+</Tab>
+<Tab>
+
+```typescript
+import { LangfuseClient } from "@langfuse/client";
+
+const langfuse = new LangfuseClient();
+
+langfuse.score.create({
+  id: "unique_id", // optional, can be used as an idempotency key to update the score subsequently
+  traceId: message.traceId,
+  observationId: message.generationId, // optional
+  name: "correctness",
+  value: 0.9,
+  dataType: "NUMERIC", // optional, inferred if not provided
+  comment: "Factually correct", // optional
+});
+
+// Flush the scores in short-lived environments
+await langfuse.flush();
+```
+
+</Tab>
+</LangTabs>
+
+### 큐잉 및 플러시
+
+Langfuse SDK는 네트워크 요청 수를 줄이고 전반적인 성능을 개선하기 위해 백그라운드에서 이벤트를 큐에 담고 배치로 처리합니다. 장시간 실행되는 애플리케이션에서는 추가 구성 없이도 이 동작이 잘 작동합니다.
+
+단기 실행 애플리케이션을 운영하는 경우, 애플리케이션이 종료되기 전에 모든 이벤트가 플러시되도록 Langfuse를 종료해야 합니다.
+
+<LangTabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab>
+
+```python
+from langfuse import get_client
+
+# Shutdown the underlying singleton instance
+get_client().shutdown()
+```
+
+</Tab>
+<Tab>
+
+```ts
+await langfuseHandler.shutdownAsync();
+```
+
+</Tab>
+</LangTabs>
+
+특정 시점에 이벤트를 동기적으로 플러시하고 싶다면 `flush` 메서드를 사용할 수 있습니다. 이는 아직 백그라운드 큐에 남아 있는 모든 이벤트가 Langfuse API로 전송될 때까지 대기합니다. 이는 일반적으로 프로덕션 환경에서는 권장되지 않습니다.
+
+<LangTabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab>
+
+```python
+from langfuse import get_client
+
+# Flush the underlying singleton instance
+get_client().flush()
+```
+
+</Tab>
+<Tab>
+
+```ts
+await langfuseHandler.flushAsync();
+```
+
+</Tab>
+</LangTabs>
+
+### 서버리스 환경(JS/TS)
+
+Langchain 버전이 0.3.0보다 높아지면서, Langfuse가 의존하는 콜백은 백그라운드로 처리되도록 변경되었습니다. 즉, 실행은 콜백이 반환되기를 기다리지 않고 계속됩니다. 0.3.0 이전에는 이 동작이 반대였습니다. Google Cloud Functions, AWS Lambda, Cloudflare Workers와 같은 서버리스 환경에서 코드를 실행하는 경우, 콜백이 완료되거나 타임아웃될 시간을 확보할 수 있도록 콜백을 블로킹 방식으로 설정해야 합니다. 이는 다음 방법 중 하나로 수행할 수 있습니다
+
+- `LANGCHAIN_CALLBACKS_BACKGROUND` 환경 변수를 "false"로 설정하기
+- 필요한 경우 모든 콜백이 완료되도록 보장하는 전역 `awaitAllCallbacks` 메서드를 임포트하기
+
+콜백 대기에 대한 자세한 내용은 [Langchain 문서](https://js.langchain.com/docs/how_to/callbacks_serverless)를 참고하세요.
+
+### AWS Bedrock AgentCore
+
+LangChain 애플리케이션을 AWS Bedrock AgentCore에 배포할 때, 런타임의 ADOT(AWS Distro for OpenTelemetry) 자동 계측은 Langfuse 콜백 핸들러에만 의존하는 대신 OTEL 구성을 필요로 합니다. 구성에 대한 자세한 내용은 [기존 OpenTelemetry 설정과 함께 Langfuse 사용하기](/faq/all/existing-otel-setup#aws-bedrock-agentcore-adot)를 참고하거나, 전체 [Amazon Bedrock AgentCore 통합 가이드](/integrations/kr/frameworks/amazon-agentcore)를 확인하세요.
+
+### Azure OpenAI 모델 이름
+
+Langfuse에서 모델 이름이 올바르게 파싱되도록 하려면 `AzureOpenAI` 또는 `AzureChatOpenAI` 클래스에 `model` 키워드 인자를 추가하세요.
+
+<LangTabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab>
+
+```python
+from langchain_openai import AzureChatOpenAI
+
+llm = AzureChatOpenAI(
+azure_deployment="my-gpt-4o-deployment",
+model="gpt-4o",
+)
+```
+
+</Tab>
+<Tab>
+
+```typescript
+import { AzureChatOpenAI } from "@langchain/openai";
+
+const llm = new AzureChatOpenAI({
+  azureOpenAIApiDeploymentName: "my-gpt-4o-deployment",
+  model: "gpt-4o",
+});
+```
+
+</Tab>
+</LangTabs>
+
+## Langchain 통합의 업그레이드 경로 [#upgrade-paths]
+
+<Callout type="info">
+  이 문서는 통합의 여러 버전에 대한 업그레이드 경로 모음입니다. 프로젝트에 통합을 추가하려면
+  최신 버전부터 시작하여 위의 통합 가이드를 따라야 합니다.
+</Callout>
+
+Langfuse와 Langchain은 활발히 개발되고 있습니다. 따라서 통합을 지속적으로 개선하고 있습니다. 이는 때때로 API에 호환성이 깨지는 변경을 해야 하거나 Langchain의 호환성이 깨지는 변경 사항에 대응해야 함을 의미합니다. 이러한 변경은 최소한으로 유지하려 하며, 변경이 있을 때는 명확한 업그레이드 경로를 제공하려 합니다.
+
+**Python**
+
+- [v2.x.x에서 v3.x.x로](#python3)
+- [v1.x.x에서 v2.x.x로](#python2)
+
+**JS/TS**
+
+- [v2.x.x에서 v3.x.x로](#js3)
+- [v1.x.x에서 v2.x.x로](#js2)
+
+### Python [#python]
+
+#### v2.x.x에서 v3.x.x로
+
+Python SDK v3는 새로운 **관찰 가능성 API**를 갖춘 완전히 개정된 Langfuse 코어를 도입합니다. LangChain 통합은 여전히 `CallbackHandler`에 의존하지만, 거의 모든 사용 방식이 바뀌었습니다. 아래 표는 가장 중요한 호환성이 깨지는 변경 사항을 강조합니다:
+
+| 주제                   | v2                                                                  | v3                                                                           |
+| ---------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| 패키지 임포트          | `from langfuse.callback import CallbackHandler`                     | `from langfuse.langchain import CallbackHandler`                             |
+| 클라이언트 처리        | 여러 개의 인스턴스화된 클라이언트                                   | 싱글턴 패턴, `get_client()`를 통해 접근                                      |
+| 트레이스/스팬 컨텍스트 | `CallbackHandler`가 실행을 그룹화하기 위해 선택적으로 `root`를 받음 | 컨텍스트 매니저 `with langfuse.start_as_current_observation(...)` 사용       |
+| 동적 트레이스 속성     | LangChain `config`를 통해 전달(예: `metadata["langfuse_user_id"]`)  | `metadata["langfuse_user_id"]` 또는 `propagate_attributes(user_id=...)` 사용 |
+| 생성자 인자            | `CallbackHandler(sample_rate=..., user_id=...)`                     | 생성자 인자 없음 – Langfuse 클라이언트나 span 사용                           |
+
+최소한의 마이그레이션 예제:
+
+```python
+# Install latest SDK (>=3.0.0)
+pip install --upgrade langfuse
+
+# v2 Code (for reference)
+# from langfuse.callback import CallbackHandler
+# handler = CallbackHandler()
+# chain.invoke({"topic": "cats"}, config={"callbacks": [handler]})
+
+# v3 Code
+from langfuse import Langfuse, get_client
+from langfuse.langchain  import CallbackHandler
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+
+# 1. Create/Configure Langfuse client (once at startup)
+Langfuse(
+    public_key="your-public-key",
+    secret_key="your-secret-key",
+)
+
+# 2. Access singleton instance and create handler
+langfuse = get_client()
+handler = CallbackHandler()
+
+# 3. Option 1: Use metadata in chain invocation (simplest migration)
+llm = ChatOpenAI(model_name="gpt-4o")
+prompt = ChatPromptTemplate.from_template("Tell me a joke about {topic}")
+chain = prompt | llm
+
+response = chain.invoke(
+    {"topic": "cats"},
+    config={
+        "callbacks": [handler],
+        "metadata": {"langfuse_user_id": "user_123"}
+    }
+)
+
+# (Optional) Flush events in short-lived scripts
+langfuse.flush()
+```
+
+- `sample_rate`나 `tracing_enabled`와 같은 모든 인자는 이제 핸들러가 아니라 **Langfuse** 클라이언트를 생성할 때(또는 환경 변수를 통해) 제공해야 합니다.
+- `flush()`, `shutdown()`과 같은 함수는 클라이언트 인스턴스로 이동했습니다(`get_client().flush()`).
+
+#### v1.x.x에서 v2.x.x로 [#python2]
+
+아래에 보이는 것처럼 `CallbackHandler`는 Langchain 체인의 여러 호출에서 사용될 수 있습니다.
+
+```python
+from langfuse.callback import CallbackHandler
+langfuse_handler = CallbackHandler(PUBLIC_KEY, SECRET_KEY)
+
+# Setup Langchain
+from langchain.chains import LLMChain
+...
+chain = LLMChain(llm=llm, prompt=prompt, callbacks=[langfuse_handler])
+
+# Add Langfuse handler as callback
+chain.run(input="<first_user_input>", callbacks=[langfuse_handler])
+chain.run(input="<second_user_input>", callbacks=[langfuse_handler])
+
+```
+
+지금까지는 체인을 여러 번 호출하면 관찰(observation)이 하나의 트레이스로 그룹화되었습니다.
+
+```bash
+TRACE
+|
+|-- SPAN: Retrieval
+|   |
+|   |-- SPAN: LLM Chain
+|   |   |
+|   |   |-- GENERATION: ChatOpenAi
+|-- SPAN: Retrieval
+|   |
+|   |-- SPAN: LLM Chain
+|   |   |
+|   |   |-- GENERATION: ChatOpenAi
+```
+
+이를 변경하여 이제는 각 호출이 각자의 트레이스로 끝나게 됩니다. 이를 통해 Langchain 애플리케이션에 대한 사용자 입력과 출력을 도출할 수 있습니다.
+
+```bash
+TRACE_1
+|
+|-- SPAN: Retrieval
+|   |
+|   |-- SPAN: LLM Chain
+|   |   |
+|   |   |-- GENERATION: ChatOpenAi
+
+TRACE_2
+|
+|-- SPAN: Retrieval
+|   |
+|   |-- SPAN: LLM Chain
+|   |   |
+|   |   |-- GENERATION: ChatOpenAi
+```
+
+여전히 여러 호출을 하나의 트레이스로 그룹화하고 싶다면, 이를 감싸는 Langfuse 관찰(observation)로 래핑하세요([상호 운용성 문서](#interoperability)).
+
+```python
+from langfuse import get_client
+from langfuse.langchain import CallbackHandler
+
+langfuse = get_client()
+langfuse_handler = CallbackHandler()
+
+with langfuse.start_as_current_observation(as_type="span", name="grouped-invocations"):
+    # All invocations within this scope end up on the same trace
+    chain.invoke({"input": "<user_input_one>"}, config={"callbacks": [langfuse_handler]})
+    chain.invoke({"input": "<user_input_two>"}, config={"callbacks": [langfuse_handler]})
+```
+
+### JS/TS [#js]
+
+#### v2.x.x에서 v3.x.x로 [#js3]
+
+[`langchain ^0.1.10`](https://github.com/langchain-ai/langchainjs/releases/tag/0.1.10)이 필요합니다. Langchain은 Callback Handler 인터페이스의 새로운 안정 버전을 발표했고, 이 버전의 Langfuse SDK가 이를 구현합니다. 이전 버전은 더 이상 지원되지 않습니다.
+
+#### v1.x.x에서 v2.x.x로 [#js2]
+
+아래에 보이는 것처럼 `CallbackHandler`는 Langchain 체인의 여러 호출에서 사용될 수 있습니다.
+
+```ts
+import { CallbackHandler } from "@langfuse/langchain";
+
+// create a handler
+const langfuseHandler = new CallbackHandler({
+  publicKey: LANGFUSE_PUBLIC_KEY,
+  secretKey: LANGFUSE_SECRET_KEY,
+});
+
+import { LLMChain } from "langchain/chains";
+
+// create a chain
+const chain = new LLMChain({
+  llm: model,
+  prompt,
+  callbacks: [langfuseHandler],
+});
+
+// execute the chain
+await chain.call(
+  { product: "<user_input_one>" },
+  { callbacks: [langfuseHandler] }
+);
+await chain.call(
+  { product: "<user_input_two>" },
+  { callbacks: [langfuseHandler] }
+);
+```
+
+지금까지는 체인을 여러 번 호출하면 관찰(observation)이 하나의 트레이스로 그룹화되었습니다.
+
+```bash
+TRACE
+|
+|-- SPAN: Retrieval
+|   |
+|   |-- SPAN: LLM Chain
+|   |   |
+|   |   |-- GENERATION: ChatOpenAi
+|-- SPAN: Retrieval
+|   |
+|   |-- SPAN: LLM Chain
+|   |   |
+|   |   |-- GENERATION: ChatOpenAi
+```
+
+이를 변경하여 이제는 각 호출이 각자의 트레이스로 끝나게 됩니다. 이는 대부분의 사용자에게 더 합리적인 기본 설정입니다.
+
+```bash
+TRACE_1
+|
+|-- SPAN: Retrieval
+|   |
+|   |-- SPAN: LLM Chain
+|   |   |
+|   |   |-- GENERATION: ChatOpenAi
+
+TRACE_2
+|
+|-- SPAN: Retrieval
+|   |
+|   |-- SPAN: LLM Chain
+|   |   |
+|   |   |-- GENERATION: ChatOpenAi
+```
+
+여전히 여러 호출을 하나의 트레이스로 그룹화하고 싶다면, 이를 감싸는 Langfuse 관찰(observation)로 래핑하세요([상호 운용성 문서](#interoperability)).
+
+```ts
+import { CallbackHandler } from "@langfuse/langchain";
+import { startActiveObservation } from "@langfuse/tracing";
+
+const langfuseHandler = new CallbackHandler();
+
+await startActiveObservation("grouped-invocations", async () => {
+  // All invocations within this scope end up on the same trace
+  await chain.invoke({ input: "<user_input_one>" }, { callbacks: [langfuseHandler] });
+  await chain.invoke({ input: "<user_input_two>" }, { callbacks: [langfuseHandler] });
+});
+```
+
+## FAQ
+
+import { FaqPreview } from "@/components/faq/FaqPreview";
+
+<FaqPreview tags={["integration"]} />
+
+## GitHub Discussions
+
+import { GhDiscussionsPreview } from "@/components/gh-discussions/GhDiscussionsPreview";
+
+<GhDiscussionsPreview labels={["integration-langchain"]} />

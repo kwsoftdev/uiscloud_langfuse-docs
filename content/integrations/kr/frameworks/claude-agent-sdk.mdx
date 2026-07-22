@@ -1,0 +1,142 @@
+---
+source: ⚠️ Jupyter Notebook
+title: Langfuse로 Claude Agent SDK 관찰하기
+sidebarTitle: Claude Agent SDK
+logo: /images/integrations/claude_icon.png
+description: OpenTelemetry를 통해 Langfuse로 Claude Agent SDK 애플리케이션을 트레이싱하는 방법을 알아보세요
+category: Integrations
+---
+
+# Langfuse와 Claude Agent SDK 통합하기
+
+<a href="https://langfuse.com/integrations/frameworks/claude-agent-sdk"><img className="inline" alt="Python" src="https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white" /></a> <a href="https://langfuse.com/integrations/frameworks/claude-agent-sdk-js"><img className="inline" alt="JS/TS" src="https://img.shields.io/badge/JS/TS-d4d4d8?style=flat&logo=javascript&logoColor=white" /></a>
+
+이 노트북은 OpenTelemetry를 사용하여 [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk-python)에서 **[Langfuse](https://langfuse.com)**로 상세한 트레이스를 캡처하는 방법을 보여줍니다.
+
+> **Claude Agent SDK란 무엇인가요?**\
+> [Claude Agent SDK](https://platform.claude.com/docs/en/agent-sdk/overview)는 AI 에이전트를 구축하기 위한 Anthropic의 오픈 소스 프레임워크입니다. MCP에 대한 네이티브 지원을 포함하여 도구를 사용하는 에이전트를 만들기 위한 깔끔한 API를 제공합니다.
+
+> **Langfuse란 무엇인가요?**\
+> [Langfuse](https://langfuse.com)는 오픈 소스 AI 엔지니어링 플랫폼입니다. 에이전트의 모든 프롬프트, 모델 응답, 도구 호출에 대한 상세한 트레이싱, 모니터링, 분석을 제공하여 LLM 애플리케이션을 쉽게 디버그, 평가, 반복할 수 있게 해줍니다.
+
+<Steps>
+## 1단계: 의존성 설치
+
+```python
+%pip install langfuse claude-agent-sdk openinference-instrumentation-claude-agent-sdk -q
+```
+
+## 2단계: 환경 변수 설정
+
+**Langfuse** API 키([Langfuse Cloud](https://cloud.langfuse.com) 또는 [셀프 호스팅](https://langfuse.com/self-hosting))와 **Anthropic** API 키([Anthropic Console](https://console.anthropic.com/))를 설정합니다.
+
+```python
+import os
+
+# Get keys for your project from the project settings page: https://cloud.langfuse.com
+os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-lf-***")
+os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-lf-***")
+os.environ.setdefault("LANGFUSE_BASE_URL", "https://cloud.langfuse.com") # 🇪🇺 EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+
+# Your Anthropic API key
+os.environ.setdefault("ANTHROPIC_API_KEY", "sk-ant-***")
+```
+
+환경 변수를 설정했으니 이제 Langfuse 클라이언트를 초기화할 수 있습니다. `get_client()`는 환경 변수에 제공된 자격 증명을 사용하여 Langfuse 클라이언트를 초기화합니다.
+
+```python
+from langfuse import get_client
+
+langfuse = get_client()
+
+# Verify connection
+if langfuse.auth_check():
+    print("Langfuse client is authenticated and ready!")
+else:
+    print("Authentication failed. Please check your credentials and host.")
+```
+
+## 3단계: OpenTelemetry 인스트루멘테이션
+
+[OpenInference의 Claude Agent SDK 인스트루멘테이션 라이브러리](https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-claude-agent-sdk)를 사용하여 에이전트 SDK를 계측하고 OpenTelemetry 스팬을 Langfuse로 전송합니다.
+
+```python
+from openinference.instrumentation.claude_agent_sdk import ClaudeAgentSDKInstrumentor
+
+ClaudeAgentSDKInstrumentor().instrument()
+```
+
+## 4단계: Hello World 에이전트 구축하기
+
+모든 도구 호출과 모델 완료는 OpenTelemetry 스팬으로 캡처되어 Langfuse로 전달됩니다.
+
+```python
+import asyncio
+from claude_agent_sdk import (
+    ClaudeAgentOptions,
+    ClaudeSDKClient,
+    tool,
+    create_sdk_mcp_server,
+)
+from typing import Any
+
+@tool(
+    "get_weather",
+    "Gets the current weather for a given city",
+    {
+        "city": str,
+    },
+)
+async def get_weather(args: dict[str, Any]) -> dict[str, Any]:
+    """Simulated weather lookup tool"""
+    city = args["city"]
+
+    # Simulated weather data
+    weather_data = {
+        "Berlin": "Cloudy, 59°F",
+        "New York": "Sunny, 75°F",
+    }
+
+    weather = weather_data.get(city, "Weather data not available")
+    return {"content": [{"type": "text", "text": f"Weather in {city}: {weather}"}]}
+
+
+async def main():
+    # Create SDK MCP server with the weather tool
+    weather_server = create_sdk_mcp_server(
+        name="weather",
+        version="1.0.0",
+        tools=[get_weather],
+    )
+
+    options = ClaudeAgentOptions(
+        model="claude-sonnet-4-5-20250929",
+        system_prompt="You are a friendly travel assistant who helps with weather information.",
+        mcp_servers={"weather": weather_server},
+        allowed_tools=["mcp__weather__get_weather"],
+    )
+
+    async with ClaudeSDKClient(options=options) as client:
+        await client.query("What's the weather like in Berlin and New York?")
+
+        async for message in client.receive_response():
+            print(message)
+
+
+await main()
+```
+
+## 5단계: Langfuse에서 트레이스 보기
+
+**Langfuse 대시보드 → Traces**로 이동하세요. 모든 도구 호출과 모델 입력/출력을 포함한 트레이스를 확인할 수 있습니다.
+
+![Claude Agent SDK example trace in Langfuse](https://langfuse.com/images/cookbook/integration_claude_agent_sdk/claude-agent-sdk-example-trace.png)
+
+[Langfuse에서 트레이스 보기](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/ff1e1c6309735ff53b94bffedfa98b70?observation=94fa8777d45b1545&timestamp=2026-05-11T07:49:30.913Z&traceId=ff1e1c6309735ff53b94bffedfa98b70)
+
+</Steps>
+
+import LearnMore from "@/components-mdx/integration-learn-more.mdx";
+
+<LearnMore />

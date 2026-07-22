@@ -1,0 +1,99 @@
+---
+source: ⚠️ Jupyter Notebook
+title: Portkey LLM 게이트웨이를 Langfuse와 통합하기
+sidebarTitle: Portkey
+logo: /images/integrations/portkey_icon.svg
+description: OpenAI SDK를 통해 Langfuse로 Portkey의 AI 게이트웨이를 사용해 250개 이상의 LLM 모델에 접근하는 가이드입니다.
+category: Integrations
+---
+
+# Portkey LLM 게이트웨이를 위한 Langfuse 관측성
+
+이 가이드에서는 Portkey의 AI 게이트웨이를 Langfuse와 통합하는 방법을 보여드립니다. Portkey의 API 엔드포인트는 OpenAI SDK와 완전히 [호환](https://portkey.ai/docs/api-reference/inference-api/introduction)되므로, AI 애플리케이션을 원활하게 트레이싱하고 모니터링할 수 있습니다.
+
+> **Portkey란?** [Portkey](https://portkey.ai/)는 250개 이상의 AI 모델과 상호작용할 수 있는 통합 인터페이스를 제공하는 AI 게이트웨이로, Generative AI 애플리케이션의 제어, 가시성, 보안을 위한 고급 도구를 제공합니다.
+
+> **Langfuse란?** [Langfuse](https://langfuse.com)는 팀이 LLM 호출을 트레이싱하고, 성능을 모니터링하며, AI 애플리케이션의 문제를 디버그하도록 돕는 오픈소스 AI 엔지니어링 플랫폼입니다.
+
+<Steps>
+## 1단계: 의존성 설치
+
+```python
+%pip install openai langfuse portkey_ai
+```
+
+## 2단계: 환경 변수 설정
+
+다음으로 Langfuse API 키를 설정하세요. 무료 [Langfuse Cloud](https://langfuse.com/cloud) 계정에 가입하거나 [Langfuse를 셀프 호스팅](https://langfuse.com/self-hosting)하면 이 키를 얻을 수 있습니다. 이 환경 변수는 Langfuse 클라이언트가 인증하고 Langfuse 프로젝트로 데이터를 전송하는 데 필수적입니다.
+
+```python
+import os
+
+# Get keys for your project from the project settings page: https://cloud.langfuse.com
+os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-lf-...")
+os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-lf-...")
+os.environ.setdefault("LANGFUSE_BASE_URL", "https://cloud.langfuse.com") # 🇪🇺 EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+```
+
+```python
+from langfuse import get_client
+
+get_client().auth_check()
+```
+
+    True
+
+## 3단계: Langfuse OpenAI 드롭인 대체 사용하기
+
+다음으로, Langfuse의 OpenAI 호환 클라이언트(from langfuse.openai import OpenAI)를 사용해 Portkey 게이트웨이를 통해 전송되는 모든 요청을 트레이싱할 수 있습니다. LLM 게이트웨이와 가상 LLM 키의 자세한 설정 방법은 [Portkey 문서](https://portkey.ai/docs/product/ai-gateway)를 참고하세요.
+
+```python
+from langfuse.openai import OpenAI
+from portkey_ai import createHeaders, PORTKEY_GATEWAY_URL
+
+client = OpenAI(
+    api_key="xxx", #Since we are using a virtual key we do not need this
+    base_url = PORTKEY_GATEWAY_URL,
+    default_headers = createHeaders(
+    api_key = "***",
+    virtual_key = "***"
+    )
+)
+```
+
+## 4단계: 예제 실행하기
+
+```python
+response = client.chat.completions.create(
+  model="gpt-4o",  # Or any model supported by your chosen provider
+  messages=[
+    {"role": "system", "content": "You are a helpful assistant."},
+    {"role": "user", "content": "What are the benefits of using an AI gateway?"},
+  ],
+)
+print(response.choices[0].message.content)
+
+# Flush via global client
+langfuse = get_client()
+langfuse.flush()
+```
+
+## 5단계: Langfuse에서 트레이스 확인하기
+
+예제를 실행한 후 Langfuse에 로그인하여 다음을 포함한 상세한 트레이스를 확인하세요:
+
+- 요청 매개변수
+- 응답 콘텐츠
+- 토큰 사용량과 지연 시간 메트릭
+- Portkey 게이트웨이를 통한 LLM 모델 정보
+
+![Langfuse Trace Example](https://langfuse.com/images/cookbook/integration-portkey/portkey-example-trace.png)
+
+_[Langfuse의 공개 예제 트레이스 링크](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/4a2391624dcd7478e56d188f55379049?timestamp=2025-07-01T13:54:00.114Z&display=details)_
+
+</Steps>
+
+import LearnMore from "@/components-mdx/integration-learn-more.mdx";
+
+<LearnMore />

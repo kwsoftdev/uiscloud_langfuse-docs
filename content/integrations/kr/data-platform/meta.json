@@ -1,0 +1,10 @@
+{
+  "title": "데이터 플랫폼",
+  "pages": [
+    "[공개 API](/docs/api-and-data-platform/overview)",
+    "[S3로 내보내기](/docs/api-and-data-platform/features/export-to-blob-storage)",
+    "[메트릭 API](/docs/metrics/features/metrics-api)",
+    "[프롬프트 웹훅](/docs/prompt-management/features/webhooks-slack-integrations)",
+    "[Blob Storage로 내보내기 (예: S3)](/docs/api-and-data-platform/features/export-to-blob-storage)"
+  ]
+}

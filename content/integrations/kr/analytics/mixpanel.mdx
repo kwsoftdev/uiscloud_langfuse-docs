@@ -1,0 +1,203 @@
+---
+title: Langfuse와 함께하는 LLM 앱용 Mixpanel
+sidebarTitle: Mixpanel
+logo: /images/integrations/mixpanel_icon.svg
+description: Mixpanel 대시보드에 Langfuse 메트릭을 표시하세요.
+---
+
+# Mixpanel 통합
+
+[Mixpanel](https://mixpanel.com)은 제품 분석을 위해 널리 사용되는 도구입니다. Langfuse는 기본적으로 [메트릭](/docs/metrics/overview)을 제공하지만, 많은 사용자가 **Langfuse로 수집한 LLM 관련 메트릭을 Mixpanel 대시보드에 통합**하는 방법을 요청해 왔습니다.
+
+Mixpanel의 Ryan과 함께 진행한 이 통합의 엔드투엔드 데모입니다:
+
+<iframe
+  width="100%"
+  src="https://www.youtube-nocookie.com/embed/2hZjU1XqxRQ?si=HnW_PX9nMfWHptEV"
+  title="Mixpanel integration"
+  frameBorder="0"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+  className="aspect-video rounded border mt-6"
+  allowFullScreen
+></iframe>
+
+다음과 같은 질문에 쉽게 답할 수 있도록 통합 기능을 구축했습니다:
+
+- _"가장 활발한 사용자가 내 LLM 콘텐츠에도 가장 많이 참여하는 사용자인가?"_
+- _"LLM 기능과 상호작용하는 것이 더 높은 리텐션(재방문)율과 관련이 있는가?"_
+- _"LLM 기능이 전환율에 어떤 영향을 미치는가?"_
+- _"Langfuse에서 수집한 사용자 피드백이 Mixpanel에서 확인하는 사용자 행동과 상관관계가 있는가?"_
+
+## 예시 대시보드
+
+[Langfuse 예시 프로젝트](/demo)에 이 통합을 활성화하고, Mixpanel의 `AI Company KPIs` 템플릿을 사용해 대시보드를 만들었습니다. 대시보드 미리보기([공개 링크](https://eu.mixpanel.com/p/V92wFA5YwNjKn9K9vcUmAX)):
+
+<Video
+  src="https://static.langfuse.com/docs-videos/mixpanel-dashboard.mp4"
+  aspectRatio={1768 / 1080}
+  gifStyle
+/>
+
+## 시작하기
+
+<Steps>
+
+### 통합 활성화
+
+Langfuse 프로젝트 설정에서 이 통합을 구성하세요. Mixpanel 리전을 선택하고 Mixpanel Project Token을 입력해야 합니다.
+
+**사용 가능한 리전:**
+
+- US (api.mixpanel.com)
+- EU (api-eu.mixpanel.com)
+- India (api-in.mixpanel.com)
+
+Mixpanel 프로젝트 설정의 "Project Settings" > "Project Token"에서 Project Token을 확인할 수 있습니다.
+
+### 초기 동기화
+
+통합이 완료되면 Langfuse는 프로젝트의 모든 과거 데이터를 Mixpanel로 동기화합니다. 초기 동기화 이후에는 Mixpanel 대시보드를 최신 상태로 유지하기 위해 매시간(30분 지연) 새로운 데이터가 자동으로 동기화됩니다.
+
+### Mixpanel에서 대시보드 만들기
+
+통합이 완료되면 Mixpanel에서 대시보드를 만들어 Langfuse 메트릭을 시각화할 수 있습니다([아래 참조](#details) 참고).
+
+다양한 공통 메트릭이 포함된 사전 제작 대시보드로 빠르게 시작하려면 `AI Company KPIs` 템플릿을 사용하세요. 예시는 위의 대시보드 미리보기를 참고하세요.
+
+</Steps>
+
+## 내보내기 소스 (Fast Preview, Langfuse v4)
+
+이제 Mixpanel 통합에는 `Export Source` 선택 기능이 포함됩니다. 새 통합은 기본적으로 `Enriched observations (recommended)`를 사용합니다(트레이스 속성이 관측값에 직접 설정됩니다).
+
+이 소스는 트레이스 속성이 포함된 enriched observation을 사용하며, 훨씬 더 나은 내보내기 성능을 제공합니다. 선택한 소스와 관계없이 `Scores`는 항상 포함됩니다.
+
+사용 가능한 옵션:
+
+- `Traces and observations (legacy)`
+- `Traces and observations (legacy) and enriched observations`
+- `Enriched observations (recommended)`
+
+<Callout type="info">
+**2026-05-20 이후 생성된 Cloud 프로젝트**는 Export Source 선택 기능을 볼 수 없습니다 — 새로운 Cloud 프로젝트는 자동으로 `Enriched observations (recommended)`를 사용합니다. 컷오프 이전 Cloud 프로젝트와 모든 셀프 호스팅 배포는 전체 선택지를 계속 사용할 수 있습니다.
+</Callout>
+
+<Callout type="warning">
+`Traces and observations (legacy)` 소스는 향후 지원이 중단될 수 있습니다. 모든 새 내보내기 작업은 `Enriched observations (recommended)`를 사용해야 하며, 기존 레거시 작업도 업그레이드할 것을 강력히 권장합니다.
+</Callout>
+
+### 기존 설정의 업그레이드 경로
+
+이 마이그레이션 경로는 **컷오프 이전 Cloud 프로젝트와 셀프 호스팅 배포**에 적용됩니다. 컷오프 이후 Cloud 프로젝트는 이미 `Enriched observations (recommended)`를 사용하며 레거시 소스를 선택할 수 없습니다.
+
+기존 통합은 변경하기 전까지 계속 `Traces and observations (legacy)`를 사용합니다.
+
+안전하게 마이그레이션하려면:
+
+1. `Traces and observations (legacy) and enriched observations`로 전환합니다.
+2. 두 소스가 모두 내보내지는 동안 다운스트림 대시보드, 변환, 알림을 검증합니다(이 모드는 설계상 중복 레코드를 생성합니다).
+3. 검증이 완료되면 `Enriched observations (recommended)`로 전환합니다.
+
+롤아웃 세부 사항은 [Simplify for Scale 체인지로그](/changelog/2026-03-10-simplify-for-scale)를 참고하세요.
+
+## 통합 세부 정보 [#details]
+
+Langfuse는 매시간 집계된 이벤트와 메트릭을 배치로 묶어 Mixpanel 인스턴스로 전송합니다.
+
+### 메타데이터 매칭
+
+메타데이터를 매칭하면 Langfuse의 데이터와 Mixpanel의 데이터를 연결하는 데 도움이 됩니다:
+
+| Langfuse                                                      | Mixpanel                  | 참고                                                                                                                       |
+| ------------------------------------------------------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| [`user_id`](/docs/observability/features/users)               | `distinct_id`, `$user_id` |                                                                                                                            |
+| `trace.timestamp`, `generation.started_at`, `score.timestamp` | `time`                    | epoch 이후 밀리초 단위로 전송됨                                                                                            |
+| `trace.metadata.$mixpanel_session_id`                         | `session_id`              | 선택 사항이며, Langfuse 트레이스 [메타데이터](/docs/observability/features/metadata)에 Mixpanel 세션 ID를 추가해야 합니다. |
+
+### 이벤트
+
+이 통합은 다음 이벤트를 Mixpanel로 전송합니다.
+
+추가로 필요한 정보가 있으신가요? [여기](/ideas)에서 더 많은 이벤트나 속성을 요청할 수 있습니다.
+
+#### Event: `[Langfuse] Trace`
+
+- `time`: 이벤트가 발생한 시점의 epoch 이후 밀리초.
+- `distinct_id`: 사용자 ID 또는 익명 식별자.
+- `$user_id`: Mixpanel의 네이티브 사용자 ID 필드로 전송되는 사용자 ID.
+- `$insert_id`: 중복 제거를 위한 고유 식별자.
+- `session_id`: 선택적 세션 식별자(메타데이터의 `$mixpanel_session_id`에서 가져오거나, 없으면 Langfuse session_id를 사용).
+- `langfuse_trace_name`: 트레이스의 이름.
+- `langfuse_url`: 트레이스의 URL.
+- `langfuse_user_url`: Langfuse의 사용자 프로필로 연결되는 딥링크.
+- `langfuse_id`: 트레이스의 고유 식별자.
+- `langfuse_cost_usd`: 트레이스와 관련된 총 비용.
+- `langfuse_count_observations`: 트레이스 내 관측값(observation) 개수.
+- `langfuse_session_id`: 이벤트와 관련된 세션 ID.
+- `langfuse_project_id`: 이벤트와 관련된 프로젝트의 ID.
+- `langfuse_user_id`: 이벤트와 관련된 사용자 ID. null인 경우 langfuse_unknown_user로 표시됩니다.
+- `langfuse_latency`: 이벤트의 지연 시간(latency).
+- `langfuse_release`: 이벤트 릴리스와 관련된 정보.
+- `langfuse_version`: 이벤트의 버전.
+- `langfuse_tags`: 이벤트와 관련된 태그.
+- `langfuse_environment`: 트레이스와 관련된 환경(environment).
+- `langfuse_event_version`: Langfuse 통합 버전.
+
+#### Event: `[Langfuse] Generation`
+
+- `time`: 생성(generation)이 시작된 시점의 epoch 이후 밀리초.
+- `distinct_id`: 사용자 ID 또는 익명 식별자.
+- `$user_id`: Mixpanel의 네이티브 사용자 ID 필드로 전송되는 사용자 ID.
+- `$insert_id`: 중복 제거를 위한 고유 식별자.
+- `session_id`: 선택적 세션 식별자(메타데이터의 `$mixpanel_session_id`에서 가져오거나, 없으면 Langfuse session_id를 사용).
+- `langfuse_generation_name`: 생성(generation)의 이름.
+- `langfuse_trace_name`: 생성과 관련된 트레이스의 이름.
+- `langfuse_trace_id`: 생성과 관련된 트레이스의 고유 식별자.
+- `langfuse_url`: 호스트 플랫폼에서의 생성 URL.
+- `langfuse_user_url`: Langfuse의 사용자 프로필로 연결되는 딥링크.
+- `langfuse_id`: 생성의 고유 식별자.
+- `langfuse_cost_usd`: 계산된 생성의 총 비용.
+- `langfuse_input_units`: 생성을 프롬프팅하는 데 사용된 토큰 수.
+- `langfuse_output_units`: 생성으로 산출된 토큰 수.
+- `langfuse_total_units`: 생성 과정에서 소비된 총 토큰 수.
+- `langfuse_session_id`: 생성의 트레이스와 관련된 세션 ID.
+- `langfuse_project_id`: 생성이 발생한 프로젝트의 식별자.
+- `langfuse_user_id`: 생성과 연결된 트레이스를 시작한 사용자 ID. 사용할 수 없는 경우 기본값으로 `langfuse_unknown_user`가 사용됩니다.
+- `langfuse_latency`: 관측된 생성의 지연 시간.
+- `langfuse_time_to_first_token`: 스트리밍 시 첫 토큰을 생성하는 데 걸린 시간.
+- `langfuse_release`: 생성에 연결된 트레이스의 릴리스 정보.
+- `langfuse_version`: 생성에 대한 버전 정보.
+- `langfuse_model`: 이 생성 과정에서 사용된 모델.
+- `langfuse_level`: 생성과 관련된 레벨.
+- `langfuse_tags`: 생성의 트레이스에 첨부된 태그.
+- `langfuse_environment`: 생성과 관련된 환경.
+- `langfuse_event_version`: Langfuse와의 통합 버전.
+
+#### Event: `[Langfuse] Score`
+
+- `time`: 스코어 이벤트가 발생한 시점의 epoch 이후 밀리초.
+- `distinct_id`: 사용자 ID 또는 익명 식별자.
+- `$user_id`: Mixpanel의 네이티브 사용자 ID 필드로 전송되는 사용자 ID.
+- `$insert_id`: 중복 제거를 위한 고유 식별자.
+- `session_id`: 선택적 세션 식별자(메타데이터의 `$mixpanel_session_id`에서 가져오거나, 없으면 Langfuse session_id를 사용).
+- `langfuse_score_name`: 스코어와 관련된 이름.
+- `langfuse_score_value`: 스코어의 값.
+- `langfuse_score_string_value`: 스코어의 문자열 값. BOOLEAN 및 CATEGORICAL 스코어의 경우 값의 문자열 표현입니다.
+- `langfuse_score_data_type`: 스코어의 데이터 타입(NUMERIC, BOOLEAN, CATEGORICAL).
+- `langfuse_score_comment`: 스코어에 첨부된 코멘트.
+- `langfuse_score_metadata`: 스코어에 첨부된 메타데이터.
+- `langfuse_trace_name`: 스코어와 관련된 트레이스의 이름.
+- `langfuse_trace_id`: 스코어와 관련된 트레이스의 고유 식별자.
+- `langfuse_user_url`: Langfuse의 사용자 프로필로 연결되는 딥링크.
+- `langfuse_id`: 스코어의 고유 식별자.
+- `langfuse_session_id`: 스코어의 트레이스와 관련된 세션 식별자.
+- `langfuse_project_id`: 스코어의 트레이스와 연결된 프로젝트 식별자.
+- `langfuse_user_id`: 스코어와 연결된 트레이스를 트리거한 사용자 ID. 사용할 수 없는 경우 기본값으로 `langfuse_unknown_user`가 사용됩니다.
+- `langfuse_release`: 스코어와 관련된 트레이스의 릴리스 정보.
+- `langfuse_tags`: 스코어의 트레이스와 관련된 태그.
+- `langfuse_environment`: 스코어와 관련된 환경.
+- `langfuse_event_version`: Langfuse와의 통합 버전.
+
+## 문제 해결
+
+**Mixpanel에 데이터가 표시되지 않나요?** Langfuse 프로젝트 설정에서 Mixpanel 리전을 올바르게 선택했는지, Project Token을 올바르게 입력했는지 확인하세요. 이 통합은 30분 지연을 두고 매시간 데이터를 동기화하므로, 새 이벤트가 나타나기까지 약간의 지연이 있을 수 있습니다. 통합에 관해 다른 문제가 발생하면 저희에게 문의해 주세요.

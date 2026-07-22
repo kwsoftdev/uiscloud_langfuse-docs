@@ -1,0 +1,108 @@
+---
+source: ⚠️ Jupyter Notebook
+title: Langfuse로 CometAPI 모니터링하기
+sidebarTitle: CometAPI
+logo: /images/integrations/cometapi_icon.svg
+description: OpenAI 드롭인 대체를 사용하여 CometAPI를 Langfuse와 통합하는 방법을 알아보세요.
+category: Integrations
+---
+
+# Langfuse로 CometAPI 옵저버빌리티 구현하기
+
+이 가이드는 CometAPI를 Langfuse와 통합하는 방법을 보여줍니다. 채팅, 언어 및 코드를 위한 CometAPI의 API 엔드포인트는 OpenAI의 API와 완전히 호환됩니다. 이를 통해 Langfuse OpenAI 드롭인 대체를 사용하여 애플리케이션의 모든 부분을 트레이싱할 수 있습니다.
+
+> **CometAPI란 무엇인가요?** [CometAPI](https://www.cometapi.com/?utm_source=langfuse&utm_campaign=integration&utm_medium=integration&utm_content=integration)는 단일 OpenAI 호환 인터페이스를 통해 500개 이상의 AI 모델에 접근할 수 있는 통합 AI 모델 API 플랫폼입니다. 채팅 모델, 임베딩, 또는 특수한 AI 기능이 필요하든, CometAPI는 간단한 통합으로 저렴하고 안정적인 접근을 제공합니다.
+
+> **Langfuse란 무엇인가요?** [Langfuse](https://langfuse.com)는 팀이 API 호출을 트레이싱하고, 성능을 모니터링하고, LLM 애플리케이션의 문제를 디버그하는 데 도움을 주는 오픈 소스 AI 엔지니어링 플랫폼입니다.
+
+<Steps>
+## 1단계: 종속성 설치
+
+필요한 Python 패키지가 설치되어 있는지 확인하세요.
+
+```python
+%pip install openai langfuse
+```
+
+## 2단계: 환경 변수 설정
+
+```python
+import os
+
+# Get keys for your project from the project settings page
+# https://cloud.langfuse.com
+
+os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-...")
+os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-...")
+os.environ.setdefault("LANGFUSE_BASE_URL", "https://cloud.langfuse.com") # 🇪🇺 EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+
+
+# Get your CometAPI API key from https://api.cometapi.com/console/token
+os.environ.setdefault("COMETAPI_KEY", "...")
+```
+
+## 3단계: Langfuse OpenAI 드롭인 대체
+
+이 단계에서는 `from langfuse.openai import openai`를 임포트하여 네이티브 [OpenAI 드롭인 대체](https://langfuse.com/integrations/model-providers/openai-py)를 사용합니다.
+
+CometAPI를 OpenAI의 클라이언트 라이브러리와 함께 사용하려면, `api_key` 옵션에 CometAPI API 키를 전달하고 `base_url`을 `https://api.cometapi.com/v1/`로 변경하세요:
+
+```python
+# instead of import openai:
+from langfuse.openai import openai
+
+client = openai.OpenAI(
+  api_key=os.environ.get("COMETAPI_KEY"),
+  base_url="https://api.cometapi.com/v1/",
+)
+```
+
+<Callout type="info" emoji="ℹ️">
+**참고:** OpenAI 드롭인 대체는 [Low-Level Langfuse Python SDK](https://langfuse.com/docs/sdk/python/low-level-sdk) 및 [`@observe()` 데코레이터](https://langfuse.com/docs/sdk/python/decorators)와 완전히 호환되어 애플리케이션의 모든 부분을 트레이싱할 수 있습니다.
+
+</Callout>
+
+## 4단계: 예시 실행하기
+
+다음 셀은 트레이싱된 OpenAI 클라이언트를 사용하여 CometAPI의 채팅 모델을 호출하는 방법을 보여줍니다. 모든 API 호출은 Langfuse에 의해 자동으로 트레이싱됩니다.
+
+```python
+client = openai.OpenAI(
+  api_key=os.environ.get("COMETAPI_KEY"),
+  base_url="https://api.cometapi.com/v1/",
+)
+
+response = client.chat.completions.create(
+  model="gpt-4o-mini",
+  messages=[
+    {"role": "system", "content": "Act like you are a helpful assistant."},
+    {"role": "user", "content": "What are the famous attractions in San Francisco?"},
+  ]
+)
+
+print(response.choices[0].message.content)
+```
+
+## 5단계: Langfuse에서 트레이스 확인하기
+
+예시 모델 호출을 실행한 후 Langfuse에서 트레이스를 확인할 수 있습니다. CometAPI API 호출에 대한 다음과 같은 상세 정보를 확인할 수 있습니다:
+
+- 요청 매개변수(모델, 메시지, temperature 등)
+- 응답 콘텐츠
+- 토큰 사용량 통계
+- 지연 시간 메트릭
+
+_Langfuse의 예시 트레이스 링크_
+
+</Steps>
+
+import LearnMore from "@/components-mdx/integration-learn-more.mdx";
+
+<LearnMore />
+
+## 참고 자료
+
+- 사용 가능한 모델과 API 옵션에 대한 자세한 내용은 [CometAPI 문서](https://api.cometapi.com/doc)를 확인하세요.
+- API 키를 발급받고 500개 이상의 AI 모델을 살펴보려면 [CometAPI](https://www.cometapi.com/?utm_source=langfuse&utm_campaign=integration&utm_medium=integration&utm_content=integration)를 방문하세요.
+- LLM 애플리케이션의 모니터링 및 트레이싱 기능에 대해 더 알아보려면 [Langfuse](https://langfuse.com)를 방문하세요.

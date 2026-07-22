@@ -1,0 +1,132 @@
+---
+source: ⚠️ Jupyter Notebook
+title: Langfuse로 BeeAI 에이전트 관찰하기
+sidebarTitle: BeeAI
+logo: /images/integrations/beeai_icon.png
+logoAppearance: dark
+description: AI 에이전트 애플리케이션의 포괄적인 트레이싱과 디버깅을 위해 Langfuse와 BeeAI Framework를 통합하는 방법을 알아보세요.
+category: Integrations
+---
+
+# Langfuse에서 BeeAI 에이전트 트레이싱하기
+
+이 노트북은 OpenTelemetry 인스트루멘테이션을 사용하여 BeeAI Framework 애플리케이션을 Langfuse로 트레이싱하고 관찰하는 방법을 보여줍니다.
+
+> **BeeAI란 무엇인가요?** [BeeAI Framework](https://beeai.dev/)는 [IBM Research](https://research.ibm.com/blog/bee-ai-app)가 개발한 포괄적인 툴킷으로, 지능적이고 자율적인 에이전트와 멀티 에이전트 시스템을 구축하기 위한 것입니다. Python과 TypeScript 모두에서 추론하고, 행동을 취하고, 복잡한 문제를 해결하기 위해 협력할 수 있는 에이전트를 만드는 데 필요한 모든 것을 제공합니다.
+
+> **Langfuse란 무엇인가요?** [Langfuse](https://langfuse.com)는 LLM 관찰 가능성 및 모니터링을 위한 오픈 소스 플랫폼입니다. 메타데이터, 프롬프트 상세 정보, 토큰 사용량, 지연 시간 등을 캡처하여 AI 애플리케이션을 트레이싱하고 모니터링하는 데 도움을 줍니다.
+
+<Steps>
+## 1단계: 의존성 설치
+
+시작하기 전에 Python 환경에 필요한 패키지를 설치하세요:
+
+```python
+%pip install beeai-framework langfuse openinference-instrumentation-beeai "beeai-framework[wikipedia]"
+```
+
+## 2단계: Langfuse SDK 구성
+
+다음으로 Langfuse API 키를 설정합니다. 무료 [Langfuse Cloud](https://langfuse.com/cloud) 계정에 가입하거나 [Langfuse를 셀프 호스팅](https://langfuse.com/self-hosting)하여 이 키를 얻을 수 있습니다. 이 환경 변수들은 Langfuse 클라이언트가 인증하고 Langfuse 프로젝트로 데이터를 전송하는 데 필수적입니다.
+
+LLM 공급자 자격 증명도 구성해야 합니다. BeeAI Framework는 OpenAI, Ollama, watsonx.ai 등 여러 공급자를 지원합니다.
+
+```python
+import os
+
+# Get keys for your project from the project settings page: https://cloud.langfuse.com
+os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-lf-...")
+os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-lf-...")
+os.environ.setdefault("LANGFUSE_BASE_URL", "https://cloud.langfuse.com") # 🇪🇺 EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+
+# Your LLM provider API key (example with OpenAI, adjust for your provider)
+os.environ.setdefault("OPENAI_API_KEY", "sk-proj-...")
+# For Ollama (local), no API key needed
+# For other providers, set appropriate environment variables
+
+```
+
+환경 변수를 설정했으니 이제 Langfuse 클라이언트를 초기화할 수 있습니다. `get_client()`는 환경 변수에 제공된 자격 증명을 사용하여 Langfuse 클라이언트를 초기화합니다.
+
+```python
+from langfuse import get_client
+
+# Initialise Langfuse client and verify connectivity
+langfuse = get_client()
+assert langfuse.auth_check(), "Langfuse auth failed - check your keys ✋"
+
+```
+
+## 3단계: OpenTelemetry 인스트루멘테이션
+
+[`BeeAIInstrumentor`](https://github.com/Arize-ai/openinference/tree/main/python/instrumentation/openinference-instrumentation-beeai) 라이브러리를 사용하여 [BeeAI Framework](https://framework.beeai.dev) 호출을 래핑하고 OpenTelemetry 스팬을 Langfuse로 전송합니다.
+
+```python
+from openinference.instrumentation.beeai import BeeAIInstrumentor
+
+BeeAIInstrumentor().instrument()
+```
+
+## 4단계: 예제 실행하기
+
+```python
+import asyncio
+from beeai_framework.agents.react import ReActAgent
+from beeai_framework.agents.types import AgentExecutionConfig
+from beeai_framework.backend.chat import ChatModel
+from beeai_framework.backend.types import ChatModelParameters
+from beeai_framework.memory import TokenMemory
+from beeai_framework.tools.search.wikipedia import WikipediaTool
+from beeai_framework.tools.weather.openmeteo import OpenMeteoTool
+
+# Initialize the language model
+llm = ChatModel.from_name(
+    "openai:gpt-4o-mini",  # or "ollama:granite3.3:8b" for local Ollama
+    ChatModelParameters(temperature=0.7),
+)
+
+# Create tools for the agent
+tools = [
+    WikipediaTool(),
+    OpenMeteoTool(),
+]
+
+# Create a ReAct agent with memory
+agent = ReActAgent(
+    llm=llm,
+    tools=tools,
+    memory=TokenMemory(llm)
+)
+
+# Run the agent
+async def main():
+    response = await agent.run(
+        prompt="I'm planning a trip to Barcelona, Spain. Can you research key attractions and landmarks I should visit, and also tell me what the current weather conditions are like there?",
+        execution=AgentExecutionConfig(
+            max_retries_per_step=3,
+            total_max_retries=10,
+            max_iterations=5
+        ),
+    )
+    print("Agent Response:", response.result.text)
+    return response
+
+# Run the example
+response = await main()
+
+```
+
+### Langfuse에서 트레이스 보기
+
+애플리케이션을 실행한 후 Langfuse 트레이스 테이블로 이동하세요. 애플리케이션 실행에 대한 상세한 트레이스를 확인할 수 있으며, 에이전트 대화, 도구 호출, LLM 상호작용, 입력, 출력, 성능 메트릭에 대한 인사이트를 얻을 수 있습니다.
+
+![Langfuse Trace](https://langfuse.com/images/cookbook/integration_beeai/beeai-trace.png)
+
+[Langfuse에서 트레이스 보기](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/096fc09a30ab90d2431778f9ee2b3936?timestamp=2025-08-01T13%3A56%3A54.163Z&display=details)
+
+</Steps>
+
+import LearnMore from "@/components-mdx/integration-learn-more.mdx";
+
+<LearnMore />

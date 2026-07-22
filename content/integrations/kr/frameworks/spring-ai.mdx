@@ -1,0 +1,305 @@
+---
+title: OpenTelemetry를 사용하여 Langfuse와 Spring AI 통합하기
+sidebarTitle: Spring AI
+logo: /images/integrations/spring_icon.svg
+description: OpenTelemetry를 사용하여 Langfuse를 Spring AI와 통합하여 AI 애플리케이션의 옵저버빌리티와 성능 모니터링을 강화하는 방법을 알아보세요.
+---
+
+# Langfuse와 Spring AI 통합하기
+
+이 가이드는 OpenTelemetry를 사용하여 [Langfuse](/)를 [Spring AI](https://docs.spring.io/spring-ai/reference)와 통합하는 방법을 보여줍니다.
+
+**Spring AI**: AI 호출에 대한 내장 OTel 트레이싱을 갖춘 Spring 기반 AI 개발 프레임워크입니다.
+
+**Langfuse**: 옵저버빌리티, 평가, 프롬프트 관리를 위한 오픈소스 AI 엔지니어링 플랫폼입니다.
+
+<Callout type="info" emoji="💡">
+  완전히 계측된 예제 애플리케이션은 [Langfuse 예제
+  저장소](https://github.com/langfuse/langfuse-examples/tree/main/applications/spring-ai-demo)를 확인하세요.
+</Callout>
+
+## 1단계: Spring AI에서 OpenTelemetry 활성화하기
+
+**OpenTelemetry 및 Spring Observability 종속성 추가** (Maven):
+
+프로젝트에 Spring Boot Actuator와 OpenTelemetry를 위한 Micrometer 트레이싱 라이브러리가 포함되어 있는지 확인하세요. Micrometer의 관찰(observation) 및 트레이싱 기능을 활성화하려면 Spring Boot Actuator가 필요합니다.
+
+또한 Micrometer -> OpenTelemetry 브리지와 OTLP 익스포터도 필요합니다. Maven의 경우 `pom.xml`에 다음을 추가하세요 (Gradle 사용자는 Gradle에서 동등한 좌표를 포함할 수 있습니다):
+
+```xml
+<dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>io.opentelemetry.instrumentation</groupId>
+            <artifactId>opentelemetry-instrumentation-bom</artifactId>
+            <version>2.28.1</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-bom</artifactId>
+            <version>1.0.9</version> <!-- Check for the latest 1.0.x release -->
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.ai</groupId>
+        <artifactId>spring-ai-starter-model-openai</artifactId>
+    </dependency>
+    <!-- Web server context required for Spring Boot auto-configuration and the actuator observability endpoints -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>io.opentelemetry.instrumentation</groupId>
+        <artifactId>opentelemetry-spring-boot-starter</artifactId>
+    </dependency>
+    <!-- Spring Boot Actuator for observability support -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+    <!-- Micrometer Observation -> OpenTelemetry bridge -->
+    <dependency>
+        <groupId>io.micrometer</groupId>
+        <artifactId>micrometer-tracing-bridge-otel</artifactId>
+    </dependency>
+    <!-- OpenTelemetry OTLP exporter for traces -->
+    <dependency>
+        <groupId>io.opentelemetry</groupId>
+        <artifactId>opentelemetry-exporter-otlp</artifactId>
+    </dependency>
+</dependencies>
+```
+
+**스팬 내보내기 활성화 및 Spring AI Observation 구성** (`application.yml`):
+
+위의 종속성을 사용하면 적절한 설정을 제공하는 한 Spring Boot는 OpenTelemetry를 사용하여 트레이싱을 자동으로 구성합니다. 스팬을 어디로 보낼지(OTLP 엔드포인트)를 지정하고 Spring AI가 해당 스팬에 원하는 데이터를 포함하도록 설정해야 합니다. 다음 구성으로 `application.yml`(또는 `application.properties`)을 생성하거나 업데이트하세요:
+
+```yaml
+spring:
+  application:
+    name: spring-ai-llm-app # Service name for tracing (appears in Langfuse UI as the source service)
+  ai:
+    chat:
+      observations:
+        log-prompt: true # Include prompt content in tracing (disabled by default for privacy)
+        log-completion: true # Include completion content in tracing (disabled by default)
+management:
+  tracing:
+    sampling:
+      probability: 1.0 # Sample 100% of requests for full tracing (adjust in production as needed)
+  observations:
+    annotations:
+      enabled: true # Enable @Observed (if you use observation annotations in code)
+    enable:
+      "http.server.requests": false # Suppress duplicate Micrometer HTTP server spans
+      "http.client.requests": false # Suppress duplicate Micrometer HTTP client spans
+
+otel:
+  instrumentation:
+    spring-webmvc:
+      enabled: false # Suppress duplicate OTel HTTP server spans
+    spring-web:
+      enabled: false # Suppress duplicate OTel HTTP client spans
+```
+
+`management.observations.enable`과 `otel.instrumentation` 블록은 중복된 HTTP 스팬을 억제합니다. Micrometer와 OpenTelemetry Java 계측 모두 기본적으로 HTTP 스팬을 생성합니다. 둘 다 비활성화하면 트레이스에서 시끄러운 중복 항목이 발생하지 않습니다.
+
+**Observation 필터 추가** (`ChatModelCompletionContentObservationFilter.java`):
+
+<Callout type="warning">
+  이 필터는 Langfuse의 생성(generation) observation에 입력과 출력이 표시되기 위해 **필수적**입니다. 위의 `log-prompt`와 `log-completion` 속성은 Spring AI의 observation 컨텍스트 내에서 데이터 수집만 활성화할 뿐, 프롬프트/완성 콘텐츠를 OpenTelemetry 스팬 속성으로 자동 추가하지는 않습니다. 이 필터가 없으면 Langfuse에서 생성 스팬의 입력과 출력이 `null`이 됩니다.
+</Callout>
+
+```java
+package com.langfuse.springai;
+
+import io.micrometer.common.KeyValue;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationFilter;
+import org.springframework.ai.chat.observation.ChatModelObservationContext;
+import org.springframework.ai.content.Content;
+import org.springframework.ai.observation.ObservabilityHelper;
+import org.springframework.stereotype.Component;
+import org.springframework.util.CollectionUtils;
+import org.springframework.util.StringUtils;
+
+import java.util.List;
+
+@Component
+public class ChatModelCompletionContentObservationFilter implements ObservationFilter {
+
+    @Override
+    public Observation.Context map(Observation.Context context) {
+        if (!(context instanceof ChatModelObservationContext chatModelObservationContext)) {
+            return context;
+        }
+
+        var prompts = processPrompts(chatModelObservationContext);
+        var completions = processCompletion(chatModelObservationContext);
+
+        chatModelObservationContext.addHighCardinalityKeyValue(new KeyValue() {
+            @Override
+            public String getKey() {
+                return "gen_ai.prompt";
+            }
+
+            @Override
+            public String getValue() {
+                return ObservabilityHelper.concatenateStrings(prompts);
+            }
+        });
+
+        chatModelObservationContext.addHighCardinalityKeyValue(new KeyValue() {
+            @Override
+            public String getKey() {
+                return "gen_ai.completion";
+            }
+
+            @Override
+            public String getValue() {
+                return ObservabilityHelper.concatenateStrings(completions);
+            }
+        });
+
+        return chatModelObservationContext;
+    }
+
+    private List<String> processPrompts(ChatModelObservationContext chatModelObservationContext) {
+            return CollectionUtils.isEmpty((chatModelObservationContext.getRequest()).getInstructions()) ? List.of() : (chatModelObservationContext.getRequest()).getInstructions().stream().map(Content::getText).toList();
+    }
+
+    private List<String> processCompletion(ChatModelObservationContext context) {
+        if (context.getResponse() != null && (context.getResponse()).getResults() != null && !CollectionUtils.isEmpty((context.getResponse()).getResults())) {
+            return !StringUtils.hasText((context.getResponse()).getResult().getOutput().getText()) ? List.of() : (context.getResponse()).getResults().stream().filter((generation) -> generation.getOutput() != null && StringUtils.hasText(generation.getOutput().getText())).map((generation) -> generation.getOutput().getText()).toList();
+        } else {
+            return List.of();
+        }
+    }
+}
+```
+
+이러한 구성과 종속성을 갖추면 Spring Boot 애플리케이션은 OpenTelemetry 트레이스를 생성할 준비가 됩니다. Spring AI의 내부 호출(예: 채팅 모델을 호출하거나 임베딩을 생성할 때)은 스팬으로 기록됩니다.
+
+각 스팬은 `gen_ai.operation.name`, `gen_ai.system`(제공업체, 예: "openai"), 모델 이름, 토큰 사용량 등의 속성을 가지며 – 이를 활성화했으므로 – 프롬프트 및 응답 콘텐츠에 대한 이벤트도 포함됩니다.
+
+## 2단계: Langfuse 구성하기
+
+이제 Spring AI 애플리케이션이 OpenTelemetry 트레이스 데이터를 내보내고 있으므로 다음 단계는 해당 데이터를 Langfuse로 보내는 것입니다.
+
+이 설정에서 Langfuse는 OpenTelemetry의 "백엔드" 역할을 합니다. 즉, 일반적인 Jaeger/Zipkin/OTel-Collector를 Langfuse의 트레이스 수집 API로 대체하는 것입니다.
+
+**Langfuse 설정**
+
+- [Langfuse Cloud](https://langfuse.com/cloud) 또는 [셀프 호스팅 Langfuse](https://langfuse.com/self-hosting)에 가입하세요.
+- OTLP 엔드포인트(예: `https://cloud.langfuse.com/api/public/otel`)와 API 키를 설정하세요.
+
+인증은 HTTP Basic Auth를 사용합니다: `public_key:secret_key` 쌍을 base64로 인코딩하여 자격 증명을 만든 다음, 표준 OpenTelemetry 환경 변수를 통해(수집 버전 헤더와 함께) 전달합니다:
+
+```bash
+# Build the Basic Auth string from your Langfuse API keys
+export AUTH_STRING=$(echo -n "pk-lf-...:sk-lf-..." | base64 -w0) # Linux
+# macOS (BSD base64 has no -w0): export AUTH_STRING=$(echo -n "pk-lf-...:sk-lf-..." | base64)
+
+export OTEL_EXPORTER_OTLP_ENDPOINT="https://cloud.langfuse.com/api/public/otel" # 🇪🇺 EU data region
+# Other regions: 🇺🇸 US https://us.cloud.langfuse.com/api/public/otel, 🇯🇵 Japan https://jp.cloud.langfuse.com/api/public/otel, ⚕️ HIPAA https://hipaa.cloud.langfuse.com/api/public/otel
+# Self-hosted (>= v3.22.0): http://localhost:3000/api/public/otel
+export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic ${AUTH_STRING},x-langfuse-ingestion-version=4"
+```
+
+<Callout type="info">
+  Basic Auth와 `x-langfuse-ingestion-version` 헤더에 대한 자세한 내용은 [OpenTelemetry: 시작하기](/docs/opentelemetry/get-started)를 참고하세요.
+</Callout>
+
+## 3단계: 테스트 AI 작업 실행하기
+
+Spring Boot 애플리케이션을 시작하세요. Spring AI가 처리하는 AI 작업을 트리거하세요 – 예를 들어, `ChatModel`을 사용하여 완성을 생성하거나 `EmbeddingModel`을 사용하여 임베딩을 생성하는 서비스나 컨트롤러를 호출합니다.
+
+```java
+@Autowired
+private ChatService chatService;
+
+@EventListener(ApplicationReadyEvent.class)
+public void testAiCall() {
+    String answer = chatService.chat("Hello, Spring AI!");
+    System.out.println("AI answered: " + answer);
+}
+```
+
+## userId와 sessionId 설정하기
+
+이 섹션에서는 Spring AI의 스팬을 [사용자](/docs/tracing-features/users) 및 [세션](/docs/tracing-features/sessions)과 연결하는 방법을 다룹니다.
+커스텀 스팬을 만들고 Langfuse 관련 속성을 직접 설정하세요. 아래의 `tracer`는 `opentelemetry-spring-boot-starter`에 의해 자동 구성된, 주입된 OpenTelemetry `Tracer`(`io.opentelemetry.api.trace.Tracer`)이며, `Scope`/`Span`은 OpenTelemetry API(`io.opentelemetry.context.Scope`, `io.opentelemetry.api.trace.Span`)에서 가져옵니다:
+
+```java
+public String processUserRequest(String userInput, String userId) {
+    // Create a new span with user, session, and observation attributes
+    Span span = tracer.spanBuilder("user-interaction")
+            .setAttribute("langfuse.user.id", userId)
+            .setAttribute("langfuse.session.id", UUID.randomUUID().toString())
+            .setAttribute("langfuse.observation.input", userInput)
+            .startSpan();
+
+    // Make sure to set the new span as active.
+    try (Scope ignored = span.makeCurrent()) {
+        // Any spans created within this scope will be children of the parent span
+        String result = performAiOperation(userInput);
+        span.setAttribute("langfuse.observation.output", result);
+        return result;
+    } finally {
+        span.end();
+    }
+}
+
+private String performAiOperation(String userInput) {
+    // Your Spring AI code here
+    // For example:
+    List<Message> messages = new ArrayList<>();
+    messages.add(new SystemMessage("You are a helpful assistant."));
+    messages.add(new UserMessage(userInput));
+
+    Prompt prompt = new Prompt(messages);
+    ChatResponse response = chatModel.call(prompt);
+    return response.getResult().getOutput().getText();
+}
+```
+
+<Callout type="info">
+  Langfuse에서 올바른 사용자 트래킹을 위해서는 `langfuse.user.id`와
+  `langfuse.session.id` 속성을 이상적으로는 루트 스팬에 설정해야 한다는 점에 유의하세요. 루트
+  스팬에 직접 이러한 속성을 추가할 수 없다면 [Langfuse Java
+  SDK](https://github.com/langfuse/langfuse-java)를 사용하여
+  트레이스가 작성된 후에 업데이트할 수 있습니다.
+</Callout>
+
+또한 커스텀 스팬에 `langfuse.observation.input`과 `langfuse.observation.output`을 설정하여 Langfuse에서 해당 observation의 입력/출력 필드를 채울 수 있습니다. 이는 비즈니스 로직이나 다단계 워크플로우를 감싸는 커스텀 스팬에서 무엇이 들어갔고 무엇이 나왔는지 캡처하고 싶을 때 유용합니다.
+
+## 문제 해결
+
+**트레이스가 표시되지 않는 경우:**
+
+- 엔드포인트/자격 증명을 확인하고 AI 호출이 호출되는지 확인하세요.
+- 여러 트레이서 구현을 혼용하지 마세요.
+
+**프롬프트/완성이 누락되는 경우:**
+
+- `log-prompt`와 `log-completion`이 `true`인지 확인하세요.
+- `ChatModelCompletionContentObservationFilter`가 Spring `@Component`로 등록되어 있는지 확인하세요. 이것이 없으면 로깅이 활성화되어 있어도 프롬프트와 완성 데이터가 스팬 속성으로 추가되지 않습니다.
+- 샘플링 확률이 충분히 높아야 합니다.
+
+## GitHub 토론
+
+import { GhDiscussionsPreview } from "@/components/gh-discussions/GhDiscussionsPreview";
+
+<GhDiscussionsPreview labels={["integration-spring-ai"]} />

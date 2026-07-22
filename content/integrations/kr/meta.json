@@ -1,0 +1,16 @@
+{
+  "title": "인테그레이션",
+  "pages": [
+    "import",
+    "index",
+    "native",
+    "frameworks",
+    "model-providers",
+    "gateways",
+    "no-code",
+    "analytics",
+    "data-platform",
+    "developer-tools",
+    "other"
+  ]
+}

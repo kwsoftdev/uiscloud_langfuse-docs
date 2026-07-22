@@ -1,0 +1,144 @@
+---
+title: Langfuse를 통한 VoltAgent 옵저버빌리티
+sidebarTitle: VoltAgent
+logo: /images/integrations/voltagent_icon.png
+description: TypeScript 에이전트 프레임워크인 VoltAgent와 Langfuse를 통합하여 AI 애플리케이션을 모니터링, 디버깅, 분석하는 방법을 알아보세요.
+---
+
+# Langfuse를 통한 VoltAgent 옵저버빌리티
+
+이 가이드는 옵저버빌리티와 트레이싱을 위해 **VoltAgent**에 **Langfuse**를 통합하는 방법을 보여줍니다. 이 단계를 따라가면 Langfuse 대시보드에서 VoltAgent 에이전트를 모니터링하고 디버깅할 수 있게 됩니다.
+
+> **VoltAgent란 무엇인가요?** [VoltAgent](https://github.com/voltagent/voltagent)는 이 필수적인 툴킷 역할을 하는 오픈소스 TypeScript 프레임워크입니다. 모듈식 빌딩 블록, 표준화된 패턴, 추상화를 제공하여 AI 에이전트 애플리케이션의 개발을 단순화합니다. 챗봇, 가상 어시스턴트, 자동화된 워크플로우, 복잡한 다중 에이전트 시스템 중 무엇을 만들든, VoltAgent는 기저의 복잡성을 처리하여 에이전트의 기능과 로직을 정의하는 데 집중할 수 있게 해줍니다.
+
+## 통합
+
+<Steps>
+
+### VoltAgent 프로젝트 만들기
+
+아직 VoltAgent 프로젝트가 없다면 VoltAgent CLI를 사용하여 만들 수 있습니다:
+
+```bash
+npm create voltagent-app@latest
+```
+
+프로젝트 디렉터리로 이동하세요:
+
+```bash
+cd my-voltagent-app
+```
+
+전체 VoltAgent 설치 지침은 [여기](https://voltagent.dev/docs/quick-start/)에서 확인할 수 있습니다.
+
+### Langfuse 프로젝트 설정하기
+
+[Langfuse](https://cloud.langfuse.com)에서 프로젝트를 만들고 프로젝트 설정 페이지에서 API 키를 가져오세요.
+
+### 환경 변수 추가하기
+
+다음 변수로 `.env.development` 파일을 만들거나 업데이트하세요:
+
+```bash
+# Your LLM API key
+OPENAI_API_KEY=your-api-key
+
+# Langfuse credentials
+LANGFUSE_SECRET_KEY=sk-lf-...
+LANGFUSE_PUBLIC_KEY=pk-lf-...
+LANGFUSE_BASE_URL=https://cloud.langfuse.com # Optional. Defaults to https://cloud.langfuse.com
+```
+
+### `@voltagent/langfuse-exporter` 패키지 설치하기
+
+프로젝트에 `@voltagent/langfuse-exporter` 패키지를 추가하세요:
+
+```bash
+npm install @voltagent/langfuse-exporter
+```
+
+### Langfuse Exporter 구성하기
+
+메인 애플리케이션 파일(예: `VoltAgent`가 초기화되는 `index.ts`)을 수정하여 `LangfuseExporter`를 임포트하고 `VoltAgent` 옵션 내에서 구성하세요:
+
+```typescript
+import { VoltAgent, Agent } from "@voltagent/core";
+import { VercelAIProvider } from "@voltagent/vercel-ai";
+import { openai } from "@ai-sdk/openai";
+
+import { LangfuseExporter } from "@voltagent/langfuse-exporter";
+
+const langfuseExporter = new LangfuseExporter({
+  publicKey: process.env.LANGFUSE_PUBLIC_KEY,
+  secretKey: process.env.LANGFUSE_SECRET_KEY,
+  baseUrl: process.env.LANGFUSE_BASE_URL,
+});
+
+const agent = new Agent({
+  name: "my-voltagent-app",
+  description: "A helpful assistant that answers questions without using tools",
+  llm: new VercelAIProvider(),
+  model: openai("gpt-4o-mini"),
+});
+
+new VoltAgent({
+  agents: {
+    agent,
+  },
+  telemetryExporter: langfuseExporter,
+});
+```
+
+<Callout type="info">
+
+에이전트 정의(`new Agent({...})`)와 `VoltAgent` 인스턴스화(`new VoltAgent({...})`)가 프로젝트 구조와 일치하는지 확인하세요. 핵심 변경 사항은 `LangfuseExporter`와 `telemetryExporter` 옵션을 추가하는 것입니다.
+
+</Callout>
+
+### VoltAgent 애플리케이션 실행하기
+
+VoltAgent 개발 서버를 시작하거나 평소처럼 애플리케이션을 실행하세요:
+
+```bash
+npm run dev
+```
+
+`dev` 명령을 실행하면 `tsx`가 코드를 컴파일하고 실행합니다. 터미널에서 VoltAgent 서버 시작 메시지가 표시되어야 합니다:
+
+```bash
+══════════════════════════════════════════════════
+  VOLTAGENT SERVER STARTED SUCCESSFULLY
+══════════════════════════════════════════════════
+  ✓ HTTP Server: http://localhost:3141
+
+  Developer Console:    https://console.voltagent.dev
+══════════════════════════════════════════════════
+[VoltAgent] All packages are up to date
+```
+
+이제 에이전트가 실행 중입니다! 상호작용하려면:
+
+1.  **콘솔 열기:** 터미널 출력에서 [`https://console.voltagent.dev`](https://console.voltagent.dev) 링크를 클릭하세요(또는 복사하여 브라우저에 붙여넣으세요).
+2.  **에이전트 찾기:** VoltAgent 콘솔 페이지에서 나열된 에이전트를 확인할 수 있습니다(예: "my-agent").
+3.  **에이전트 세부 정보 열기:** 에이전트 이름을 클릭하세요.
+4.  **채팅 시작:** 에이전트 세부 정보 페이지에서 오른쪽 하단의 채팅 아이콘을 클릭하여 채팅 창을 엽니다.
+5.  **메시지 보내기:** "Hello"와 같은 메시지를 입력하고 Enter를 누르세요.
+
+### Langfuse에서 트레이스 보기
+
+[Langfuse 대시보드](https://cloud.langfuse.com)로 이동하면 에이전트 상호작용의 트레이스를 확인할 수 있습니다. AI 상호작용의 프롬프트, 완성, 기타 세부 정보를 분석할 수 있습니다.
+
+트레이스 예시는 다음과 같습니다:
+
+<Frame>
+  ![Langfuse UI의 VoltAgent 트레이스](/images/docs/langfuse-voltagent-trace.png)
+</Frame>
+
+</Steps>
+
+## 참고 자료
+
+- [VoltAgent 프로젝트 저장소](https://github.com/voltagent/voltagent)
+- [VoltAgent 문서](https://voltagent.dev/docs/)
+- [Langfuse 문서](https://langfuse.com/docs)
+- [@voltagent/langfuse-exporter 패키지](https://www.npmjs.com/package/@voltagent/langfuse-exporter)

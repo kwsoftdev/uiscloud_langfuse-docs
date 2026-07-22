@@ -1,0 +1,233 @@
+---
+title: Pipecat을 위한 오픈소스 관찰 가능성
+sidebarTitle: Pipecat
+logo: /images/integrations/pipecat_icon.svg
+logoAppearance: dark
+description: Langfuse를 사용해 Pipecat으로 구축된 실시간 음성 및 멀티모달 대화를 트레이싱하세요.
+---
+
+# Pipecat 트레이싱 통합
+
+이 가이드는 실시간 음성 에이전트의 [관찰 가능성과 트레이싱](/docs/tracing)을 위해 **Langfuse**를 **Pipecat**과 통합하는 방법을 보여줍니다. 이 단계를 따르면 Langfuse 대시보드에서 Pipecat 에이전트를 모니터링, 디버그, 평가할 수 있게 됩니다.
+
+> [Pipecat](https://www.pipecat.ai) ([저장소](https://github.com/pipecat-ai/pipecat))는 실시간 음성 및 멀티모달 대화형 AI 에이전트를 구축하기 위한 오픈소스 Python 프레임워크입니다. Daily가 개발했으며, 완전히 프로그래밍 가능한 AI 음성 에이전트를 지원하고 멀티모달 상호작용을 지원하여, 대화형 AI 시스템을 구축하려는 개발자를 위한 유연한 솔루션으로 자리매김하고 있습니다.
+
+_Langfuse에서의 Pipecat 에이전트 대화 예제입니다._
+
+<Video
+  src="https://static.langfuse.com/docs-videos/pipecat-trace-16-9.mp4"
+  aspectRatio={16 / 9}
+  gifStyle
+/>
+
+## 기능
+
+- **계층적 트레이싱**: 전체 대화, 턴, 서비스 호출을 추적합니다
+- **서비스 트레이싱**: 풍부한 컨텍스트와 함께 TTS, STT, LLM 서비스에 대한 상세한 span을 제공합니다
+- **TTFB 메트릭**: 지연 시간 분석을 위해 Time To First Byte 메트릭을 캡처합니다
+- **사용량 통계**: TTS의 문자 수와 LLM의 토큰 사용량을 추적합니다
+
+## 트레이스 구조
+
+트레이스는 계층적으로 구성됩니다:
+
+```
+Conversation (conversation-uuid)
+├── turn-1
+│   ├── stt_deepgramsttservice
+│   ├── llm_openaillmservice
+│   └── tts_cartesiattsservice
+└── turn-2
+    ├── stt_deepgramsttservice
+    ├── llm_openaillmservice
+    └── tts_cartesiattsservice
+    turn-N
+    └── ...
+```
+
+이러한 구성은 대화 대 대화, 턴 대 턴 추적에 도움이 됩니다.
+
+**이 트레이스 구조에 대한 중요한 참고 사항:**
+
+1. **하나의 트레이스 = 하나의 완전한 대화**: Pipecat이 OpenTelemetry span을 구성하는 방식 때문에, 하나의 트레이스는 하나의 완전한 대화를 나타냅니다. 이는 하나의 트레이스가 하나의 상호작용과 같고 완전한 대화는 [세션](/docs/observability/features/sessions) 아래로 그룹화되는 일반적인 Langfuse 패턴과 다릅니다. Pipecat에서는 트레이스를 세션 아래로 그룹화할 필요가 없습니다. 전체 대화가 이미 하나의 트레이스에 포함되어 있기 때문입니다.
+
+2. **기본 트레이스 이름**: 기본적으로 모든 트레이스는 `conversation` 또는 대화 uuid로 이름이 지정됩니다. 트레이스 이름을 커스터마이즈하기 위해 span을 패치하는 방법의 예제는 아래의 [트레이스 이름 변경하기](#renaming-traces)를 참고하세요.
+
+Pipecat span 속성에 대해 더 알아보려면 [Pipecat 문서](https://docs.pipecat.ai/server/utilities/opentelemetry)를 참고하세요.
+
+## 엔드투엔드 예제
+
+import { FileCode } from "lucide-react";
+
+<Cards num={2}>
+  <Card
+    title="비디오 가이드"
+    href="https://github.com/langfuse/langfuse-examples/tree/main/applications/langchat"
+    icon={<FileCode />}
+  />
+  <Card
+    title="엔드투엔드 예제"
+    href="https://github.com/pipecat-ai/pipecat-examples/tree/main/open-telemetry/langfuse"
+    icon={<FileCode />}
+  />
+</Cards>
+
+## 시작하기
+
+Pipecat은 OpenTelemetry 트레이싱을 지원하며, Langfuse는 [OpenTelemetry 엔드포인트](/docs/opentelemetry/get-started)를 제공합니다. 다음 단계를 따르면 Pipecat 애플리케이션에서 Langfuse 트레이싱을 활성화할 수 있습니다.
+
+<Steps>
+
+### Langfuse API 키 받기
+
+[Langfuse Cloud](https://cloud.langfuse.com)에서 프로젝트를 생성하거나 Langfuse를 [셀프 호스팅](/self-hosting)하고 API 키를 복사하세요.
+
+### 환경 구성
+
+Langfuse public 키와 secret 키를 Base64로 인코딩하세요:
+
+```bash filename="terminal"
+echo -n "pk-lf-1234567890:sk-lf-1234567890" | base64
+```
+
+트레이싱을 활성화하기 위해 API 키가 담긴 `.env` 파일을 생성하세요:
+
+```bash filename=".env"
+ENABLE_TRACING=true
+# OTLP endpoint (defaults to localhost:4317 if not set)
+OTEL_EXPORTER_OTLP_ENDPOINT="https://cloud.langfuse.com/api/public/otel" # 🇪🇺 EU data region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com/api/public/otel, 🇯🇵 Japan: https://jp.cloud.langfuse.com/api/public/otel and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com/api/public/otel
+OTEL_EXPORTER_OTLP_HEADERS=Authorization=Basic%20<base64_encoded_api_key>,x-langfuse-ingestion-version=4
+# Set to any value to enable console output for debugging
+# OTEL_CONSOLE_EXPORT=true
+```
+
+자세한 내용은 Langfuse [OpenTelemetry 문서](/docs/opentelemetry/get-started)를 참고하세요.
+
+### Pipeline Task에 OpenTelemetry 추가하기
+
+Pipecat 애플리케이션에서 트레이싱을 활성화하세요:
+
+```python filename="main.py"
+# Initialize OpenTelemetry with the http exporter
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+
+# Configured automatically from .env
+exporter = OTLPSpanExporter()
+
+setup_tracing(
+    service_name="pipecat-demo",
+    exporter=exporter,
+)
+
+# Enable tracing in your PipelineTask
+task = PipelineTask(
+    pipeline,
+    params=PipelineParams(
+        allow_interruptions=True,
+        enable_metrics=True,  # Required for some service metrics
+    ),
+    enable_tracing=True,  # Enables both turn and conversation tracing
+    conversation_id="customer-123",  # Optional - will auto-generate if not provided
+)
+```
+
+자세한 내용은 [OpenTelemetry Python 문서](https://opentelemetry-python.readthedocs.io/)를 참고하세요.
+
+### 트레이스 입력과 출력 추가하기
+
+기본적으로 Pipecat 트레이스는 트레이스 수준에서 대화 입력과 출력을 포함하지 않습니다. Pipecat의 서비스 데코레이터를 패치하여 `langfuse.trace.input` 및 `langfuse.trace.output` 속성을 설정함으로써, 첫 번째 LLM 호출의 메시지를 트레이스 입력으로, 마지막 LLM 응답을 트레이스 출력으로 캡처할 수 있습니다:
+
+```python filename="main.py"
+def patch_trace_input_output():
+    from pipecat.utils.tracing import service_decorators
+    original = service_decorators.add_llm_span_attributes
+    first_call = [True]
+
+    def patched(span, *args, **kwargs):
+        original(span, *args, **kwargs)
+
+        # Set the input of the first LLM call as the trace input
+        if first_call[0] and kwargs.get("messages"):
+            span.set_attribute("langfuse.trace.input", kwargs["messages"])
+            first_call[0] = False
+
+        # Set the output of each LLM call as the trace output (last one wins)
+        orig_set = span.set_attribute
+        def new_set(key, value):
+            orig_set(key, value)
+            if key == "output":
+                orig_set("langfuse.trace.output", value)
+        span.set_attribute = new_set
+
+    service_decorators.add_llm_span_attributes = patched
+
+# Apply patch before tracing setup
+patch_trace_input_output()
+```
+
+### 트레이스 이름 변경하기(선택 사항) [#renaming-traces]
+
+기본적으로 모든 Pipecat 트레이스는 `conversation`으로 이름이 지정되거나 대화 UUID를 사용합니다. 트레이스 이름을 커스터마이즈하려면, `langfuse.trace.name` 속성을 설정하도록 패치를 확장하세요:
+
+```python filename="main.py"
+def patch_trace_name():
+    from pipecat.utils.tracing import service_decorators
+    original = service_decorators.add_llm_span_attributes
+    first_call = [True]
+
+    def patched(span, *args, **kwargs):
+        original(span, *args, **kwargs)
+
+        # Set a custom trace name on the first LLM call
+        if first_call[0]:
+            span.set_attribute("langfuse.trace.name", "pipecat-chatbot")
+            first_call[0] = False
+
+    service_decorators.add_llm_span_attributes = patched
+
+# Apply patch before tracing setup
+patch_trace_name()
+```
+
+트레이스 이름, 입력, 출력을 함께 설정하고 싶다면 두 패치를 하나의 함수로 결합할 수 있습니다.
+
+</Steps>
+
+## 트레이스 이해하기
+
+- **대화 span**: 전체 대화를 나타내는 최상위 span
+- **턴 span**: 대화의 각 턴을 나타내는 대화의 자식 span
+- **서비스 span**: 턴 아래에 중첩된 상세한 서비스 작업
+- **서비스 속성**: 각 서비스는 자신의 작업에 대한 풍부한 컨텍스트를 포함합니다:
+  - **TTS**: 음성 ID, 문자 수, 서비스 유형
+  - **STT**: 전사 텍스트, 언어, 모델
+  - **LLM**: 메시지, 사용된 토큰, 모델, 서비스 구성
+- **메트릭**: `metrics.ttfb_ms`와 같은 성능 데이터 및 처리 소요 시간
+
+## 작동 방식
+
+트레이싱 시스템은 다음으로 구성됩니다:
+
+1. **TurnTrackingObserver**: 대화 턴을 감지합니다
+2. **TurnTraceObserver**: 턴 및 대화에 대한 span을 생성합니다
+3. **서비스 데코레이터**: 서비스별 트레이싱을 위한 `@traced_tts`, `@traced_stt`, `@traced_llm`
+4. **컨텍스트 프로바이더**: 파이프라인의 서로 다른 부분 간 컨텍스트를 공유합니다
+
+## 문제 해결
+
+- **Langfuse에 트레이스가 없는 경우**: 자격 증명이 올바른지 확인하고 이 [문제 해결 가이드](/faq/all/missing-traces)를 따르세요
+- **메트릭 누락**: PipelineParams에서 `enable_metrics=True`인지 확인하세요
+- **연결 오류**: Langfuse에 대한 네트워크 연결을 확인하세요
+- **익스포터 문제**: 트레이싱이 작동하는지 확인하려면 Console 익스포터(`OTEL_CONSOLE_EXPORT=true`)를 시도해 보세요
+
+## 참고 자료
+
+- [엔드투엔드 예제](https://github.com/pipecat-ai/pipecat-examples/tree/main/open-telemetry/langfuse)
+- [Pipecat 트레이싱 문서](https://docs.pipecat.ai/server/utilities/opentelemetry)
+
+## GitHub Discussions
+
+import { GhDiscussionsPreview } from "@/components/gh-discussions/GhDiscussionsPreview";
+
+<GhDiscussionsPreview labels={["integration-pipecat"]} />

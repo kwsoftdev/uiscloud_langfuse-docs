@@ -1,0 +1,101 @@
+---
+source: ⚠️ Jupyter Notebook
+title: Langfuse로 Together AI 모니터링하기
+sidebarTitle: Together AI
+logo: /images/integrations/togetherai_icon.svg
+description: OpenAI 드롭인 대체재를 사용하여 Together.ai를 Langfuse와 통합하는 방법을 알아보세요.
+category: Integrations
+---
+
+# Langfuse로 Together.ai 옵저버빌리티 확보하기
+
+이 가이드는 Together.ai를 Langfuse와 통합하는 방법을 보여줍니다. 채팅, 언어, 코드, 이미지, 임베딩을 위한 Together의 API 엔드포인트는 OpenAI의 API와 완전히 호환됩니다. 이를 통해 Langfuse의 OpenAI 드롭인 대체재를 사용하여 애플리케이션의 모든 부분을 트레이싱할 수 있습니다.
+
+> **Together.ai란 무엇인가요?** [Together.ai](https://docs.together.ai/docs/openai-api-compatibility)는 개발자와 연구자가 서버리스 및 전용 인스턴스에서 100개가 넘는 오픈소스 모델에 접근하여 생성형 AI 모델을 학습, 미세 조정, 배포할 수 있도록 지원합니다. 이 플랫폼은 탈중앙화된 클라우드 서비스를 강조하여, 모든 규모의 조직이 자신의 데이터를 사용해 AI 솔루션을 커스터마이즈할 수 있게 해줍니다.
+
+> **Langfuse란 무엇인가요?** [Langfuse](https://langfuse.com)는 팀이 API 호출을 트레이싱하고, 성능을 모니터링하고, LLM 애플리케이션의 문제를 디버깅할 수 있도록 돕는 오픈소스 AI 엔지니어링 플랫폼입니다.
+
+<Steps>
+## 1단계: 의존성 설치
+
+필요한 Python 패키지가 설치되어 있는지 확인하세요.
+
+```python
+%pip install openai langfuse
+```
+
+## 2단계: 환경 변수 설정
+
+```python
+import os
+
+# Get keys for your project from the project settings page
+# https://cloud.langfuse.com
+
+os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-lf-...")
+os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-lf-...")
+os.environ.setdefault("LANGFUSE_BASE_URL", "https://cloud.langfuse.com") # 🇪🇺 EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+
+
+# Get your Together.ai API key from the project settings page
+os.environ.setdefault("TOGETHER_API_KEY", "...")
+```
+
+## 3단계: Langfuse OpenAI 드롭인 대체재
+
+이 단계에서는 `from langfuse.openai import openai`를 임포트하여 네이티브 [OpenAI 드롭인 대체재](https://langfuse.com/integrations/model-providers/openai-py)를 사용합니다.
+
+Together를 OpenAI 클라이언트 라이브러리와 함께 사용하려면 Together API 키를 `api_key` 옵션에 전달하고, `base_url`을 `https://api.together.xyz/v1`로 변경하세요.
+
+```python
+# instead of import openai:
+from langfuse.openai import openai
+
+client = openai.OpenAI(
+  api_key=os.environ.get("TOGETHER_API_KEY"),
+  base_url="https://api.together.xyz/v1",
+)
+```
+
+**참고:** OpenAI 드롭인 대체재는 [저수준 Langfuse Python SDK](https://langfuse.com/docs/sdk/python/low-level-sdk) 및 [`@observe()` 데코레이터](https://langfuse.com/docs/sdk/python/decorators)와 완전히 호환되어, 애플리케이션의 모든 부분을 트레이싱할 수 있습니다.
+
+## 4단계: 예제 실행
+
+다음 셀은 트레이싱되는 OpenAI 클라이언트를 사용하여 Together.ai의 채팅 모델을 호출하는 방법을 보여줍니다. 모든 API 호출은 Langfuse에 의해 자동으로 트레이싱됩니다.
+
+```python
+client = openai.OpenAI(
+  api_key=os.environ.get("TOGETHER_API_KEY"),
+  base_url="https://api.together.xyz/v1",
+)
+
+response = client.chat.completions.create(
+  model="meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo",
+  messages=[
+    {"role": "system", "content": "You are a travel agent. Be descriptive and helpful."},
+    {"role": "user", "content": "Tell me the top 3 things to do in San Francisco"},
+  ]
+)
+
+print(response.choices[0].message.content)
+```
+
+## 5단계: Langfuse에서 트레이스 확인하기
+
+예제 모델 호출을 실행한 후 Langfuse에서 트레이스를 확인할 수 있습니다. Together.ai API 호출에 대한 다음과 같은 상세 정보를 확인할 수 있습니다.
+
+- 요청 파라미터 (모델, 메시지, temperature 등)
+- 응답 내용
+- 토큰 사용량 통계
+- 지연 시간 지표
+
+![Langfuse Trace Example](https://langfuse.com/images/cookbook/integration-togetherai/togetherai-example-trace.png)
+
+_[Langfuse의 공개 예제 트레이스 링크](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/d3c13a6f-00c5-4090-8f18-6ce18c794950?timestamp=2025-02-25T15%3A43%3A52.800Z&observation=9eeb3b33-49f0-4557-ac00-d3cbe6bc051e)_
+
+</Steps>
+
+import LearnMore from "@/components-mdx/integration-learn-more.mdx";
+
+<LearnMore />

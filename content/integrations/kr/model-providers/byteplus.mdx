@@ -1,0 +1,126 @@
+---
+source: ⚠️ Jupyter Notebook
+title: Langfuse로 BytePlus 모델 추론 모니터링하기
+sidebarTitle: BytePlus
+logo: /images/integrations/byteplus_icon.png
+description: OpenAI 드롭인 대체를 사용하여 BytePlus를 Langfuse와 통합하는 방법을 알아보세요.
+category: Integrations
+---
+
+# Langfuse로 BytePlus 옵저버빌리티 구현하기
+
+이 가이드는 BytePlus를 Langfuse와 통합하는 방법을 보여줍니다. 채팅, 언어 및 코드, 이미지, 임베딩을 위한 BytePlus API 엔드포인트는 OpenAI의 API와 완전히 호환됩니다. 이를 통해 Langfuse OpenAI 드롭인 대체를 사용하여 애플리케이션의 모든 부분을 트레이싱할 수 있습니다.
+
+> **BytePlus란 무엇인가요?** [BytePlus](https://www.byteplus.com/)는 [ByteDance](https://www.bytedance.com/en/)가 개발한 음성, 비디오, 추천 기술을 포함한 AI 기반 API 및 서비스 모음입니다. Langfuse는 BytePlus와 통합되어 BytePlus 도구를 사용하는 LLM 워크플로우를 트레이싱하고 평가하여 생성 및 사용자 상호작용 전반의 옵저버빌리티를 지원합니다.
+
+> **Langfuse란 무엇인가요?** [Langfuse](https://langfuse.com)는 팀이 API 호출을 트레이싱하고, 성능을 모니터링하고, LLM 애플리케이션의 문제를 디버그하는 데 도움을 주는 오픈 소스 AI 엔지니어링 플랫폼입니다.
+
+<Callout type="info" emoji="ℹ️">
+_**참고:** BytePlus 모델은 OpenAI 어댑터를 사용하여 Langfuse Playground와 LLM-as-a-Judge 평가에서도 사용할 수 있습니다. Langfuse에서 LLM Connection을 설정하는 방법은 [여기](https://langfuse.com/faq/all/llm-connection)에서 확인하세요._
+
+</Callout>
+
+<Steps>
+## 1단계: 종속성 설치
+
+필요한 Python 패키지가 설치되어 있는지 확인하세요.
+
+```python
+%pip install openai langfuse
+```
+
+## 2단계: 환경 변수 설정
+
+다음으로 Langfuse API 키를 설정합니다. 무료 [Langfuse Cloud](https://langfuse.com/cloud) 계정에 가입하거나 [Langfuse를 셀프 호스팅](https://langfuse.com/self-hosting)하여 이 키를 얻을 수 있습니다. 이 환경 변수들은 [OpenAI 드롭인 대체](https://langfuse.com/integrations/model-providers/openai-py)가 인증하고 Langfuse 프로젝트로 데이터를 전송하는 데 필수적입니다.
+
+모델 서비스를 위한 BytePlus API 키를 생성하는 가이드는 [여기](https://docs.byteplus.com/en/docs/ModelArk/1399008)에서 확인하세요.
+
+```python
+import os
+
+# Get keys for your project from the project settings page: https://cloud.langfuse.com
+os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-lf-...")
+os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-lf-...")
+os.environ.setdefault("LANGFUSE_BASE_URL", "https://cloud.langfuse.com") # 🇪🇺 EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+
+# Get your BytePlus API key from the project settings page
+os.environ.setdefault("ARK_API_KEY", "***")
+```
+
+## 3단계: Langfuse OpenAI 드롭인 대체
+
+이 단계에서는 `from langfuse.openai import openai`를 임포트하여 네이티브 [OpenAI 드롭인 대체](https://langfuse.com/integrations/model-providers/openai-py)를 사용합니다.
+
+BytePlus 모델을 OpenAI의 클라이언트 라이브러리와 함께 사용하려면, `api_key` 옵션에 BytePlus API 키를 전달하고 `base_url`을 `https://ark.ap-southeast.bytepluses.com/api/v3`로 변경하세요:
+
+```python
+# instead of import openai:
+from langfuse.openai import openai
+
+client = openai.OpenAI(
+  api_key=os.environ.get("ARK_API_KEY"),
+  base_url="https://ark.ap-southeast.bytepluses.com/api/v3",
+)
+```
+
+**참고:** OpenAI 드롭인 대체는 [Low-Level Langfuse Python SDK](https://langfuse.com/docs/sdk/python/low-level-sdk) 및 [`@observe()` 데코레이터](https://langfuse.com/docs/sdk/python/decorators)와 완전히 호환되어 애플리케이션의 모든 부분을 트레이싱할 수 있습니다.
+
+## 4단계: 예시 실행하기
+
+다음 셀은 트레이싱된 OpenAI 클라이언트를 사용하여 BytePlus를 통해 [Kimi K2 모델](https://moonshotai.github.io/Kimi-K2/)을 호출하는 방법을 보여줍니다. 모든 API 호출은 Langfuse에 의해 자동으로 트레이싱됩니다.
+
+```python
+# Non-streaming:
+print("----- standard request -----")
+completion = client.chat.completions.create(
+    # Specify the Ark Inference Point ID that you created, which has been changed for you here to your Endpoint ID
+    model="kimi-k2-250711",
+    messages=[
+        {"role": "system", "content": "You're an AI assistant"},
+        {"role": "user", "content": "What is Langfuse?"},
+    ],
+    name = "BytePlus-Generation" # Optional: Set the name of the generation in Langfuse
+)
+print(completion.choices[0].message.content)
+```
+
+```python
+# Streaming:
+print("----- streaming request -----")
+stream = client.chat.completions.create(
+    # Specify the Ark Inference Point ID that you created, which has been changed for you here to your Endpoint ID
+    model="kimi-k2-250711",
+    messages=[
+        {"role": "system", "content": "You're an AI assistant"},
+        {"role": "user", "content": "What is Langfuse?"},
+    ],
+    name = "BytePlus-Generation", # Optional: Set the name of the generation in Langfuse
+    # Whether the response content is streamed back
+    stream=True,
+)
+for chunk in stream:
+    if not chunk.choices:
+        continue
+    print(chunk.choices[0].delta.content, end="")
+print()
+```
+
+## 5단계: Langfuse에서 트레이스 확인하기
+
+예시 모델 호출을 실행한 후 Langfuse에서 트레이스를 확인할 수 있습니다. BytePlus API 호출에 대한 다음과 같은 상세 정보를 확인할 수 있습니다:
+
+- 요청 매개변수(모델, 메시지, temperature 등)
+- 응답 콘텐츠
+- 토큰 사용량 통계
+- 지연 시간 메트릭
+
+![Langfuse 트레이스 예시](https://langfuse.com/images/cookbook/integration_byteplus/byteplus-trace.png)
+
+_[Langfuse의 공개 예시 트레이스 링크](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/b526e1fb8e94dd1e8a17bda69e596199?display=details%3Ftimestamp%3D2025-08-01T09%3A32%3A36.190Z&observation=31a9697edf561af3)_
+
+</Steps>
+
+import LearnMore from "@/components-mdx/integration-learn-more.mdx";
+
+<LearnMore />

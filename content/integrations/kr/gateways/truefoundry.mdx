@@ -1,0 +1,210 @@
+---
+source: ⚠️ Jupyter Notebook
+title: TrueFoundry AI 게이트웨이 통합
+sidebarTitle: Truefoundry
+logo: /images/integrations/truefoundry-logo.png
+description: OpenAI 드롭인 대체를 사용해 Truefoundry를 Langfuse와 통합하는 방법을 알아보세요.
+category: Integrations
+---
+
+# TrueFoundry AI 게이트웨이 통합
+
+> **Truefoundry란?** [TrueFoundry](https://www.truefoundry.com/ai-gateway)는 하나의 OpenAI 호환 API 뒤에서 모든 LLM 또는 Gen-AI 워크로드를 배포, 거버넌스, 모니터링할 수 있는 엔터프라이즈급 AI Gateway이자 제어 플레인으로, 속도 제한, 비용 통제, 관측성, 온프레미스 지원을 프로덕션 AI 애플리케이션에 제공합니다.
+
+## TrueFoundry가 Langfuse와 통합되는 방식
+
+Truefoundry의 AI Gateway와 Langfuse가 결합되어 몇 분 만에 설정할 수 있는 엔터프라이즈급 관측성, 거버넌스, 모든 LLM 요청에 대한 비용 통제를 제공합니다.
+
+<details>
+<summary><strong>통합 OpenAI 호환 엔드포인트</strong></summary>
+
+Langfuse OpenAI 클라이언트를 Truefoundry의 게이트웨이 URL로 지정하세요. Truefoundry는 지원되는 모든 모델(OpenAI, Anthropic, 셀프 호스팅 모델 등)로 라우팅하며, Langfuse는 코드 변경 없이 각 호출을 투명하게 캡처합니다.
+
+</details>
+
+<details>
+<summary><strong>엔드투엔드 트레이싱 및 메트릭</strong></summary>
+
+Langfuse는 다음을 제공합니다:
+
+- 시스템 메시지를 포함한 **전체 요청/응답 로그**\
+- **토큰 사용량**(프롬프트, 완료, 총합)\
+- 호출당 **지연 시간 분석**\
+- 모델과 환경별 **비용 분석**\
+
+몇 초 만에 트레이스를 파고들어 성능을 최적화하거나 회귀 문제를 디버그하세요.
+
+</details>
+
+<details>
+<summary><strong>프로덕션 준비 완료된 제어 기능</strong></summary>
+
+Truefoundry는 LLM 스택에 다음 기능을 추가합니다:
+
+- 팀 또는 사용자별 **속도 제한 및 쿼터**\
+- 초과 지출을 방지하는 **예산 경고 및 지출 상한**\
+- 개발/스테이징/프로덕션을 위한 RBAC가 적용된 **범위 지정 API 키**\
+- 완전한 데이터 주권을 위한 **온프레미스/VPC 배포**\
+
+</details>
+
+## 사전 요구 사항
+
+Langfuse를 TrueFoundry와 통합하기 전에 다음을 준비하세요:
+
+1. TrueFoundry 계정: [퀵 스타트](https://docs.truefoundry.com/gateway/quick-start)와 [토큰 생성](https://docs.truefoundry.com/gateway/authentication) 안내를 따라 최소 한 개의 모델 프로바이더로 [Truefoundry 계정](https://www.truefoundry.com/register)을 만들고 개인 액세스 토큰을 생성합니다
+2. Langfuse 계정: 무료 [Langfuse Cloud 계정](https://langfuse.com/cloud)에 가입하거나 Langfuse를 셀프 호스팅합니다
+
+<Steps>
+## 1단계: 의존성 설치
+
+```python
+%pip install openai langfuse
+```
+
+## 2단계: 환경 변수 설정
+
+다음으로 Langfuse API 키를 설정하세요. 무료 [Langfuse Cloud](https://langfuse.com/cloud) 계정에 가입하거나 [Langfuse를 셀프 호스팅](https://langfuse.com/self-hosting)하면 이 키를 얻을 수 있습니다. 이 환경 변수는 Langfuse 클라이언트가 인증하고 Langfuse 프로젝트로 데이터를 전송하는 데 필수적입니다.
+
+```python
+import os
+
+# Langfuse Configuration
+os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-lf-...")
+os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-lf-...")
+os.environ.setdefault("LANGFUSE_BASE_URL", "https://cloud.langfuse.com")  # 🇪🇺 EU region
+# Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+
+# TrueFoundry Configuration
+os.environ.setdefault("TRUEFOUNDRY_API_KEY", "your-truefoundry-token")
+os.environ.setdefault("TRUEFOUNDRY_BASE_URL", "https://your-control-plane.truefoundry.cloud/api/llm")
+```
+
+```python
+from langfuse import get_client
+
+# Test Langfuse authentication
+get_client().auth_check()
+```
+
+    True
+
+## 3단계: Langfuse OpenAI 드롭인 대체 사용하기
+
+Langfuse의 OpenAI 호환 클라이언트를 사용해 TrueFoundry AI Gateway를 통해 라우팅되는 모든 요청을 캡처하고 트레이싱하세요. 게이트웨이 설정과 가상 LLM 키 생성에 대한 자세한 단계는 [TrueFoundry 문서](https://docs.truefoundry.com/gateway/langfuse)에서 확인할 수 있습니다.
+
+```python
+from langfuse.openai import OpenAI
+import os
+
+# Initialize OpenAI client with TrueFoundry Gateway
+client = OpenAI(
+    api_key=os.environ["TRUEFOUNDRY_API_KEY"],
+    base_url=os.environ["TRUEFOUNDRY_BASE_URL"]  # Base URL from unified code snippet
+)
+```
+
+## 4단계: 예제 실행하기
+
+```python
+# Make a request through TrueFoundry Gateway with Langfuse tracing
+response = client.chat.completions.create(
+    model="openai-main/gpt-4o",  # Paste the model ID you copied from TrueFoundry Gateway
+    messages=[
+        {"role": "system", "content": "You are a helpful AI assistant specialized in explaining AI concepts."},
+        {"role": "user", "content": "Why does an AI gateway help enterprises?"},
+    ],
+    max_tokens=500,
+    temperature=0.7
+)
+
+print(response.choices[0].message.content)
+
+# Ensure all traces are sent to Langfuse
+langfuse = get_client()
+langfuse.flush()
+```
+
+## 5단계: Langfuse에서 트레이스 확인하기
+
+예제를 실행한 후 Langfuse에 로그인하여 다음을 포함한 상세한 트레이스를 확인하세요:
+
+- 요청 매개변수
+- 응답 콘텐츠
+- 토큰 사용량과 지연 시간 메트릭
+- Truefoundry 게이트웨이를 통한 LLM 모델 정보
+
+![Langfuse Trace Example](https://langfuse.com/images/cookbook/integration_troufoundry/truefoundry-trace.png)
+
+> **참고**: 프롬프트 관리, 평가, 커스텀 대시보드, 고급 관측성 기능을 포함한 Langfuse의 다른 모든 기능도 예상대로 작동합니다. TrueFoundry 통합은 Langfuse의 전체 기능 세트를 원활하게 지원합니다.
+
+</Steps>
+
+## Langfuse Python SDK를 활용한 고급 통합
+
+자동 트레이싱을 추가 Langfuse 기능과 결합해 관측성을 강화하세요.
+
+### @observe 데코레이터 사용하기
+
+`@observe()` 데코레이터는 함수를 자동으로 감싸고 트레이스에 커스텀 속성을 추가합니다:
+
+```python
+from langfuse import observe, get_client, propagate_attributes
+
+langfuse = get_client()
+
+@observe()
+def analyze_customer_query(query, customer_id):
+    """Analyze customer query using TrueFoundry Gateway with full observability"""
+
+    # Propagate attributes to all child observations
+    with propagate_attributes(
+        user_id=customer_id,
+        session_id=f"session_{customer_id}",
+        tags=["customer-service", "truefoundry-gateway"],
+        metadata={"gateway": "truefoundry"},
+        version="1.0.0"
+    ):
+
+        response = client.chat.completions.create(
+            model="openai-main/gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a customer service AI assistant."},
+                {"role": "user", "content": query},
+            ],
+            temperature=0.3
+        )
+
+        result = response.choices[0].message.content
+
+    # Set input and output on the current observation
+    langfuse.update_current_observation(
+        input={"query": query, "customer_id": customer_id},
+        output={"response": result},
+    )
+
+    return result
+
+# Usage
+result = analyze_customer_query("How do I reset my password?", "customer_123")
+```
+
+### 디버그 모드
+
+문제 해결을 위해 디버그 로깅을 활성화하세요:
+
+```python
+import logging
+logging.basicConfig(level=logging.DEBUG)
+```
+
+> **참고**: 프롬프트 관리, 평가, 커스텀 대시보드, 고급 관측성 기능을 포함한 Langfuse의 다른 모든 기능도 예상대로 작동합니다. TrueFoundry 통합은 Langfuse의 전체 기능 세트를 원활하게 지원합니다.
+
+## 더 알아보기
+
+- **TrueFoundry AI Gateway 소개**: [https://docs.truefoundry.com/gateway/intro-to-llm-gateway](https://docs.truefoundry.com/gateway/intro-to-llm-gateway)
+- **TrueFoundry 인증 가이드**: [https://docs.truefoundry.com/gateway/authentication](https://docs.truefoundry.com/gateway/authentication)
+
+import LearnMore from "@/components-mdx/integration-learn-more.mdx";
+
+<LearnMore />

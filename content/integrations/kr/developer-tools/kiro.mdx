@@ -1,0 +1,201 @@
+---
+title: "Trace Kiro IDE with Langfuse"
+sidebarTitle: Kiro
+logo: /images/integrations/kiro_icon.png
+description: "Trace Kiro IDE AI agent activity during coding sessions with Langfuse for comprehensive observability of prompts, tool use, file operations, and task execution."
+category: Integrations
+---
+
+# Kiro IDE Tracing with Langfuse
+
+> **Kiro란 무엇인가요?** [**Kiro**](https://kiro.dev)는 AWS가 만든 AI 기반 IDE로, 코드를 작성, 편집, 디버깅하고 이해하도록 돕는 AI 에이전트를 특징으로 합니다. Kiro는 AI 에이전트 활동의 여러 라이프사이클 시점에서 커스텀 스크립트를 실행할 수 있는 [훅 시스템](https://kiro.dev/docs/hooks/)을 제공합니다.
+
+> **Langfuse란 무엇인가요?** [**Langfuse**](https://langfuse.com/)는 오픈소스 AI 엔지니어링 플랫폼입니다. 팀이 LLM 애플리케이션을 추적하고, 문제를 디버깅하고, 품질을 평가하고, 프로덕션에서 비용을 모니터링할 수 있도록 돕습니다.
+
+## 이 인테그레이션으로 무엇을 추적할 수 있나요?
+
+[Kiro 훅](https://kiro.dev/docs/hooks/)을 사용해, 이 인테그레이션은 AI 에이전트 활동을 자동으로 캡처해 Langfuse로 트레이스를 전송합니다. 10가지 Kiro 훅 유형이 모두 지원됩니다:
+
+| Kiro 훅 유형        | 추적하는 대상                    |
+| ------------------- | -------------------------------- |
+| Prompt Submit       | 사용자 프롬프트와 질의           |
+| Agent Stop          | 상태 점수와 함께한 에이전트 완료 |
+| Pre Tool Use        | 실행 전 도구 호출                |
+| Post Tool Use       | 도구 결과와 소요 시간            |
+| File Create         | 새 파일 생성                     |
+| File Save           | 파일 수정                        |
+| File Delete         | 파일 삭제                        |
+| Pre Task Execution  | 스펙 작업 시작                   |
+| Post Task Execution | 스펙 작업 완료                   |
+| Manual Trigger      | 온디맨드 트레이스 이벤트         |
+
+주요 관측 가능성 기능은 다음과 같습니다:
+
+- **대화별로 그룹화된 트레이스**: 각 대화는 Langfuse에서 자체 트레이스를 가집니다
+- **워크스페이스별로 그룹화된 세션**: 같은 워크스페이스 폴더에서 나온 모든 트레이스는 하나의 세션으로 그룹화됩니다
+- **동적 태깅**: 도구 유형, 파일 작업, 모델을 기반으로 한 자동 태그
+- **완료 상태 점수화**: 에이전트 완료 시 점수(0-1)가 기록됩니다
+- **논블로킹 오류 처리**: 트레이싱은 코딩 흐름을 절대 방해하지 않습니다
+
+## 작동 방식
+
+```
+Kiro triggers hook event
+    → Shell command runs hook-handler.js
+    → Reads input from stdin + environment variables
+    → Creates/updates Langfuse trace for the conversation
+    → Routes to event-specific handler
+    → Creates spans, generations, scores in Langfuse
+    → Flushes data before exit
+```
+
+### 트레이스 계층 구조
+
+각 대화는 다음 구조로 트레이스를 생성합니다:
+
+- **트레이스** — 대화당 하나
+  - **세션** — 워크스페이스 폴더별로 그룹화
+  - **생성** — 사용자 프롬프트
+  - **스팬** — 도구 사용, 파일 작업, 작업 실행
+  - **이벤트** — 에이전트 정지, 수동 트리거
+  - **점수** — 완료 상태(0-1)
+
+## 빠른 시작
+
+<Steps>
+
+### Langfuse 설정하기
+
+1. [Langfuse Cloud](https://cloud.langfuse.com)에 가입하거나 [Langfuse를 직접 호스팅](/self-hosting)하세요.
+2. 새 프로젝트를 생성하고 프로젝트 설정에서 API 키를 복사하세요.
+
+### 예제 저장소 클론하기
+
+[langfuse-examples](https://github.com/langfuse/langfuse-examples) 저장소를 클론하세요:
+
+```bash
+git clone https://github.com/langfuse/langfuse-examples.git
+```
+
+### 훅 파일을 프로젝트에 복사하기
+
+Kiro 훅 정의와 핸들러 코드를 모두 프로젝트에 복사하세요:
+
+```bash
+cp -r langfuse-examples/applications/kiro-langfuse/.kiro/hooks/ your-project/.kiro/hooks/
+cp -r langfuse-examples/applications/kiro-langfuse/hooks/ your-project/hooks/
+```
+
+이렇게 하면 다음이 추가됩니다:
+
+- `.kiro/hooks/` — Kiro 훅 정의 파일(훅 유형당 하나)
+- `hooks/` — Node.js 핸들러 코드와 Langfuse 클라이언트
+
+### 의존성 설치하기
+
+```bash
+cd your-project/hooks && npm install
+```
+
+### Langfuse 자격 증명 구성하기
+
+프로젝트 루트에 Langfuse API 키가 담긴 `.env` 파일을 생성하세요:
+
+```bash
+# Langfuse credentials - get these from https://cloud.langfuse.com
+LANGFUSE_SECRET_KEY=sk-lf-...
+LANGFUSE_PUBLIC_KEY=pk-lf-...
+
+# Optional: self-hosted Langfuse URL (defaults to cloud.langfuse.com)
+# LANGFUSE_BASE_URL=https://your-langfuse-instance.com
+```
+
+**환경 변수:**
+
+| 변수                  | 설명                                                                                                                                                                        | 필수 여부            |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| `LANGFUSE_PUBLIC_KEY` | Langfuse 공개 키                                                                                                                                                            | 예                   |
+| `LANGFUSE_SECRET_KEY` | Langfuse 비밀 키                                                                                                                                                            | 예                   |
+| `LANGFUSE_BASE_URL`   | Langfuse 기본 URL. EU: `https://cloud.langfuse.com`, US: `https://us.cloud.langfuse.com`, Japan: `https://jp.cloud.langfuse.com`, HIPAA: `https://hipaa.cloud.langfuse.com` | 아니요 (기본값은 EU) |
+
+### Kiro에서 훅 활성화하기
+
+Kiro에서 Hook UI를 여세요:
+
+- **Mac**: `Cmd + Shift + P` → "Kiro: Open Kiro Hook UI"
+- **Windows/Linux**: `Ctrl + Shift + P` → "Kiro: Open Kiro Hook UI"
+
+`.kiro/hooks/`의 훅 파일이 자동으로 나타납니다. 추적하려는 훅을 켜세요.
+
+각 훅 파일은 다음 형식을 따릅니다:
+
+```json
+{
+  "version": "1.0.0",
+  "enabled": true,
+  "name": "Langfuse - Prompt Submit",
+  "when": {
+    "type": "promptSubmit"
+  },
+  "then": {
+    "type": "runCommand",
+    "command": "KIRO_HOOK_EVENT=prompt_submit node hooks/hook-handler.js"
+  }
+}
+```
+
+### Langfuse에서 트레이스 확인하기
+
+[Langfuse 대시보드](https://cloud.langfuse.com)를 열어 **Traces**로 이동하세요. 다음을 할 수 있습니다:
+
+- `kiro` 태그로 필터링해 모든 Kiro 트레이스를 확인합니다
+- 세션 이름(여러분의 워크스페이스 폴더)으로 필터링해 특정 프로젝트의 트레이스를 확인합니다
+- 트레이스를 클릭해 중첩된 스팬, 생성, 점수와 함께 전체 대화 세부 내역을 확인합니다
+
+</Steps>
+
+## 커스터마이징
+
+### 특정 도구 필터링하기
+
+`.kiro/hooks/langfuse-pre-tool-use.kiro.hook`을 편집하고 `"toolName"` 필드를 업데이트해 특정 도구를 대상으로 지정하세요. 다음 내장 카테고리가 지원됩니다:
+
+- `read` — 모든 내장 파일 읽기 도구
+- `write` — 모든 내장 파일 쓰기 도구
+- `shell` — 모든 내장 셸 명령 관련 도구
+- `web` — 모든 내장 웹 도구
+- `spec` — 모든 내장 스펙 도구
+- `*` — 모든 도구(내장 및 MCP)
+
+특정 소스별로 도구를 대상 지정하려면 접두사 필터를 사용할 수도 있습니다:
+
+- `@mcp` — 모든 MCP 도구
+- `@powers` — 모든 Powers 도구
+- `@builtin` — 모든 내장 도구
+
+`@`로 시작하는 접두사는 정규식으로 매칭되므로, `@mcp.*sql.*`와 같은 패턴을 사용해 이름으로 특정 MCP 도구를 매칭할 수 있습니다.
+
+Kiro Hook UI를 통해 도구 훅을 구성할 수도 있습니다 — 각 도구 이름을 입력하고 Enter를 눌러 추가하세요.
+
+### 특정 파일 필터링하기
+
+`.kiro/hooks/langfuse-file-save.kiro.hook`을 편집하고 `"patterns": ["**/*"]`을 변경해 특정 파일을 대상으로 지정하세요:
+
+- `["src/**/*.ts"]` — TypeScript 소스 파일
+- `["**/*.js", "**/*.ts"]` — JS와 TS 파일
+- `["**/*", "!node_modules/**"]` — node_modules 제외
+
+## 사전 준비 사항
+
+- [Node.js](https://nodejs.org/) v18+
+- [Kiro IDE](https://kiro.dev) 설치됨
+- [Langfuse](https://langfuse.com) 계정(클라우드 또는 셀프 호스팅)
+
+## 리소스
+
+- [kiro-langfuse 예제](https://github.com/langfuse/langfuse-examples/tree/main/applications/kiro-langfuse)
+- [Kiro 훅 문서](https://kiro.dev/docs/hooks/)
+- [Kiro 훅 유형](https://kiro.dev/docs/hooks/types/)
+- [Kiro 훅 액션](https://kiro.dev/docs/hooks/actions/)
+- [Langfuse 관측 가능성 문서](/docs/observability/overview)
+- [Langfuse 세션](/docs/observability/features/sessions)

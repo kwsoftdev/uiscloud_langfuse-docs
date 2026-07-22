@@ -1,0 +1,164 @@
+---
+title: "Trace Kiro CLI with Langfuse"
+sidebarTitle: Kiro CLI
+logo: /images/integrations/kiro_icon.png
+description: "Trace Kiro CLI AI agent activity — prompts, tool use, and completions — with Langfuse for comprehensive observability of your terminal coding sessions."
+category: Integrations
+---
+
+# Kiro CLI Tracing with Langfuse
+
+> **Kiro CLI란 무엇인가요?** [**Kiro CLI**](https://kiro.dev)는 AWS가 만든 터미널 기반 AI 코딩 도구로, AI 에이전트를 실행해 명령줄에서 코드를 작성, 편집, 이해하도록 도와줍니다. Kiro CLI는 에이전트 활동의 여러 라이프사이클 시점에서 커스텀 명령을 실행할 수 있는 [훅 시스템](https://kiro.dev/docs/cli/hooks/)을 제공합니다.
+
+> **Langfuse란 무엇인가요?** [**Langfuse**](https://langfuse.com/)는 오픈소스 AI 엔지니어링 플랫폼입니다. 팀이 LLM 애플리케이션을 추적하고, 문제를 디버깅하고, 품질을 평가하고, 프로덕션에서 비용을 모니터링할 수 있도록 돕습니다.
+
+## 이 인테그레이션으로 무엇을 추적할 수 있나요?
+
+[Kiro CLI 훅](https://kiro.dev/docs/cli/hooks/)을 사용해, 이 인테그레이션은 코딩 세션 중 에이전트 활동을 캡처해 Langfuse로 트레이스를 전송합니다. 다섯 가지 훅 유형이 지원됩니다:
+
+| Kiro CLI 훅        | 추적하는 대상                         |
+| ------------------ | ------------------------------------- |
+| `agentSpawn`       | 에이전트 초기화                       |
+| `userPromptSubmit` | 사용자 프롬프트와 질의                |
+| `preToolUse`       | 실행 전 도구 호출                     |
+| `postToolUse`      | 도구 결과와 실행 시간                 |
+| `stop`             | 완료 상태 점수와 함께한 에이전트 완료 |
+
+주요 관측 가능성 기능은 다음과 같습니다:
+
+- **대화별로 그룹화된 트레이스**: 각 대화는 Langfuse에서 자체 트레이스를 가집니다.
+- **워크스페이스별로 그룹화된 세션**: 같은 워크스페이스 폴더에서 나온 모든 트레이스는 [세션](/docs/observability/features/sessions)으로 그룹화됩니다.
+- **동적 태깅**: 빠른 필터링을 위한 자동 `kiro` 및 이벤트 기반 태그.
+- **완료 상태 점수화**: 에이전트가 멈추면 `completion_status` 점수(`1` 완료, `0.5` 중단, `0` 오류)가 기록됩니다.
+- **논블로킹 오류 처리**: 트레이싱은 코딩 흐름을 절대 방해하지 않습니다 — 실패해도 열린 상태를 유지합니다.
+
+## 작동 방식
+
+Kiro CLI는 각 훅 이벤트마다 셸 명령을 실행합니다. 이 인테그레이션은 stdin에서 이벤트 페이로드를 읽어 [JS/TS SDK](/docs/observability/sdk/overview)를 통해 Langfuse로 전달하는 단일 Node.js 핸들러(`hooks/hook-handler.js`)를 등록합니다.
+
+```
+Kiro CLI triggers a hook event
+    → Shell command runs hook-handler.js
+    → Reads event payload from stdin
+    → Creates or updates the Langfuse trace for the conversation
+    → Routes to the event-specific handler
+    → Creates generations, spans, events, and scores in Langfuse
+    → Flushes data before exit
+```
+
+### 트레이스 계층 구조
+
+각 대화는 대화 ID로 키가 지정된 하나의 트레이스를 다음 구조로 생성합니다:
+
+- **트레이스** — 대화당 하나이며, 워크스페이스 폴더별로 **세션**으로 그룹화됩니다
+  - **생성** (`User Prompt`) — 사용한 모델과 함께, 여러분이 제출한 프롬프트
+  - **스팬** (`Tool: <name>`, `Tool Result: <name>`) — 도구 호출과 그 출력, 소요 시간 포함
+  - **이벤트** (`Agent Spawned`, `Agent Stopped`) — 라이프사이클 마커
+  - **점수** (`completion_status`) — 에이전트가 멈출 때 기록됨
+
+## 빠른 시작
+
+<Steps>
+
+### Langfuse 설정하기
+
+1. [Langfuse Cloud](https://cloud.langfuse.com)에 가입하거나 [Langfuse를 직접 호스팅](/self-hosting)하세요.
+2. 새 프로젝트를 생성하고 프로젝트 설정에서 API 키를 복사하세요.
+
+### 인테그레이션 파일을 프로젝트에 복사하기
+
+[kiro-cli-langfuse](https://github.com/dhanpraja231/kiro-cli-langfuse) 저장소를 클론하고 에이전트 정의와 훅 핸들러를 프로젝트에 복사하세요:
+
+```bash
+git clone https://github.com/dhanpraja231/kiro-cli-langfuse.git
+
+cp -r kiro-cli-langfuse/.kiro/agents/ your-project/.kiro/agents/
+cp -r kiro-cli-langfuse/hooks/ your-project/hooks/
+```
+
+이렇게 하면 다음이 추가됩니다:
+
+- `.kiro/agents/langfuse-observer.json` — 훅을 핸들러에 연결하는 Kiro CLI 에이전트 정의
+- `hooks/` — Node.js 핸들러 코드와 Langfuse 클라이언트
+
+### 의존성 설치하기
+
+```bash
+cd your-project/hooks && npm install
+```
+
+### Langfuse 자격 증명 구성하기
+
+프로젝트 루트에 Langfuse API 키가 담긴 `.env` 파일을 생성하세요:
+
+```bash
+# Langfuse credentials - get these from https://cloud.langfuse.com
+LANGFUSE_SECRET_KEY=sk-lf-...
+LANGFUSE_PUBLIC_KEY=pk-lf-...
+
+# Optional: self-hosted or non-EU Langfuse URL (defaults to cloud.langfuse.com)
+# LANGFUSE_BASE_URL=https://your-langfuse-instance.com
+```
+
+**환경 변수:**
+
+| 변수                  | 설명                                                                                                                                                                        | 필수 여부            |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| `LANGFUSE_PUBLIC_KEY` | Langfuse 공개 키                                                                                                                                                            | 예                   |
+| `LANGFUSE_SECRET_KEY` | Langfuse 비밀 키                                                                                                                                                            | 예                   |
+| `LANGFUSE_BASE_URL`   | Langfuse 기본 URL. EU: `https://cloud.langfuse.com`, US: `https://us.cloud.langfuse.com`, Japan: `https://jp.cloud.langfuse.com`, HIPAA: `https://hipaa.cloud.langfuse.com` | 아니요 (기본값은 EU) |
+
+### Langfuse Observer 에이전트 활성화하기
+
+Kiro CLI 안에서 `langfuse-observer` 에이전트로 전환하세요:
+
+```bash
+/agent swap langfuse-observer
+```
+
+또는 `langfuse-observer.json`의 `hooks` 필드를 기존 에이전트 설정에 병합해, 에이전트를 전환하지 않고도 트레이싱이 실행되도록 할 수 있습니다.
+
+### Langfuse에서 트레이스 확인하기
+
+평소처럼 Kiro CLI를 사용하세요. [Langfuse 대시보드](https://cloud.langfuse.com)를 열어 **Traces**로 이동하세요. 다음을 할 수 있습니다:
+
+- `kiro` 태그로 필터링해 모든 Kiro CLI 트레이스를 확인합니다.
+- [Sessions](/docs/observability/features/sessions) 탭을 열어 워크스페이스 폴더로 필터링해 특정 프로젝트의 트레이스를 확인합니다.
+- 트레이스를 클릭해 중첩된 스팬, 생성, 이벤트, 완료 점수와 함께 전체 대화 세부 내역을 확인합니다.
+
+</Steps>
+
+## 커스터마이징
+
+### 특정 도구 필터링하기
+
+기본적으로 에이전트는 모든 도구에 대해 핸들러를 실행합니다. 특정 도구만 추적하려면 `.kiro/agents/langfuse-observer.json`을 편집해 `preToolUse`(및/또는 `postToolUse`) 훅에 `matcher`를 추가하세요:
+
+```json
+{
+  "hooks": {
+    "preToolUse": [
+      {
+        "matcher": "fs_write",
+        "command": "node hooks/hook-handler.js"
+      }
+    ]
+  }
+}
+```
+
+지원되는 매처에는 `fs_write`, `fs_read`, `execute_bash`, `use_aws`, `@git`, `@git/status`, 또는 모든 도구를 나타내는 `*`가 있습니다.
+
+## 사전 준비 사항
+
+- [Node.js](https://nodejs.org/) v18+
+- [Kiro CLI](https://kiro.dev) 설치됨
+- [Langfuse](https://langfuse.com) 계정(클라우드 또는 셀프 호스팅)
+
+## 리소스
+
+- [kiro-cli-langfuse 저장소](https://github.com/dhanpraja231/kiro-cli-langfuse)
+- [Kiro CLI 훅 문서](https://kiro.dev/docs/cli/hooks/)
+- [Kiro IDE를 Langfuse로 트레이싱하기](/integrations/kr/developer-tools/kiro)
+- [Langfuse JS/TS SDK](/docs/observability/sdk/overview)
+- [Langfuse 세션](/docs/observability/features/sessions)

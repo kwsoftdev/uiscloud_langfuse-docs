@@ -1,0 +1,77 @@
+---
+title: Observability and tracing for Dify
+sidebarTitle: Dify
+logo: /images/integrations/dify_icon.svg
+logoAppearance: dark
+description: Open source observability and prompt management for Dify applications. Automatically capture detailed traces and metrics for every request.
+---
+
+# Dify - Observability & Metrics for Your LLM Apps
+
+**Dify**([GitHub](https://github.com/langgenius/dify))는 Langfuse와 네이티브로 통합되는 오픈소스 LLM 앱 개발 플랫폼입니다. 네이티브 인테그레이션을 통해 Dify로 복잡한 LLM 애플리케이션을 빠르게 만들고, Langfuse로 이를 모니터링하고 개선할 수 있습니다.
+
+<Video
+  src="https://static.langfuse.com/docs-videos/dify_integration.mp4"
+  aspectRatio={1568 / 1080}
+/>
+
+## 설정
+
+1. Langfuse에서 프로젝트를 생성하고 프로젝트 설정에서 API 자격 증명을 받으세요.
+1. Dify에서: Dify 앱의 `Monitoring` 설정으로 이동하세요.
+1. `Third-party LLMOps provider` 메뉴를 통해 Langfuse를 추가하세요.
+1. UI나 API를 통해 Dify 애플리케이션을 호출해 Langfuse에서 트레이스와 메트릭 캡처를 시작하세요.
+
+## Dify와 Langfuse의 매핑
+
+이 인테그레이션은 Dify의 다음 필드를 Langfuse로 자동 매핑합니다:
+
+| Dify                                                                                                        | Langfuse                                     |
+| ----------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| `user`                                                                                                      | [`userId`](/docs/tracing/users)              |
+| [`message_id`](https://docs.dify.ai/api-reference/completion/create-completion-message#response-message-id) | [`trace_id`](/docs/observability/data-model) |
+| `conversation_id`                                                                                           | [`sessionId`](/docs/tracing/sessions)        |
+|                                                                                                             | `trace.name`                                 |
+| 애플리케이션 유형, 모델 유형                                                                                | [`tags`](/docs/tracing/tags)                 |
+
+## Langfuse 프롬프트 관리
+
+[Langfuse 프롬프트 관리 플러그인](https://github.com/gao-ai-com/dify-plugin-langfuse)(커뮤니티 유지 관리)을 사용하면 Dify 애플리케이션에서 Langfuse로 관리되고 버전이 지정된 프롬프트를 사용할 수 있어, LLM 애플리케이션 개발 워크플로우를 향상시킵니다. 주요 기능은 다음과 같습니다:
+
+- **Get Prompt:** Langfuse로 관리되는 특정 프롬프트를 가져옵니다.
+- **Search Prompts:** 다양한 필터로 Langfuse에서 프롬프트를 검색합니다.
+- **Update Prompt:** Langfuse에서 프롬프트의 새 버전을 생성하고 태그/레이블을 설정합니다.
+
+이 인테그레이션은 프롬프트 관리와 버전 관리 과정을 간소화하여 더 효율적인 개발과 반복 주기에 기여합니다. 플러그인과 설치 안내는 [여기](https://github.com/gao-ai-com/dify-plugin-langfuse)에서 확인할 수 있습니다.
+
+## Dify 소개
+
+> 출처: [Dify Readme](https://github.com/langgenius/dify)
+
+Dify는 오픈소스 LLM 앱 개발 플랫폼입니다. 직관적인 인터페이스가 AI 워크플로우, RAG 파이프라인, 에이전트 기능, 모델 관리, 관측 가능성 기능 등을 결합해 프로토타입에서 프로덕션까지 빠르게 나아갈 수 있게 합니다. 핵심 기능 목록은 다음과 같습니다:
+
+1. **워크플로우**: 다음의 모든 기능과 그 이상을 활용해, 시각적 캔버스에서 강력한 AI 워크플로우를 구축하고 테스트하세요.
+
+<Video
+  src="https://static.langfuse.com/docs-videos/Dify%20workflow.mp4"
+  aspectRatio={16 / 9}
+  className="max-w-lg"
+/>
+
+2. **포괄적인 모델 지원**: 수십 개의 추론 제공업체와 셀프 호스팅 솔루션에서 나온 수백 개의 독점/오픈소스 LLM과의 원활한 통합으로, GPT, Mistral, Llama3, 그리고 모든 OpenAI API 호환 모델을 아우릅니다. 지원되는 모델 제공업체의 전체 목록은 [여기](https://docs.dify.ai/getting-started/readme/model-providers)에서 확인할 수 있습니다.
+
+3. **Prompt IDE**: 프롬프트 작성, 모델 성능 비교, 채팅 기반 앱에 텍스트-투-스피치와 같은 추가 기능을 더하기 위한 직관적인 인터페이스입니다.
+
+4. **RAG 파이프라인**: PDF, PPT 등 일반적인 문서 형식에서의 텍스트 추출을 기본적으로 지원하는, 문서 수집부터 검색까지 아우르는 광범위한 RAG 기능입니다.
+
+5. **에이전트 기능**: LLM 함수 호출이나 ReAct를 기반으로 에이전트를 정의하고, 사전 구축된 도구나 커스텀 도구를 에이전트에 추가할 수 있습니다. Dify는 Google Search, DELL·E, Stable Diffusion, WolframAlpha 등 AI 에이전트를 위한 50개 이상의 내장 도구를 제공합니다.
+
+6. **LLMOps**: 시간에 따른 애플리케이션 로그와 성능을 모니터링하고 분석합니다. 프로덕션 데이터와 주석을 바탕으로 프롬프트, 데이터셋, 모델을 지속적으로 개선할 수 있습니다.
+
+7. **Backend-as-a-Service**: Dify의 모든 제품에는 해당하는 API가 함께 제공되므로, 여러분의 비즈니스 로직에 Dify를 손쉽게 통합할 수 있습니다.
+
+## GitHub Discussions
+
+import { GhDiscussionsPreview } from "@/components/gh-discussions/GhDiscussionsPreview";
+
+<GhDiscussionsPreview labels={["integration-dify"]} />

@@ -1,0 +1,145 @@
+---
+title: Langfuse로 Swiftide 트레이싱하기
+sidebarTitle: Swiftide
+logo: /images/integrations/swiftide.png
+description: Langfuse를 사용하여 Swiftide 애플리케이션을 모니터링하고 LLM 워크플로우를 디버깅하고 평가하는 방법을 알아보세요
+category: Integrations
+---
+
+# Langfuse로 Swiftide 트레이싱하기
+
+이 가이드는 LLM 애플리케이션을 모니터링, 디버깅, 평가하기 위해 **Swiftide** 워크플로우에 **Langfuse**를 **통합**하는 방법을 보여줍니다.
+
+> **Swiftide란 무엇인가요?**: [Swiftide](https://github.com/bosun-ai/swiftide)는 LLM 애플리케이션을 구축하기 위한 Rust 라이브러리입니다. 프롬프트 완성, 스트리밍 인덱싱 및 쿼리 파이프라인, 도구를 사용하거나 다른 에이전트를 호출할 수 있는 에이전트를 위한 간단한 기본 요소를 제공합니다. 인기 있는 LLM 및 스토리지 제공업체와의 통합, 모듈식 API, 트레이싱 및 Langfuse에 대한 일급(first-class) 지원을 갖추고 있습니다. 문서는 [swiftide.rs](https://swiftide.rs)에서 확인할 수 있습니다.
+
+<Steps>
+
+## 종속성 설치
+
+Swiftide를 `Cargo.toml`에 추가할 때 `langfuse` 기능을 활성화하세요:
+
+```toml
+swiftide = { version = "0.31", features = ["langfuse", "openai"] }
+```
+
+트레이싱을 구성하기 위해 `tracing-subscriber`도 추가하세요:
+
+```toml
+tracing-subscriber = "0.3"
+```
+
+## 환경 및 Langfuse 자격 증명 구성하기
+
+Langfuse에 필요한 환경 변수를 설정하세요. 이 키들은 [Langfuse Cloud](https://langfuse.com/cloud) 프로젝트 설정 페이지 또는 [Langfuse 셀프 호스팅](https://langfuse.com/self-hosting)에서 얻을 수 있습니다.
+
+```bash
+export LANGFUSE_PUBLIC_KEY=pk-lf-...
+export LANGFUSE_SECRET_KEY=sk-lf-...
+# optional, defaults to http://localhost:3000
+export LANGFUSE_URL=https://cloud.langfuse.com
+```
+
+## Langfuse로 Swiftide 계측하기
+
+Swiftide는 `tracing`과 통합됩니다. Langfuse로 트레이스를 전송하려면 일반 트레이싱 레이어와 함께 `LangfuseLayer`를 설정하세요.
+
+```rust
+use tracing::level_filters::LevelFilter;
+use tracing_subscriber::{
+    EnvFilter, Layer as _, layer::SubscriberExt as _, util::SubscriberInitExt as _,
+};
+use swiftide::langfuse::LangfuseLayer;
+
+let fmt_layer = tracing_subscriber::fmt::layer()
+    .compact()
+    .with_target(false)
+    .boxed();
+
+let langfuse_layer = LangfuseLayer::default()
+    .with_filter(LevelFilter::DEBUG)
+    .boxed();
+
+let registry = tracing_subscriber::registry()
+    .with(EnvFilter::from_default_env())
+    .with(vec![fmt_layer, langfuse_layer]);
+
+registry.init();
+```
+
+이 설정을 완료하면 계측된 스팬이나 Swiftide 작업이 Langfuse로 보고됩니다.
+
+## Hello World 예제
+
+Langfuse가 활성화된 최소한의 Swiftide 프로그램입니다. Swiftide를 통해 OpenAI로 간단한 프롬프트를 전송하고 트레이스를 Langfuse에 기록합니다.
+
+```rust
+//! This is an example of using the langfuse integration with Swiftide.
+//!
+//! Langfuse is a platform for tracking and monitoring LLM usage and performance.
+//!
+//! When the feature `langfuse` is enabled, Swiftide can report tracing information,
+//! usage, inputs, and outputs to langfuse.
+//!
+//! For this to work, you need to set the LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY
+//! to the appropriate values. You can also set the LANGFUSE_URL environment variable
+//! to overwrite the default URL (http://localhost:3000).
+use anyhow::Result;
+use swiftide::traits::SimplePrompt;
+use tracing::level_filters::LevelFilter;
+use tracing_subscriber::{
+    EnvFilter, Layer as _, layer::SubscriberExt as _, util::SubscriberInitExt as _,
+};
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    println!("Hello, langfuse!");
+
+    let fmt_layer = tracing_subscriber::fmt::layer()
+        .compact()
+        .with_target(false)
+        .boxed();
+
+    let langfuse_layer = swiftide::langfuse::LangfuseLayer::default()
+        .with_filter(LevelFilter::DEBUG)
+        .boxed();
+
+    let registry = tracing_subscriber::registry()
+        .with(EnvFilter::from_default_env())
+        .with(vec![fmt_layer, langfuse_layer]);
+
+    registry.init();
+
+    prompt_openai().await?;
+
+    Ok(())
+}
+
+#[tracing::instrument]
+async fn prompt_openai() -> Result<()> {
+    let openai = swiftide::integrations::openai::OpenAI::builder()
+        .default_prompt_model("gpt-5")
+        .build()
+        .unwrap();
+
+    let paris = openai
+        .prompt("What is the capital of France?".into())
+        .await?;
+
+    println!("The capital of France is {paris}");
+
+    Ok(())
+}
+```
+
+</Steps>
+
+이 프로그램을 실행하면 입력, 출력, 사용량, 메타데이터를 포함한 프롬프트에 대한 Langfuse 트레이스가 생성됩니다.
+
+import LearnMore from "@/components-mdx/integration-learn-more.mdx";
+
+## 더 알아보기
+
+Swiftide 사용에 대한 자세한 내용은 다음 리소스를 확인하세요:
+
+- [GitHub의 Swiftide](https://github.com/bosun-ai/swiftide)
+- [Swiftide 문서](https://swiftide.rs)

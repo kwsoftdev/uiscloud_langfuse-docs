@@ -1,0 +1,44 @@
+---
+title: n8n Integration
+seoTitle: n8n and Langfuse
+sidebarTitle: n8n
+logo: /images/integrations/n8n_icon.svg
+---
+
+# Integration: n8n
+
+> [n8n](https://github.com/n8n-io/n8n)은 fair-code 라이선스의 워크플로우 자동화 플랫폼입니다.
+
+## 프롬프트 관리 인테그레이션
+
+<Frame>
+  ![n8n node for
+  langfuse](/images/docs/prompt-management-node-in-n8n-workflow.png)
+</Frame>
+
+Langfuse 프롬프트 관리는 n8n 노드를 통해 사용할 수 있습니다. [n8n Node 문서](/docs/prompts/n8n-node)에서 더 알아보세요.
+
+## 트레이싱 인테그레이션
+
+### 공식 지원
+
+현재 n8n에 대한 네이티브 트레이싱 인테그레이션은 없습니다. 관심이 있다면 관련 GitHub 토론에 [여기](https://github.com/orgs/langfuse/discussions/4397)에서 업보트해 주세요.
+
+### 대안
+
+네이티브 인테그레이션은 없지만, n8n AI 워크플로우를 Langfuse에서 추적하는 몇 가지 방법이 있습니다.
+
+#### Broadcast와 함께 OpenRouter 사용하기
+
+n8n에서 LLM 제공업체로 [OpenRouter](https://openrouter.ai/)를 사용하고, OpenRouter의 [Broadcast 기능](/integrations/kr/gateways/openrouter#broadcast)을 사용해 트레이스를 Langfuse로 보낼 수 있습니다.
+
+#### 커뮤니티 지원
+
+<Frame>
+  ![n8n workflow with OpenAI model traced in
+  Langfuse](/images/docs/n8n-nodes-openai-langfuse-workflow.png)
+</Frame>
+
+[@rorubyy](https://github.com/rorubyy)는 OpenAI 모델을 감싸 트레이싱 데이터를 Langfuse로 보내는 n8n 노드를 만들었습니다. 여기에서 확인할 수 있습니다: [rorubyy/n8n-nodes-openai-langfuse](https://github.com/rorubyy/n8n-nodes-openai-langfuse)
+
+또는, [@rwb-truelime](https://github.com/rwb-truelime)이 OTEL(OpenTelemetry) API를 사용해 n8n 실행 데이터를 Langfuse로 전송하는 Python 프로젝트인 [n8n-langfuse-shipper](https://github.com/rwb-truelime/n8n-langfuse-shipper)를 개발했습니다. 이 방식은 n8n의 워크플로우 실행 데이터를 캡처해 관측 가능성과 트레이싱을 위해 Langfuse로 전달하는 더 폭넓은 통합을 제공합니다.

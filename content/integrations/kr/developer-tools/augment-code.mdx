@@ -1,0 +1,1049 @@
+---
+title: "Trace Augment Code with Langfuse"
+sidebarTitle: Augment Code
+logo: /images/integrations/augment_code_icon.svg
+description: "Trace Augment Code conversations, tool executions, and final session summaries with Langfuse."
+category: Integrations
+---
+
+# Augment Code Tracing with Langfuse
+
+> **Augment Code란 무엇인가요?** [Augment Code](https://www.augmentcode.com/)는 전문 팀을 위해 특별히 설계된 에이전틱 AI 플랫폼으로, 대규모 멀티 레포지토리 코드베이스에 대한 깊이 있는 시맨틱 이해를 유지하는 전용 Context Engine을 특징으로 합니다. 자율 에이전트를 활용해 복잡한 리팩터링, 정밀한 코드 리뷰부터 Jira나 Linear 티켓을 기반으로 전체 기능을 구현하는 것까지 엔드투엔드 개발 작업을 계획하고 실행하며, 동시에 아키텍처 일관성과 보안 준수를 보장합니다.
+
+> **Langfuse란 무엇인가요?** [Langfuse](https://langfuse.com/)는 오픈소스 LLM 엔지니어링 플랫폼입니다. 팀이 AI 워크플로우를 추적하고, 문제를 디버깅하고, 품질을 평가하고, 프로덕션에서 사용량을 모니터링할 수 있도록 돕습니다.
+
+## 이 인테그레이션으로 무엇을 추적할 수 있나요?
+
+Augment의 [훅 시스템](https://docs.augmentcode.com/cli/hooks)을 사용해, 이 인테그레이션은 도구별 활동과 최종 대화 요약을 모두 캡처한 뒤 Langfuse로 전송합니다. 이 문서에서는 다음을 모니터링하기 위해 2개의 훅을 활용합니다:
+
+- 최종 대화 페이로드에서 가져온 **사용자 프롬프트와 어시스턴트 응답**
+- `PostToolUse` 훅을 통한 **도구별 실행**
+- 도구 이름, MCP 세부 정보, 타임스탬프, 오류 상태 등 **도구 메타데이터**
+- 도구 호출 이후 기록되는 **파일 변경 컨텍스트**
+- `Stop` 훅에서 발생하는 **대화 수준 트레이스**
+- 최종 대화 트레이스 아래 중첩되는 **생성 및 도구 관찰**
+
+## UX 데모
+
+[tracing UX Auggie CLI => Langfuse](https://youtu.be/3i3YCOZtbC4)의 1분 데모
+
+## 작동 방식
+
+Augment는 `~/.augment/settings.json`에 전역으로 등록된 훅을 지원합니다. 이 인테그레이션은 **`PostToolUse`** 훅과 **`Stop`** 훅을 모두 사용합니다.
+
+1. 전역 훅은 각 도구 호출 이후, 그리고 각 Augment 응답이 완료된 이후에 실행되도록 구성됩니다.
+2. 셸 래퍼 스크립트는 `stdin`으로 Augment의 훅 페이로드를 받아 로컬 감사 항목을 기록하고, 변경되지 않은 JSON 페이로드를 Python으로 전달합니다.
+3. Python 스크립트는 Langfuse 설정을 로드하고, Augment 페이로드를 Langfuse 트레이스와 관찰로 변환하며, 트레이싱이 비활성화되었거나 설정이 없는 경우 실패해도 열린 상태(fail open)를 유지합니다.
+4. Python 스크립트가 먼저 활성 워크스페이스 루트에서 `.env.langfuse.local`을 검색한 뒤 `~/.augment/hooks`와 `~/.augment`로 폴백하기 때문에, 트레이싱은 워크스페이스별로 옵트인됩니다.
+
+## 빠른 시작
+
+<Steps>
+
+### Langfuse 설정하기
+
+1. [Langfuse Cloud](https://cloud.langfuse.com)에 가입하거나 [Langfuse를 직접 호스팅](https://langfuse.com/self-hosting)하세요.
+2. 새 프로젝트를 생성하고 프로젝트 설정에서 API 키를 복사하세요.
+
+### 의존성 설치하기
+
+Augment를 실행하는 머신에 다음이 있는지 확인하세요:
+
+- `jq`
+- `/usr/bin/python3`
+- Python `langfuse` 패키지
+
+Python SDK를 설치하고 훅 디렉터리를 생성하세요:
+
+```bash
+python3 -m pip install langfuse
+mkdir -p ~/.augment/hooks
+```
+
+### 훅 파일 생성하기
+
+`~/.augment/hooks/` 아래에 다음 네 개의 파일을 생성하세요:
+
+```text
+~/.augment/hooks/
+├── langfuse_hook_posttooluse.sh
+├── langfuse_hook_posttooluse.py
+├── langfuse_hook_stop.sh
+└── langfuse_hook_stop.py
+```
+
+셸 래퍼는 실행 가능한 훅 진입점으로 사용하고, Python 파일은 Langfuse 트레이싱 로직에 사용하세요.
+
+<details>
+<summary>View full langfuse_hook_stop.sh script</summary>
+
+```bash
+#!/usr/bin/env bash
+# Stop Hook: Conversation data capture and audit logging
+
+set -euo pipefail
+
+EVENT_DATA=$(cat)
+
+LOG_FILE="/tmp/auggie-hook-stop.log"
+echo "=== Stop $(date) ===" >> "$LOG_FILE"
+echo "$EVENT_DATA" | jq '.' >> "$LOG_FILE" 2>/dev/null || echo "$EVENT_DATA" >> "$LOG_FILE"
+
+USER_PROMPT=$(echo "$EVENT_DATA" | jq -r '.conversation.userPrompt // "NOT_SET"')
+AGENT_CODE=$(echo "$EVENT_DATA" | jq -c '.conversation.agentCodeResponse // []')
+AGENT_STOP_CAUSE=$(echo "$EVENT_DATA" | jq -r '.agent_stop_cause // "NOT_SET"')
+CONVERSATION_ID=$(echo "$EVENT_DATA" | jq -r '.conversation_id // "NOT_SET"')
+USER_EMAIL=$(echo "$EVENT_DATA" | jq -r '.context.userEmail // "NOT_SET"')
+MODEL_NAME=$(echo "$EVENT_DATA" | jq -r '.context.modelName // "NOT_SET"')
+CONTEXT_TIMESTAMP=$(echo "$EVENT_DATA" | jq -r '.context.timestamp // "NOT_SET"')
+
+# Log to audit file
+AUDIT_API_LOG="$HOME/.augment/audit-api.jsonl"
+mkdir -p "$(dirname "$AUDIT_API_LOG")"
+jq -n \
+    --arg event "Stop" \
+    --arg conversation_id "$CONVERSATION_ID" \
+    --arg user_email "$USER_EMAIL" \
+    --arg model_name "$MODEL_NAME" \
+    --arg agent_stop_cause "$AGENT_STOP_CAUSE" \
+    --arg timestamp "$CONTEXT_TIMESTAMP" \
+    --arg user_prompt "${USER_PROMPT:0:200}" \
+    --argjson agent_code_response "$AGENT_CODE" \
+    '{
+      event: $event,
+      conversation_id: $conversation_id,
+      user_email: $user_email,
+      model_name: $model_name,
+      agent_stop_cause: $agent_stop_cause,
+      timestamp: $timestamp,
+      user_prompt_preview: $user_prompt,
+      agent_code_response: $agent_code_response
+    }' >> "$AUDIT_API_LOG"
+
+# Pipe conversation data to Langfuse
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+LANGFUSE_SCRIPT="$HOOK_DIR/langfuse_hook_stop.py"
+PYTHON3="/usr/bin/python3"
+if [ -f "$LANGFUSE_SCRIPT" ]; then
+  printf '%s' "$EVENT_DATA" | "$PYTHON3" -u "$LANGFUSE_SCRIPT" 2>>"$HOOK_DIR/langfuse_hook_stop.log" || true
+fi
+
+# Output a message to show in the UI
+cat <<ENDJSON
+{
+  "systemMessage": "✅ Session logged | Stop cause: ${AGENT_STOP_CAUSE} | User: ${USER_EMAIL}",
+  "hookSpecificOutput": {
+    "hookEventName": "Stop",
+    "conversationId": "${CONVERSATION_ID}",
+    "stopCause": "${AGENT_STOP_CAUSE}"
+  }
+}
+ENDJSON
+
+exit 0
+```
+
+</details>
+
+<details>
+<summary>View full langfuse_hook_posttooluse.sh script</summary>
+
+```bash
+#!/usr/bin/env bash
+# PostToolUse Hook: Tool execution capture and audit logging
+
+set -euo pipefail
+
+EVENT_DATA=$(cat)
+
+LOG_FILE="/tmp/auggie-hook-posttooluse.log"
+echo "=== PostToolUse $(date) ===" >> "$LOG_FILE"
+echo "$EVENT_DATA" | jq '.' >> "$LOG_FILE" 2>/dev/null || echo "$EVENT_DATA" >> "$LOG_FILE"
+
+USER_PROMPT=$(echo "$EVENT_DATA" | jq -r '.conversation.userPrompt // "NOT_SET"')
+AGENT_CODE=$(echo "$EVENT_DATA" | jq -c '.conversation.agentCodeResponse // []')
+AGENT_STOP_CAUSE=$(echo "$EVENT_DATA" | jq -r '.agent_stop_cause // "NOT_SET"')
+CONVERSATION_ID=$(echo "$EVENT_DATA" | jq -r '.conversation_id // "NOT_SET"')
+USER_EMAIL=$(echo "$EVENT_DATA" | jq -r '.context.userEmail // "NOT_SET"')
+MODEL_NAME=$(echo "$EVENT_DATA" | jq -r '.context.modelName // "NOT_SET"')
+CONTEXT_TIMESTAMP=$(echo "$EVENT_DATA" | jq -r '.context.timestamp // "NOT_SET"')
+
+# Log to audit file
+AUDIT_API_LOG="$HOME/.augment/audit-api.jsonl"
+mkdir -p "$(dirname "$AUDIT_API_LOG")"
+jq -n \
+    --arg event "PostToolUse" \
+    --arg conversation_id "$CONVERSATION_ID" \
+    --arg user_email "$USER_EMAIL" \
+    --arg model_name "$MODEL_NAME" \
+    --arg agent_stop_cause "$AGENT_STOP_CAUSE" \
+    --arg timestamp "$CONTEXT_TIMESTAMP" \
+    --arg user_prompt "${USER_PROMPT:0:200}" \
+    --argjson agent_code_response "$AGENT_CODE" \
+    '{
+      event: $event,
+      conversation_id: $conversation_id,
+      user_email: $user_email,
+      model_name: $model_name,
+      agent_stop_cause: $agent_stop_cause,
+      timestamp: $timestamp,
+      user_prompt_preview: $user_prompt,
+      agent_code_response: $agent_code_response
+    }' >> "$AUDIT_API_LOG"
+
+# Pipe conversation data to Langfuse
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+LANGFUSE_SCRIPT="$HOOK_DIR/langfuse_hook_posttooluse.py"
+PYTHON3="/usr/bin/python3"
+if [ -f "$LANGFUSE_SCRIPT" ]; then
+  printf '%s' "$EVENT_DATA" | "$PYTHON3" -u "$LANGFUSE_SCRIPT" 2>>"$HOOK_DIR/langfuse_hook_stop.log" || true
+fi
+
+# Output a message to show in the UI
+cat <<ENDJSON
+{
+  "systemMessage": "✅ Session logged | Stop cause: ${AGENT_STOP_CAUSE} | User: ${USER_EMAIL}",
+  "hookSpecificOutput": {
+    "hookEventName": "PostToolUse",
+    "conversationId": "${CONVERSATION_ID}",
+    "stopCause": "${AGENT_STOP_CAUSE}"
+  }
+}
+ENDJSON
+
+exit 0
+```
+
+</details>
+
+<details>
+<summary>View full langfuse_hook_stop.py script</summary>
+
+```python
+#!/usr/bin/env python3
+"""
+Auggie Stop hook -> Langfuse trace.
+
+Reads the Auggie stop-hook JSON payload from stdin, parses the full
+conversation (user messages, assistant responses, tool/MCP calls,
+bash commands), and emits structured Langfuse traces.
+"""
+
+import hashlib
+import json
+import os
+import sys
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+# --- Paths & config ---
+HOOK_DIR = Path.home() / ".augment" / "hooks"
+LOG_FILE = HOOK_DIR / "langfuse_hook_stop.log"
+ENV_FILE = ".env.langfuse.local"
+MAX_CHARS = int(os.environ.get("AUGGIE_LANGFUSE_MAX_CHARS", "20000"))
+DEBUG = os.environ.get("AUGGIE_LANGFUSE_DEBUG", "").lower() == "true"
+
+# Fallback dirs to search for .env.langfuse.local when workspace_roots is empty
+FALLBACK_ENV_DIRS = [
+    HOOK_DIR,
+    Path.home() / ".augment",
+]
+
+# --- Langfuse import (fail-open) ---
+try:
+    from langfuse import Langfuse, propagate_attributes
+except Exception:
+    sys.exit(0)
+
+
+# ── Logging ──────────────────────────────────────────────────────────
+def _log(level: str, msg: str) -> None:
+    try:
+        HOOK_DIR.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(f"{ts} [{level}] {msg}\n")
+    except Exception:
+        pass
+
+
+def debug(msg: str) -> None:
+    if DEBUG:
+        _log("DEBUG", msg)
+
+
+def info(msg: str) -> None:
+    _log("INFO", msg)
+
+
+def warn(msg: str) -> None:
+    _log("WARN", msg)
+
+
+def error(msg: str) -> None:
+    _log("ERROR", msg)
+
+
+# ── Env loading ──────────────────────────────────────────────────────
+def _parse_env_file(path: Path) -> Dict[str, str]:
+    env: Dict[str, str] = {}
+    if not path.is_file():
+        return env
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        env[k.strip()] = v.strip().strip("\"'")
+    return env
+
+
+def load_env(workspace_roots: List[str]) -> Dict[str, str]:
+    """Try workspace_roots first, then fallback dirs."""
+    search_dirs = [Path(r) for r in (workspace_roots or [])] + FALLBACK_ENV_DIRS
+    for d in search_dirs:
+        env = _parse_env_file(d / ENV_FILE)
+        if env:
+            debug(f"Loaded env from {d / ENV_FILE}")
+            return env
+    return {}
+
+
+def cfg(name: str, env: Dict[str, str], default: str = "") -> str:
+    return os.environ.get(name) or env.get(name, "") or default
+
+
+# ── Text helpers ─────────────────────────────────────────────────────
+def truncate(s: str, max_chars: int = MAX_CHARS) -> Tuple[str, Dict[str, Any]]:
+    if not s:
+        return "", {"truncated": False, "orig_len": 0}
+    orig = len(s)
+    if orig <= max_chars:
+        return s, {"truncated": False, "orig_len": orig}
+    return s[:max_chars], {
+        "truncated": True,
+        "orig_len": orig,
+        "kept_len": max_chars,
+        "sha256": hashlib.sha256(s.encode()).hexdigest(),
+    }
+
+
+# ── Conversation parsing ────────────────────────────────────────────
+def extract_tool_calls(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    tools: List[Dict[str, Any]] = []
+    for msg in messages:
+        role = msg.get("role", "")
+        content = msg.get("content")
+        if isinstance(content, list):
+            for block in content:
+                if not isinstance(block, dict):
+                    continue
+                btype = block.get("type", "")
+                if btype == "tool_use":
+                    tools.append({
+                        "id": block.get("id", ""),
+                        "name": block.get("name", "unknown"),
+                        "input": block.get("input"),
+                        "output": None,
+                    })
+                if btype == "mcp_tool_use":
+                    tools.append({
+                        "id": block.get("id", ""),
+                        "name": f"mcp:{block.get('server_name', '?')}/{block.get('name', '?')}",
+                        "input": block.get("input"),
+                        "output": None,
+                    })
+        if role == "user" and isinstance(content, list):
+            for block in content:
+                if not isinstance(block, dict):
+                    continue
+                if block.get("type") == "tool_result":
+                    tid = block.get("tool_use_id", "")
+                    result_content = block.get("content", "")
+                    for tc in tools:
+                        if tc["id"] == tid and tc["output"] is None:
+                            if isinstance(result_content, str):
+                                tc["output"] = result_content
+                            else:
+                                tc["output"] = json.dumps(result_content, ensure_ascii=False)
+                            break
+    return tools
+
+
+def extract_text_from_content(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict) and block.get("type") == "text":
+                parts.append(block.get("text", ""))
+        return "\n".join(p for p in parts if p)
+    return ""
+
+
+# ── Langfuse emit ───────────────────────────────────────────────────
+def emit_conversation(lf: Langfuse, session_id: str, payload: Dict[str, Any],
+                      env: Dict[str, str]) -> None:
+    conv = payload.get("conversation", {})
+    ctx = payload.get("context", {})
+    messages = conv.get("messages", [])
+
+    user_prompt = conv.get("userPrompt", "")
+    agent_response = conv.get("agentTextResponse", "")
+    model = ctx.get("modelName") or "auggie"
+    user_email = ctx.get("userEmail", "")
+    stop_cause = payload.get("agent_stop_cause", "")
+    workspace_roots = payload.get("workspace_roots", [])
+
+    tool_calls = extract_tool_calls(messages)
+
+    mcp_calls = [t for t in tool_calls if t["name"].startswith("mcp:")]
+    bash_calls = [t for t in tool_calls if "bash" in t["name"].lower()
+                  or "launch-process" in t["name"].lower()
+                  or "shell" in t["name"].lower()]
+    other_calls = [t for t in tool_calls if t not in mcp_calls and t not in bash_calls]
+
+    user_text, user_meta = truncate(user_prompt)
+    agent_text, agent_meta = truncate(agent_response)
+
+    info(f"Emitting trace: conv_id={session_id}, model={model}, "
+         f"tools={len(tool_calls)} (mcp={len(mcp_calls)}, bash={len(bash_calls)})")
+
+    with lf.start_as_current_observation(
+        name="Auggie Conversation",
+        input={"role": "user", "content": user_text},
+        metadata={
+            "source": "auggie",
+            "model": model,
+            "user": user_email,
+            "stop_cause": stop_cause,
+            "workspace_roots": workspace_roots,
+            "user_text_meta": user_meta,
+            "agent_text_meta": agent_meta,
+            "tool_count": len(tool_calls),
+            "mcp_tool_count": len(mcp_calls),
+            "bash_tool_count": len(bash_calls),
+        },
+    ) as span, propagate_attributes(
+        session_id=session_id,
+        trace_name="Auggie Conversation",
+        tags=["auggie"],
+        user_id=user_email or None,
+    ):
+
+        with lf.start_as_current_observation(
+            name="Auggie Response",
+            as_type="generation",
+            model=model,
+            input={"role": "user", "content": user_text},
+            output={"role": "assistant", "content": agent_text},
+            metadata={
+                "user_text_meta": user_meta,
+                "agent_text_meta": agent_meta,
+            },
+        ):
+            pass
+
+        for tc in mcp_calls:
+            in_obj = tc["input"]
+            if isinstance(in_obj, str):
+                in_obj, _ = truncate(in_obj)
+            out_str = tc.get("output") or ""
+            if isinstance(out_str, str):
+                out_str, out_meta = truncate(out_str)
+            else:
+                out_meta = {}
+            with lf.start_as_current_observation(
+                name=f"MCP: {tc['name']}",
+                as_type="tool",
+                input=in_obj,
+                metadata={"tool_id": tc["id"], "category": "mcp", "output_meta": out_meta},
+            ) as obs:
+                obs.update(output=out_str)
+
+        for tc in bash_calls:
+            in_obj = tc["input"]
+            if isinstance(in_obj, str):
+                in_obj, _ = truncate(in_obj)
+            out_str = tc.get("output") or ""
+            if isinstance(out_str, str):
+                out_str, out_meta = truncate(out_str)
+            else:
+                out_meta = {}
+            with lf.start_as_current_observation(
+                name=f"Bash: {tc['name']}",
+                as_type="tool",
+                input=in_obj,
+                metadata={"tool_id": tc["id"], "category": "bash", "output_meta": out_meta},
+            ) as obs:
+                obs.update(output=out_str)
+
+        for tc in other_calls:
+            in_obj = tc["input"]
+            if isinstance(in_obj, str):
+                in_obj, _ = truncate(in_obj)
+            out_str = tc.get("output") or ""
+            if isinstance(out_str, str):
+                out_str, out_meta = truncate(out_str)
+            else:
+                out_meta = {}
+            with lf.start_as_current_observation(
+                name=f"Tool: {tc['name']}",
+                as_type="tool",
+                input=in_obj,
+                metadata={"tool_id": tc["id"], "category": "other", "output_meta": out_meta},
+            ) as obs:
+                obs.update(output=out_str)
+
+        span.update(output={"role": "assistant", "content": agent_text})
+
+
+# ── Main ─────────────────────────────────────────────────────────────
+def main() -> int:
+    start = time.time()
+    info("=== Hook invoked ===")
+
+    try:
+        raw = sys.stdin.read() or "{}"
+        payload = json.loads(raw)
+    except Exception as e:
+        error(f"Failed to read/parse stdin: {e}")
+        return 0
+
+    debug(f"Payload keys: {list(payload.keys())}")
+    debug(f"Raw payload (first 1000 chars): {raw[:1000]}")
+
+    workspace_roots = payload.get("workspace_roots", [])
+    info(f"workspace_roots: {workspace_roots}")
+
+    env = load_env(workspace_roots)
+    if not env:
+        warn("No .env.langfuse.local found in any search path")
+        return 0
+
+    trace_flag = cfg("TRACE_TO_LANGFUSE", env).lower()
+    info(f"TRACE_TO_LANGFUSE = {trace_flag!r}")
+    if trace_flag != "true":
+        info("Tracing disabled, exiting")
+        return 0
+
+    pk = cfg("LANGFUSE_PUBLIC_KEY", env)
+    sk = cfg("LANGFUSE_SECRET_KEY", env)
+    host = cfg("LANGFUSE_BASE_URL", env, "https://cloud.langfuse.com")
+    if not pk or not sk:
+        warn("Missing LANGFUSE_PUBLIC_KEY or LANGFUSE_SECRET_KEY")
+        return 0
+
+    info(f"pk={pk[:10]}..., host={host}")
+
+    conv_id = payload.get("conversation_id", "")
+    conv = payload.get("conversation", {})
+    user_prompt = conv.get("userPrompt", "")
+    agent_response = conv.get("agentTextResponse", "")
+
+    if not conv_id:
+        warn("No conversation_id in payload, exiting")
+        return 0
+    if not user_prompt and not agent_response:
+        warn("Both userPrompt and agentTextResponse empty, exiting")
+        return 0
+
+    info(f"conv_id={conv_id}, prompt_len={len(user_prompt)}, response_len={len(agent_response)}")
+
+    try:
+        lf = Langfuse(public_key=pk, secret_key=sk, host=host)
+    except Exception as e:
+        error(f"Failed to create Langfuse client: {e}")
+        return 0
+
+    try:
+        emit_conversation(lf, conv_id, payload, env)
+        lf.flush()
+        dur = time.time() - start
+        info(f"Trace sent in {dur:.2f}s for conv_id={conv_id}")
+    except Exception as e:
+        error(f"Failed to emit trace: {e}")
+    finally:
+        try:
+            lf.shutdown()
+        except Exception:
+            pass
+
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except Exception as e:
+        error(f"Unhandled exception: {e}")
+        sys.exit(0)
+```
+
+</details>
+
+<details>
+<summary>View full langfuse_hook_posttooluse.py script</summary>
+
+```python
+#!/usr/bin/env python3
+"""
+Auggie PostToolUse hook -> Langfuse trace.
+
+Reads the PostToolUse JSON event from stdin and emits a Langfuse trace
+for each tool invocation.  Also writes a local JSONL audit log.
+
+Stdin payload fields (mirrors the bash PostToolUse hook):
+  tool_name, tool_error, is_mcp_tool, conversation_id, file_changes,
+  context.userEmail, context.modelName, context.timestamp,
+  user_prompt  (when includeConversationData: true),
+  mcp_metadata.mcpDecision, mcp_metadata.mcpTotalToolsCount,
+  mcp_metadata.mcpExecutedToolName, mcp_metadata.mcpExecutedToolServerName,
+  mcp_metadata.mcpExecutedTotalToolsCount
+
+Environment variables
+---------------------
+TRACE_TO_LANGFUSE          – must be "true" to enable  (or via .env file)
+LANGFUSE_PUBLIC_KEY        – Langfuse public key       (or via .env file)
+LANGFUSE_SECRET_KEY        – Langfuse secret key       (or via .env file)
+LANGFUSE_BASE_URL          – Langfuse host             (or via .env file)
+AUGGIE_LANGFUSE_DEBUG      – set to "true" for verbose logging
+AUGGIE_LANGFUSE_MAX_CHARS  – max chars kept per field  (default 20000)
+"""
+
+import hashlib
+import json
+import os
+import sys
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, List, Tuple
+
+# --- Paths & config ---
+HOOK_DIR = Path.home() / ".augment" / "hooks"
+LOG_FILE = HOOK_DIR / "langfuse_hook_posttooluse.log"
+AUDIT_LOG = Path.home() / ".augment" / "audit-api.jsonl"
+ENV_FILE = ".env.langfuse.local"
+MAX_CHARS = int(os.environ.get("AUGGIE_LANGFUSE_MAX_CHARS", "20000"))
+DEBUG = os.environ.get("AUGGIE_LANGFUSE_DEBUG", "").lower() == "true"
+
+FALLBACK_ENV_DIRS = [
+    HOOK_DIR,
+    Path.home() / ".augment",
+]
+
+# --- Langfuse import (fail-open) ---
+try:
+    from langfuse import Langfuse, propagate_attributes
+except Exception:
+    sys.exit(0)
+
+
+# ── Logging ──────────────────────────────────────────────────────────
+def _log(level: str, msg: str) -> None:
+    try:
+        HOOK_DIR.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(f"{ts} [{level}] {msg}\n")
+    except Exception:
+        pass
+
+
+def debug(msg: str) -> None:
+    if DEBUG:
+        _log("DEBUG", msg)
+
+
+def info(msg: str) -> None:
+    _log("INFO", msg)
+
+
+def warn(msg: str) -> None:
+    _log("WARN", msg)
+
+
+def error(msg: str) -> None:
+    _log("ERROR", msg)
+
+
+# ── Env loading (shared pattern with stop hook) ─────────────────────
+def _parse_env_file(path: Path) -> Dict[str, str]:
+    env: Dict[str, str] = {}
+    if not path.is_file():
+        return env
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        env[k.strip()] = v.strip().strip("\"'")
+    return env
+
+
+def load_env(workspace_roots: List[str]) -> Dict[str, str]:
+    """Try workspace_roots first, then fallback dirs."""
+    search_dirs = [Path(r) for r in (workspace_roots or [])] + FALLBACK_ENV_DIRS
+    for d in search_dirs:
+        env = _parse_env_file(d / ENV_FILE)
+        if env:
+            debug(f"Loaded env from {d / ENV_FILE}")
+            return env
+    return {}
+
+
+def cfg(name: str, env: Dict[str, str], default: str = "") -> str:
+    return os.environ.get(name) or env.get(name, "") or default
+
+
+# ── Text helpers ─────────────────────────────────────────────────────
+def truncate(s: str, max_chars: int = MAX_CHARS) -> Tuple[str, Dict[str, Any]]:
+    if not s:
+        return "", {"truncated": False, "orig_len": 0}
+    orig = len(s)
+    if orig <= max_chars:
+        return s, {"truncated": False, "orig_len": orig}
+    return s[:max_chars], {
+        "truncated": True,
+        "orig_len": orig,
+        "kept_len": max_chars,
+        "sha256": hashlib.sha256(s.encode()).hexdigest(),
+    }
+
+
+# ── Extract fields from PostToolUse event ────────────────────────────
+def extract_fields(event: Dict[str, Any]) -> Dict[str, Any]:
+    ctx = event.get("context") or {}
+    mcp = event.get("mcp_metadata") or {}
+
+    tool_error = event.get("tool_error") or ""
+    if tool_error == "null":
+        tool_error = ""
+
+    return {
+        "tool_name":        event.get("tool_name") or "unknown",
+        "tool_error":       tool_error,
+        "is_mcp_tool":      bool(event.get("is_mcp_tool", False)),
+        "conversation_id":  event.get("conversation_id") or "unknown",
+        "file_changes":     event.get("file_changes"),
+        "user_email":       ctx.get("userEmail") or "",
+        "model_name":       ctx.get("modelName") or "",
+        "timestamp":        ctx.get("timestamp") or datetime.now(timezone.utc).isoformat(),
+        "user_prompt":      event.get("user_prompt") or "",
+        "mcp_decision":                 mcp.get("mcpDecision") or "",
+        "mcp_total_tools_count":        int(mcp.get("mcpTotalToolsCount") or 0),
+        "mcp_tool_name":                mcp.get("mcpExecutedToolName") or "",
+        "mcp_server_name":              mcp.get("mcpExecutedToolServerName") or "",
+        "mcp_executed_total_tools_count": int(mcp.get("mcpExecutedTotalToolsCount") or 0),
+    }
+
+
+# ── Local audit log (JSONL, mirrors the bash hook) ──────────────────
+def write_audit_log(fields: Dict[str, Any]) -> None:
+    try:
+        AUDIT_LOG.parent.mkdir(parents=True, exist_ok=True)
+        record = {
+            "event":                        "PostToolUse",
+            "conversation_id":              fields["conversation_id"],
+            "tool_name":                    fields["tool_name"],
+            "user_email":                   fields["user_email"],
+            "model_name":                   fields["model_name"],
+            "is_mcp_tool":                  fields["is_mcp_tool"],
+            "mcp_decision":                 fields["mcp_decision"],
+            "mcp_total_tools_count":        fields["mcp_total_tools_count"],
+            "mcp_tool_name":                fields["mcp_tool_name"],
+            "mcp_server_name":              fields["mcp_server_name"],
+            "mcp_executed_total_tools_count": fields["mcp_executed_total_tools_count"],
+            "timestamp":                    fields["timestamp"],
+            "has_error":                    bool(fields["tool_error"]),
+            "file_changes":                 fields["file_changes"],
+            "user_prompt_preview":          fields["user_prompt"][:100] if fields["user_prompt"] else "",
+        }
+        with open(AUDIT_LOG, "a", encoding="utf-8") as f:
+            f.write(json.dumps(record, default=str) + "\n")
+    except Exception as e:
+        debug(f"write_audit_log failed: {e}")
+
+
+# ── Langfuse emit ───────────────────────────────────────────────────
+def emit_tool_use(lf: Langfuse, fields: Dict[str, Any]) -> None:
+    tool_name = fields["tool_name"]
+    conversation_id = fields["conversation_id"]
+    has_error = bool(fields["tool_error"])
+
+    user_prompt_trunc, user_prompt_meta = truncate(fields["user_prompt"])
+
+    tags = ["augment-code", "post-tool-use"]
+    if fields["is_mcp_tool"]:
+        tags.append("mcp")
+    if has_error:
+        tags.append("tool-error")
+
+    with lf.start_as_current_observation(
+        name=f"PostToolUse – {tool_name}",
+        input={"user_prompt_preview": user_prompt_trunc},
+        metadata={
+            "source":           "augment-code-hook",
+            "event":            "PostToolUse",
+            "conversation_id":  conversation_id,
+            "user_email":       fields["user_email"],
+            "model_name":       fields["model_name"],
+            "timestamp":        fields["timestamp"],
+            "user_prompt_meta": user_prompt_meta,
+        },
+    ) as span, propagate_attributes(
+        session_id=conversation_id,
+        trace_name=f"PostToolUse – {tool_name}",
+        tags=tags,
+        user_id=fields["user_email"] or None,
+    ):
+
+        tool_input: Dict[str, Any] = {}
+        if fields["is_mcp_tool"]:
+            tool_input["mcp_decision"] = fields["mcp_decision"]
+            tool_input["mcp_server_name"] = fields["mcp_server_name"]
+            tool_input["mcp_tool_name"] = fields["mcp_tool_name"]
+            tool_input["mcp_total_tools_count"] = fields["mcp_total_tools_count"]
+            tool_input["mcp_executed_total_tools_count"] = fields["mcp_executed_total_tools_count"]
+
+        tool_output: Dict[str, Any] = {}
+        if has_error:
+            tool_output["error"] = fields["tool_error"]
+        if fields["file_changes"] is not None:
+            tool_output["file_changes"] = fields["file_changes"]
+
+        with lf.start_as_current_observation(
+            name=f"Tool: {tool_name}",
+            as_type="tool",
+            input=tool_input or None,
+            metadata={
+                "tool_name":    tool_name,
+                "is_mcp_tool":  fields["is_mcp_tool"],
+                "has_error":    has_error,
+            },
+        ) as obs:
+            obs.update(output=tool_output or None)
+
+        span.update(output={
+            "tool_name":          tool_name,
+            "has_error":          has_error,
+            "file_changes_count": len(fields["file_changes"]) if isinstance(fields["file_changes"], list) else 0,
+        })
+
+
+# ── Main ─────────────────────────────────────────────────────────────
+def main() -> int:
+    start = time.time()
+    info("=== PostToolUse hook invoked ===")
+
+    try:
+        raw = sys.stdin.read() or "{}"
+        event = json.loads(raw)
+    except Exception as e:
+        error(f"Failed to read/parse stdin: {e}")
+        return 0
+
+    debug(f"Payload keys: {list(event.keys())}")
+    debug(f"Raw payload (first 1000 chars): {raw[:1000]}")
+
+    workspace_roots = event.get("workspace_roots", [])
+
+    env = load_env(workspace_roots)
+    if not env:
+        warn("No .env.langfuse.local found in any search path")
+        return 0
+
+    trace_flag = cfg("TRACE_TO_LANGFUSE", env).lower()
+    if trace_flag != "true":
+        info("Tracing disabled, exiting")
+        return 0
+
+    pk = cfg("LANGFUSE_PUBLIC_KEY", env)
+    sk = cfg("LANGFUSE_SECRET_KEY", env)
+    host = cfg("LANGFUSE_BASE_URL", env, "https://cloud.langfuse.com")
+    if not pk or not sk:
+        warn("Missing LANGFUSE_PUBLIC_KEY or LANGFUSE_SECRET_KEY")
+        return 0
+
+    fields = extract_fields(event)
+    info(f"tool={fields['tool_name']}, conv={fields['conversation_id']}, "
+         f"mcp={fields['is_mcp_tool']}, error={bool(fields['tool_error'])}")
+
+    write_audit_log(fields)
+
+    try:
+        lf = Langfuse(public_key=pk, secret_key=sk, host=host)
+    except Exception as e:
+        error(f"Failed to create Langfuse client: {e}")
+        return 0
+
+    try:
+        emit_tool_use(lf, fields)
+        lf.flush()
+        dur = time.time() - start
+        info(f"Trace sent in {dur:.2f}s (tool={fields['tool_name']}, conv={fields['conversation_id']})")
+    except Exception as e:
+        error(f"Failed to emit trace: {e}")
+    finally:
+        try:
+            lf.shutdown()
+        except Exception:
+            pass
+
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except Exception as e:
+        error(f"Unhandled exception: {e}")
+        sys.exit(0)
+```
+
+</details>
+
+셸 래퍼를 실행 가능하게 만드세요:
+
+```bash
+chmod +x ~/.augment/hooks/langfuse_hook_stop.sh
+chmod +x ~/.augment/hooks/langfuse_hook_posttooluse.sh
+```
+
+### 훅 등록하기
+
+전역 Augment 설정 `~/.augment/settings.json`에 두 훅을 모두 추가하세요:
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.augment/hooks/langfuse_hook_posttooluse.sh"
+          }
+        ],
+        "metadata": {
+          "includeConversationData": true,
+          "includeUserContext": true
+        }
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.augment/hooks/langfuse_hook_stop.sh"
+          }
+        ],
+        "metadata": {
+          "includeConversationData": true,
+          "includeUserContext": true
+        }
+      }
+    ]
+  }
+}
+```
+
+이렇게 하면 훅이 전역으로 등록되어 모든 Augment 세션에서 실행됩니다.
+
+### 프로젝트별로 트레이싱 활성화하기
+
+트레이싱을 활성화하려는 각 워크스페이스에서 워크스페이스 루트에 `.env.langfuse.local` 파일을 생성하세요:
+
+```bash
+TRACE_TO_LANGFUSE=true
+LANGFUSE_PUBLIC_KEY=pk-lf-...
+LANGFUSE_SECRET_KEY=sk-lf-...
+LANGFUSE_BASE_URL=https://cloud.langfuse.com
+AUGGIE_LANGFUSE_DEBUG=false
+AUGGIE_LANGFUSE_MAX_CHARS=20000
+```
+
+<Callout type="info">
+트레이싱은 워크스페이스별로 옵트인됩니다. 훅은 전역으로 설치되지만, 발견된 `.env.langfuse.local` 파일에서 `TRACE_TO_LANGFUSE`가 `"true"`로 설정되어 있지 않으면 Python 스크립트는 즉시 종료됩니다.
+</Callout>
+
+Python 훅은 다음 순서로 `.env.langfuse.local`을 찾습니다:
+
+1. 현재 워크스페이스 루트
+2. `~/.augment/hooks`
+3. `~/.augment`
+
+**환경 변수:**
+
+| 변수                        | 설명                                                                                       | 필수 여부            |
+| --------------------------- | ------------------------------------------------------------------------------------------ | -------------------- |
+| `TRACE_TO_LANGFUSE`         | 트레이싱을 활성화하려면 `"true"`로 설정하세요                                              | 예                   |
+| `LANGFUSE_PUBLIC_KEY`       | Langfuse 공개 키                                                                           | 예                   |
+| `LANGFUSE_SECRET_KEY`       | Langfuse 비밀 키                                                                           | 예                   |
+| `LANGFUSE_BASE_URL`         | Langfuse 기본 URL(EU는 `https://cloud.langfuse.com`, US는 `https://us.cloud.langfuse.com`) | 아니요 (기본값은 EU) |
+| `AUGGIE_LANGFUSE_DEBUG`     | 자세한 디버그 로깅을 원하면 `"true"`로 설정하세요                                          | 아니요               |
+| `AUGGIE_LANGFUSE_MAX_CHARS` | 필드당 유지할 최대 문자 수 (기본값 20000)                                                  | 아니요               |
+
+### Augment Code 사용 시작하기
+
+이제 트레이싱이 활성화된 워크스페이스를 열고 Augment를 평소대로 사용하세요. 훅이 등록되면, 트레이싱이 활성화되어 있을 때마다 `PostToolUse`와 `Stop` 이벤트가 자동으로 전송됩니다.
+
+### Langfuse에서 트레이스 확인하기
+
+Langfuse 프로젝트를 열어 캡처된 트레이스를 확인하세요. 다음을 볼 수 있습니다:
+
+- 파일 변경, 오류 상태, 사용자/모델/타임스탬프 세부 정보, MCP 메타데이터를 포함해 개별 도구 실행에 대한 **`PostToolUse – <tool>` 트레이스**
+- `Stop` 훅에서 나온 **`Auggie Conversation` 트레이스**로, 최종 대화 수준 생성과 전체 페이로드에서 추출된 도구 관찰을 포함
+
+</Steps>
+
+## 문제 해결
+
+### Langfuse에 트레이스가 나타나지 않음
+
+1. `.env.langfuse.local`이 워크스페이스 루트, `~/.augment/hooks`, 또는 `~/.augment`에 있는지 확인하세요.
+2. `TRACE_TO_LANGFUSE=true`이고 Langfuse 키가 채워져 있는지 확인하세요.
+3. 로컬 훅 로그를 확인하세요:
+
+```bash
+tail -f /tmp/auggie-hook-stop.log
+tail -f /tmp/auggie-hook-posttooluse.log
+tail -f ~/.augment/hooks/langfuse_hook_stop.log
+tail -f ~/.augment/hooks/langfuse_hook_posttooluse.log
+```
+
+4. Python 의존성을 가져올 수 있는지 확인하세요:
+
+```bash
+/usr/bin/python3 -c "import langfuse; print('langfuse ok')"
+```
+
+### 훅은 등록되었지만 여전히 트레이스가 전송되지 않음
+
+- `~/.augment/settings.json`의 두 훅 커맨드가 모두 실행 가능한 셸 스크립트를 가리키는지 확인하세요.
+- 셸 래퍼가 원본 페이로드를 소비하는 대신 Python 스크립트로 전달하는지 확인하세요.
+- `~/.augment/audit-api.jsonl`을 확인해 Langfuse 전송이 실패하더라도 셸 래퍼가 이벤트를 수신하고 있는지 확인하세요.
+- 이 설정은 **실패해도 열린 상태(fail open)**를 유지하도록 설계되어 있다는 점을 기억하세요: 트레이싱이 실패하더라도 Augment는 계속 동작하므로, 로그가 가장 신뢰할 수 있는 확인 수단입니다.
+
+### 인증 또는 리전 문제
+
+`.env.langfuse.local`의 키와 기본 URL을 확인하세요:
+
+- **EU Cloud**: `https://cloud.langfuse.com`
+- **US Cloud**: `https://us.cloud.langfuse.com`
+- **셀프 호스팅**: 직접 호스팅하는 Langfuse 기본 URL
+
+## 리소스
+
+- [Augment Code CLI 문서](https://docs.augmentcode.com/cli/overview)
+- [Augment Code 훅](https://docs.augmentcode.com/cli/hooks)
+- [Langfuse Cloud](https://cloud.langfuse.com)
+- [Langfuse SDK 계측](https://langfuse.com/docs/observability/sdk/instrumentation)
+- [Langfuse Python SDK 레퍼런스](https://python.reference.langfuse.com)

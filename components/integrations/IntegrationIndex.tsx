@@ -1,10 +1,21 @@
-import { integrationsSource } from "@/lib/source";
+import { integrationsSource, integrationsKrSource } from "@/lib/source";
 import { Cards } from "@/components/docs";
 import {
   nativeIntegrationsMeta,
   dataPlatformIntegrationsMeta,
 } from "@/lib/integrations-meta";
 import { cn } from "@/lib/utils";
+
+type Lang = "en" | "ko";
+
+/** Rewrites an /integrations/... route to its /integrations/kr/... counterpart.
+ * Routes outside /integrations (e.g. /docs/...) are left untouched — same
+ * convention as everywhere else on the site: cross-section links stay on the
+ * English page unless that section is translated too. */
+function localizeRoute(route: string, lang: Lang): string {
+  if (lang !== "ko" || !route.startsWith("/integrations/")) return route;
+  return `/integrations/kr${route.slice("/integrations".length)}`;
+}
 
 function additionalLinksFromMeta(metaConfig: Record<string, any>) {
   return Object.entries(metaConfig)
@@ -20,6 +31,7 @@ const categoryConfig: Record<
   {
     title: string;
     description: string;
+    descriptionKo?: string;
     additionalLinks?: { route: string; frontMatter: any }[];
     featuredLinks?: ProcessedIntegrationPage[];
   }
@@ -27,6 +39,7 @@ const categoryConfig: Record<
   native: {
     title: "Native",
     description: "Native integrations with Langfuse",
+    descriptionKo: "Langfuse의 네이티브 인테그레이션",
     additionalLinks: additionalLinksFromMeta(nativeIntegrationsMeta),
     featuredLinks: [
       {
@@ -49,6 +62,7 @@ const categoryConfig: Record<
   frameworks: {
     title: "Frameworks",
     description: "Integrate with popular AI frameworks",
+    descriptionKo: "인기 있는 AI 프레임워크와 통합하세요",
     featuredLinks: [
       {
         route: "/integrations/frameworks/langchain",
@@ -106,34 +120,43 @@ const categoryConfig: Record<
   "model-providers": {
     title: "Model Providers",
     description: "Direct integrations with AI model providers",
+    descriptionKo: "AI 모델 제공업체와의 직접 인테그레이션",
   },
   gateways: {
     title: "Gateways",
     description: "Connect through API gateways and proxies",
+    descriptionKo: "API 게이트웨이 및 프록시를 통해 연결하세요",
   },
   "no-code": {
     title: "No-Code",
     description: "No-code agent builders and tools",
+    descriptionKo: "노코드 에이전트 빌더 및 도구",
   },
   analytics: {
     title: "Analytics",
     description:
       "Analytics tools that can visualize Langfuse traces and metrics",
+    descriptionKo: "Langfuse 트레이스와 메트릭을 시각화할 수 있는 분석 도구",
   },
   data: {
     title: "Data Platform",
     description:
       "Use Langfuse data and metrics in your own application and data platform",
+    descriptionKo:
+      "Langfuse 데이터와 메트릭을 여러분의 애플리케이션과 데이터 플랫폼에서 활용하세요",
     additionalLinks: additionalLinksFromMeta(dataPlatformIntegrationsMeta),
   },
   "developer-tools": {
     title: "Developer Tools",
     description:
       "Trace AI coding assistants, editors, and CLIs, or use Langfuse directly from your editor",
+    descriptionKo:
+      "AI 코딩 어시스턴트, 에디터, CLI를 트레이싱하거나 에디터에서 직접 Langfuse를 사용하세요",
   },
   other: {
     title: "Other",
     description: "Other integrations",
+    descriptionKo: "기타 인테그레이션",
   },
 };
 
@@ -159,16 +182,18 @@ function IntegrationLogo({ frontMatter }: { frontMatter: any }) {
   );
 }
 
-function loadFilesystemPages(category: string): IntegrationPage[] {
+function loadFilesystemPages(category: string, lang: Lang): IntegrationPage[] {
+  const source = lang === "ko" ? integrationsKrSource : integrationsSource;
+  const routePrefix = lang === "ko" ? "/integrations/kr" : "/integrations";
   try {
-    const allParams = integrationsSource.generateParams();
+    const allParams = source.generateParams();
     return allParams
       .filter(({ slug }) => slug.length >= 2 && slug[0] === category)
       .map(({ slug }) => {
-        const page = integrationsSource.getPage(slug);
+        const page = source.getPage(slug);
         if (!page) return null;
         return {
-          route: `/integrations/${slug.join("/")}`,
+          route: `${routePrefix}/${slug.join("/")}`,
           name: String(slug[slug.length - 1] || ""),
           frontMatter: page.data as unknown as Record<string, unknown>,
         } as IntegrationPage;
@@ -189,11 +214,11 @@ function processPages(pages: IntegrationPage[]): ProcessedIntegrationPage[] {
     .sort((a, b) => a.title.localeCompare(b.title));
 }
 
-function getCategory(category: string) {
+function getCategory(category: string, lang: Lang = "en") {
   const config = categoryConfig[category];
   if (!config) return null;
 
-  const filesystemPages = loadFilesystemPages(category);
+  const filesystemPages = loadFilesystemPages(category, lang);
   const mergedPages = [
     ...(config.additionalLinks ?? []),
     ...(filesystemPages ?? []),
@@ -201,10 +226,17 @@ function getCategory(category: string) {
 
   if (mergedPages.length === 0) return null;
 
+  const description =
+    (lang === "ko" ? config.descriptionKo : undefined) ?? config.description;
+  const featured = config.featuredLinks?.map((link) => ({
+    ...link,
+    route: localizeRoute(link.route, lang),
+  }));
+
   return {
-    config,
+    config: { ...config, description },
     pages: processPages(mergedPages),
-    featured: config.featuredLinks,
+    featured,
   };
 }
 
@@ -267,8 +299,14 @@ function IntegrationCards({
  * Renders a single integration category's description and cards.
  * Headings are expected to be provided in the MDX so they appear in the TOC.
  */
-export function IntegrationCategory({ category }: { category: string }) {
-  const data = getCategory(category);
+export function IntegrationCategory({
+  category,
+  lang = "en",
+}: {
+  category: string;
+  lang?: Lang;
+}) {
+  const data = getCategory(category, lang);
   if (!data) return null;
 
   return (

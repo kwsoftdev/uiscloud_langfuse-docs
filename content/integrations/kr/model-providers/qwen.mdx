@@ -1,0 +1,86 @@
+---
+source: ⚠️ Jupyter Notebook
+title: Langfuse로 Qwen 옵저버빌리티 확보하기
+sidebarTitle: Qwen
+logo: /images/integrations/qwen_icon.png
+logoAppearance: light
+description: OpenAI SDK 통합을 사용하여 Qwen LLM 애플리케이션을 모니터링하고 트레이싱하는 방법을 Langfuse로 알아보세요.
+category: Integrations
+---
+
+# Langfuse로 Qwen 옵저버빌리티 확보하기
+
+이 노트북은 OpenAI SDK 드롭인 대체재를 사용하여 **Qwen** API 호출을 **Langfuse**로 트레이싱하는 방법을 보여줍니다.
+
+> **Qwen이란 무엇인가요?** [Qwen](https://qwen.ai)은 Alibaba Cloud가 개발한 대규모 언어 모델 계열로, OpenAI 호환 API를 통해 Qwen-Plus, Qwen-Max, Qwen-Turbo 같은 모델을 제공합니다.
+
+> **Langfuse란 무엇인가요?** [Langfuse](https://langfuse.com)는 팀이 LLM 애플리케이션을 트레이싱, 디버깅, 평가할 수 있도록 돕는 오픈소스 AI 엔지니어링 플랫폼입니다.
+
+<Steps>
+## 1단계: 의존성 설치
+
+```python
+%pip install openai langfuse
+```
+
+## 2단계: 환경 변수 설정
+
+[Langfuse Cloud](https://langfuse.com/cloud)의 프로젝트 설정에서 Langfuse 키를 가져오거나 [셀프 호스팅](https://langfuse.com/self-hosting)을 설정하세요.
+
+```python
+import os
+
+# Get keys for your project from the project settings page: https://cloud.langfuse.com
+os.environ.setdefault("LANGFUSE_PUBLIC_KEY", "pk-lf-...")
+os.environ.setdefault("LANGFUSE_SECRET_KEY", "sk-lf-...")
+os.environ.setdefault("LANGFUSE_BASE_URL", "https://cloud.langfuse.com") # 🇪🇺 EU region
+# os.environ.setdefault("LANGFUSE_BASE_URL", "https://us.cloud.langfuse.com") # 🇺🇸 US region
+
+os.environ.setdefault("DASHSCOPE_API_KEY", "sk-...")  # Get your API key from https://qwen.ai/apiplatform
+```
+
+## 3단계: Langfuse OpenAI 드롭인 대체재 사용하기
+
+`openai`를 직접 임포트하는 대신 `langfuse.openai`에서 임포트하세요. 이 클라이언트를 통한 모든 호출은 자동으로 Langfuse에 트레이싱됩니다.
+
+Qwen API는 OpenAI와 호환되므로, 클라이언트를 [DashScope 엔드포인트](https://help.aliyun.com/zh/model-studio/developer-reference/compatibility-of-openai-with-dashscope)로 지정하기만 하면 됩니다.
+
+```python
+import os
+from langfuse.openai import openai
+
+client = openai.OpenAI(
+    api_key=os.environ.get("DASHSCOPE_API_KEY"),
+    base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+)
+```
+
+## 4단계: 예제 실행
+
+Qwen 모델에 채팅 완료 요청을 보냅니다. 트레이스는 Langfuse 대시보드에 자동으로 나타납니다.
+
+```python
+response = client.chat.completions.create(
+    model="qwen3.6-plus",
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "What makes open-source AI models important?"},
+    ],
+    name="Qwen-Trace",
+)
+print(response.choices[0].message.content)
+```
+
+## 5단계: Langfuse에서 트레이스 확인하기
+
+예제를 실행한 후 [Langfuse 대시보드](https://cloud.langfuse.com)를 열어 프롬프트, 완료, 도구 호출, 토큰 사용량, 지연 시간을 포함한 전체 트레이스를 확인하세요.
+
+![Example Qwen trace in Langfuse](https://langfuse.com/images/cookbook/integration-qwen/qwen-example-trace.png)
+
+[Langfuse의 예제 트레이스](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/d76897711559e73336d5257178f837b6?observation=b0dc6d1e7957f9fa&timestamp=2026-04-17T07:39:44.054Z&traceId=d76897711559e73336d5257178f837b6)
+
+</Steps>
+
+import LearnMore from "@/components-mdx/integration-learn-more.mdx";
+
+<LearnMore />

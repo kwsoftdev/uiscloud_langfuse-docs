@@ -1,0 +1,86 @@
+---
+title: Langfuse를 이용한 Koog 관찰 가능성
+sidebarTitle: Koog
+logo: /images/integrations/koog_icon.png
+description: OpenTelemetry를 통해 Koog 에이전트를 Langfuse로 계측하는 방법을 알아보세요
+category: Integrations
+---
+
+# Langfuse로 Koog 에이전트 트레이싱하기
+
+Koog는 에이전트 트레이스를 Langfuse로 내보내는 기능을 기본으로 지원합니다. Langfuse 통합을 사용하면 Koog 에이전트가 LLM, API, 기타 구성 요소와 상호작용하는 방식을 시각화하고, 분석하고, 디버그할 수 있습니다.
+
+> **Koog란 무엇인가요?** [Koog](https://docs.koog.ai/)는 Kotlin다운 방식으로 AI 에이전트를 완전히 구축하고 실행할 수 있도록 설계된 Kotlin 기반 프레임워크입니다. 이를 통해 도구와 상호작용하고, 복잡한 워크플로우를 처리하며, 사용자와 소통할 수 있는 에이전트를 만들 수 있습니다. Koog의 OpenTelemetry 지원에 대한 배경 지식은 [OpenTelemetry support](https://docs.koog.ai/opentelemetry-support/)를 참고하세요.
+
+> **Langfuse란 무엇인가요?** [Langfuse](/)는 오픈소스 AI 엔지니어링 플랫폼입니다. LLM 애플리케이션을 위한 트레이싱 및 모니터링 기능을 제공합니다. Langfuse는 네이티브 통합, OpenTelemetry, 전용 SDK를 통해 다양한 도구 및 프레임워크와 통합하여 상세한 인사이트를 제공함으로써 개발자가 AI 시스템을 디버그, 분석, 최적화하도록 돕습니다.
+
+<Steps>
+## Langfuse 설정
+
+1. [Langfuse Cloud](/)에 가입하거나 [Langfuse를 셀프 호스팅](/self-hosting)하세요.
+2. Langfuse 프로젝트를 생성하세요. [Langfuse에서 새 프로젝트 생성](/docs/get-started#create-new-project-in-langfuse)의 설정 가이드를 따르세요
+3. API 자격 증명을 받으세요. [Langfuse API 키는 어디에 있나요?](/faq/all/where-are-langfuse-api-keys)에 설명된 대로 Langfuse `public key`와 `secret key`를 가져오세요
+4. 환경 변수를 설정하세요. 다음 변수를 환경에 추가하세요:
+
+```bash
+   export LANGFUSE_BASE_URL="https://cloud.langfuse.com" # 🇪🇺 EU region
+   # Other Langfuse data regions include 🇺🇸 US: https://us.cloud.langfuse.com, 🇯🇵 Japan: https://jp.cloud.langfuse.com and ⚕️ HIPAA: https://hipaa.cloud.langfuse.com
+
+   export LANGFUSE_PUBLIC_KEY="pk-lf-..."
+   export LANGFUSE_SECRET_KEY="sk-lf-..."
+```
+
+설정이 완료되면 Koog는 자동으로 OpenTelemetry 트레이스를 Langfuse 인스턴스로 전달합니다.
+
+## Koog 구성하기
+
+Langfuse 내보내기를 활성화하려면 **OpenTelemetry 기능**을 설치하고 `LangfuseExporter`를 추가하세요.
+이 익스포터는 내부적으로 `OtlpHttpSpanExporter`를 사용하여 트레이스를 Langfuse의 OpenTelemetry 엔드포인트로 전송합니다.
+
+**예제: Langfuse 트레이싱을 사용하는 에이전트**
+
+```kotlin
+fun main() = runBlocking {
+    val agent = AIAgent(
+        executor = simpleOpenAIExecutor(ApiKeyService.openAIApiKey),
+        llmModel = OpenAIModels.CostOptimized.GPT4oMini,
+        systemPrompt = "You are a code assistant. Provide concise code examples."
+    ) {
+        install(OpenTelemetry) {
+            addLangfuseExporter()
+        }
+    }
+
+    println("Running agent with Langfuse tracing")
+
+    val result = agent.run("Tell me a joke about programming")
+
+    println("Result: $result\nSee traces on the Langfuse instance")
+}
+```
+
+## Langfuse에서 트레이스 확인하기
+
+활성화되면, Langfuse 익스포터는 Koog의 일반 OpenTelemetry 통합과 동일한 스팬을 캡처합니다. 여기에는 다음이 포함됩니다:
+
+- **에이전트 라이프사이클 이벤트** – 에이전트 시작, 중지, 오류
+- **LLM 상호작용** – 프롬프트, 응답, 토큰 사용량, 지연 시간
+- **도구 및 API 호출** – 함수/도구 호출에 대한 실행 트레이스
+- **시스템 컨텍스트** – 모델 이름, 환경, Koog 버전과 같은 메타데이터
+
+Koog는 또한 [에이전트 그래프](/docs/observability/features/agent-graphs)를 표시하기 위해 Langfuse가 필요로 하는 스팬 속성을 캡처합니다. 이를 통해 Langfuse 내에서 구조화된 방식으로 에이전트의 추론 과정을 API 호출 및 사용자 입력과 연관시킬 수 있습니다.
+
+![Koog 예제 트레이스](/images/cookbook/integration_koog/koog-example-trace.png)
+
+[트레이스 공개 링크](https://cloud.langfuse.com/project/cmcmdwcag00c2ad077xp1qnyc/traces/dff173a675b759ce1b70e522b27d6846?timestamp=2025-08-26T19%3A40%3A59.145Z&display=details&observation=e44e72cf2d221781)
+
+Langfuse OTLP 트레이싱에 대한 자세한 내용은 [Langfuse OpenTelemetry 문서](/integrations/kr/native/opentelemetry#opentelemetry-endpoint)를 참고하세요.
+
+</Steps>
+
+## 문제 해결
+
+- **Langfuse에 트레이스가 나타나지 않는 경우**
+  - 환경에 `LANGFUSE_BASE_URL`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`가 설정되어 있는지 다시 확인하세요.
+  - 셀프 호스팅된 Langfuse에서 실행 중이라면, `LANGFUSE_BASE_URL`이 애플리케이션 환경에서 접근 가능한지 확인하세요.
+  - public/secret 키 쌍이 올바른 프로젝트에 속해 있는지 확인하세요.

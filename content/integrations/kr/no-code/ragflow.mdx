@@ -1,0 +1,67 @@
+---
+title: Observability and Tracing for Ragflow
+sidebarTitle: Ragflow
+logo: /images/integrations/ragflow_icon.svg
+description: Open source observability for Ragflow applications. Automatically capture detailed traces and metrics for every request built with Ragflow.
+category: integrations
+---
+
+# Ragflow Observability & Tracing
+
+**[Ragflow](https://ragflow.io/)**([GitHub](https://github.com/infiniflow/ragflow))는 검색 증강 생성(RAG) 파이프라인을 설계하고 실행하는 노코드/로우코드 프레임워크입니다.
+
+네이티브 Langfuse 인테그레이션을 통해 Ragflow에서 복잡한 RAG 파이프라인을 구축하고, Langfuse로 이를 모니터링, 디버깅, 개선할 수 있습니다.
+
+이 인테그레이션은 UI에서의 대화형 실행, 예약된 작업, API 호출 등 Ragflow의 모든 실행 모드에서 동작합니다.
+
+## 인테그레이션
+
+<Steps>
+
+### Langfuse API 키 받기
+
+<Tabs items={["Langfuse cloud", "local or self-hosted"]}>
+<Tab>
+
+1. [cloud.langfuse.com](https://cloud.langfuse.com/auth/sign-up)에서 계정과 프로젝트를 생성하세요
+2. 프로젝트의 **공개** 및 **비밀** API 키를 복사하세요
+
+</Tab>
+<Tab>
+
+1. [셀프 호스팅 가이드](/docs/get-started/)를 따라 Langfuse를 로컬 또는 온프레미스로 실행하세요
+2. 프로젝트의 **공개** 및 **비밀** API 키를 복사하세요
+
+</Tab>
+</Tabs>
+
+### Ragflow 구성하기
+
+Ragflow API 설정(맨 아래로 스크롤)에서 Langfuse를 구성할 수 있습니다. Ragflow 설정에서 먼저 LLM을 구성해야 한다는 점에 유의하세요.
+
+<Video
+  src="https://static.langfuse.com/docs-videos/ragflow-configuration.mp4"
+  aspectRatio={16 / 9}
+  gifStyle
+/>
+
+### 파이프라인을 실행하고 트레이스 검사하기
+
+Ragflow UI에서 파이프라인을 실행하거나 API를 통해 트리거하세요. Ragflow가 자동으로 구조화된 트레이스 데이터를 Langfuse로 전송합니다.
+
+<Frame fullWidth>
+  ![Example Ragflow trace in
+  Langfuse](/images/docs/ragflow/ragflow-example-trace.png)
+</Frame>
+
+([Langfuse의 예시 트레이스](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/0bde9629-4251-4386-b583-26101b8e7561?timestamp=2025-05-09T19%3A15%3A37.797Z&display=details&observation=823997d8-ac40-40f3-8e7b-8aa6753b499e))
+
+</Steps>
+
+## 버전 요구 사항
+
+| 라이브러리 | 최소 버전  |
+| ---------- | ---------- |
+| Ragflow    | `>= 0.3.0` |
+
+이전 버전의 Ragflow를 사용 중이라면, Langfuse 인테그레이션의 이점을 누리기 위해 업그레이드하세요.
