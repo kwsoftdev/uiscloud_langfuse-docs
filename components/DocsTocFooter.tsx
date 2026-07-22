@@ -7,43 +7,9 @@ import { allAuthors, Author, AuthorHoverCardContent } from "./Authors";
 import contributorsData from "@/data/generated/contributors.json";
 import Image from "next/image";
 import { HoverCard, HoverCardTrigger } from "@/components/ui/hover-card";
-import { ArrowUpRight } from "lucide-react";
-import TocCommunity from "@/components/TocCommunity";
 import { Text } from "@/components/ui/text";
 
 // ─── Utility functions ────────────────────────────────────────────────────────
-
-const getGithubEditUrl = (path: string): string | null => {
-  const cleanPath = path.split("#")[0].split("?")[0];
-  const [, section, ...slugParts] = cleanPath.split("/");
-
-  const sectionToDir: Record<string, string> = {
-    docs: "content/docs",
-    guides: "content/guides",
-    handbook: "content/handbook",
-    integrations: "content/integrations",
-    "self-hosting": "content/self-hosting",
-    library: "content/library",
-    academy: "content/academy",
-    resources: "content/resources",
-  };
-
-  const contentDir = sectionToDir[section];
-  if (!contentDir) return null;
-
-  const slugPath = slugParts.join("/");
-  const filePath = `${contentDir}/${slugPath === "" ? "index" : slugPath}.mdx`;
-  return `https://github.com/langfuse/langfuse-docs/edit/main/${filePath}`;
-};
-
-const getFeedbackUrl = (pageTitle?: string): string => {
-  const title = (pageTitle ?? "this page").trim();
-  const params = new URLSearchParams({
-    title: `Feedback for "${title}"`,
-    labels: "feedback",
-  });
-  return `https://github.com/langfuse/langfuse-docs/issues/new?${params.toString()}`;
-};
 
 const getContributors = (path: string): string[] => {
   const variants = [
@@ -168,19 +134,13 @@ const processContributor = (username: string): ProcessedContributor => {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 type DocsTocFooterProps = {
-  pageTitle?: string;
   lastModified?: string;
 };
 
-export const DocsTocFooter = ({
-  pageTitle,
-  lastModified,
-}: DocsTocFooterProps) => {
+export const DocsTocFooter = ({ lastModified }: DocsTocFooterProps) => {
   const pathname = usePathname() ?? "";
   const currentPath = pathname.split("#")[0].split("?")[0];
   const [showAll, setShowAll] = useState(false);
-  const editUrl = getGithubEditUrl(currentPath);
-  const feedbackUrl = getFeedbackUrl(pageTitle);
   const lastModifiedDate = useMemo(
     () => (lastModified ? new Date(lastModified) : undefined),
     [lastModified],
@@ -199,44 +159,9 @@ export const DocsTocFooter = ({
 
   return (
     <div className="toc-footer flex flex-col mt-px ml-px !p-0">
-      {/* Actions */}
-      {(editUrl || feedbackUrl) && (
-        <div className="px-2 pt-4 pb-4 mb-px rounded-sm bg-surface-1">
-          <Text
-            size="s"
-            className="font-[580] text-left text-text-primary mb-3"
-          >
-            Actions
-          </Text>
-          <div className="flex flex-col gap-1.5">
-            {feedbackUrl && (
-              <a
-                href={feedbackUrl}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="flex gap-1 items-center text-sm transition-colors text-text-tertiary hover:text-text-primary"
-              >
-                Give us feedback
-                <ArrowUpRight size={13} className="shrink-0" />
-              </a>
-            )}
-            {editUrl && (
-              <a
-                href={editUrl}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="text-sm transition-colors text-text-tertiary hover:text-text-primary"
-              >
-                Edit this page on GitHub
-              </a>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* Contributors */}
       {processedContributors.length > 0 && (
-        <div className="px-2 pt-4 pb-4 mb-px rounded-sm bg-surface-1">
+        <div className="px-2 pt-4 pb-4 mb-px rounded-sm bg-surface-1 rounded-t-sm">
           <Text
             size="s"
             className="font-[580] text-left text-text-primary mb-3"
@@ -266,9 +191,6 @@ export const DocsTocFooter = ({
           </div>
         </div>
       )}
-
-      {/* Community */}
-      <TocCommunity className="rounded-t-sm bg-surface-1 mb-px" />
     </div>
   );
 };

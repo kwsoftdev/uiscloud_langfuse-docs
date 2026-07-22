@@ -59,9 +59,7 @@ export async function DocsChromePage({
       lastUpdate={lastModified}
       breadcrumb={{ component: <DocsBreadcrumb /> }}
       tableOfContent={{
-        footer: (
-          <DocsTocFooter pageTitle={data.title} lastModified={lastModified} />
-        ),
+        footer: <DocsTocFooter lastModified={lastModified} />,
       }}
       footer={{ component: <DocsAndPageFooter /> }}
     >

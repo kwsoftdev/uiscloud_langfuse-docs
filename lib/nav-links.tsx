@@ -5,7 +5,6 @@ import {
   Bookmark,
   FlaskConical,
   GraduationCap,
-  HelpCircle,
   LayoutGrid,
   Map,
   MessageSquare,
@@ -51,7 +50,6 @@ export const resourcesLinks: NavPanelLink[] = [
   { name: "Users", href: "/users", icon: Users },
   { name: "Example Project", href: "/docs/demo", icon: Bookmark },
   { name: "Walkthroughs", href: "/guides", icon: GraduationCap },
-  { name: "Support", href: "/support", icon: HelpCircle },
 ];
 
 export const simpleLinks: SimpleLink[] = [{ name: "Docs", href: "/docs" }];
@@ -89,7 +87,6 @@ export const resourcesLinksKo: NavPanelLink[] = [
   { name: "고객 사례", href: "/users", icon: Users },
   { name: "예제 프로젝트", href: "/docs/kr/demo", icon: Bookmark },
   { name: "실습 가이드", href: "/guides/kr", icon: GraduationCap },
-  { name: "지원", href: "/support", icon: HelpCircle },
 ];
 
 export const simpleLinksKo: SimpleLink[] = [{ name: "문서", href: "/docs/kr" }];
