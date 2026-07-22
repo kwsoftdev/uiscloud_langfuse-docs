@@ -1,0 +1,28 @@
+---
+title: OpenAI Assistants API를 트레이싱하는 방법은?
+tags: [integration]
+sourceRevision: 9c0d419484845ffbd56805fd068677856e5d764c
+translationStatus: machine
+---
+
+# OpenAI Assistants API를 트레이싱하는 방법은?
+
+OpenAI용 네이티브 통합(Python 및 JS/TS)은 Assistants API가 상태(스레드 등)를 OpenAI 쪽으로 이전하기 때문에 이를 네이티브로 계측하지 않습니다. 하지만 Python 및 JS 통합을 통해 API 호출을 여전히 트레이싱하고 그 결과를 Langfuse에서 시각화할 수 있습니다.
+
+## Python
+
+[Langfuse `observe()` 데코레이터](/docs/sdk/python/decorators)를 통해 [OpenAI Assistants API](https://platform.openai.com/docs/assistants/overview)를 계측할 수 있습니다. API 호출을 트레이싱하고 결과를 Langfuse에서 시각화하는 방법을 보여주는 간단한 예제를 준비했습니다.
+
+import { FileCode } from "lucide-react";
+
+<Cards num={2}>
+  <Card
+    title="쿡북: OpenAI Assistants API 트레이싱"
+    href="/integrations/model-providers/openai-assistants-api"
+    icon={<FileCode />}
+  />
+</Cards>
+
+## JS/TS
+
+[Langfuse JS/TS SDK](/docs/sdk/typescript)를 통해 이를 수행하는 방법에 대한 예제는 아직 공개하지 않았습니다. 다만 일반적인 접근 방식을 이해하기 위해 Python 예제를 참고할 수 있습니다: (1) 어시스턴트를 생성하고, (2) 스레드에서 이를 실행한 후, (3) Langfuse 트레이싱으로 실행 과정을 관찰합니다.

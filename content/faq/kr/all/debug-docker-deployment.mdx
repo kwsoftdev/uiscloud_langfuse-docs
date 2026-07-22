@@ -1,0 +1,17 @@
+---
+title: Docker 배포에 연결할 수 없어요, 어떻게 해야 하나요?
+tags: [self-hosting]
+sourceRevision: 9c0d419484845ffbd56805fd068677856e5d764c
+translationStatus: machine
+---
+
+# 셀프 호스팅한 Langfuse 인스턴스에 연결할 수 없어요, 어떻게 해야 하나요?
+
+[셀프 호스팅](/self-hosting)한 Langfuse에서 문제가 발생한다면 다음 사항을 확인하세요:
+
+- `NEXTAUTH_URL`이 Langfuse에 접속할 때 사용하는 URL과 정확히 일치하는지 확인하세요. 프로토콜(http vs https)과 포트(예: Langfuse를 80번 포트로 노출하지 않는 경우 3000)에 주의하세요.
+- Langfuse에 접속할 수 없다면 `HOSTNAME`을 `0.0.0.0`으로 설정하세요.
+- SSO: OAuth 제공자가 올바르게 구성되어 있는지 확인하세요. 반환 경로(return path)는 `NEXTAUTH_URL`과 일치해야 하며, OAuth 클라이언트에는 올바른 콜백 URL이 구성되어 있어야 합니다.
+- `DATABASE_URL`의 특수 문자는 인코딩해야 합니다. 자세한 내용은 이 StackOverflow [답변](https://stackoverflow.com/a/68213745)을 참고하세요.
+- SDK를 사용해 Langfuse에 연결하는 경우, `auth_check()`로 연결이 정상 작동하는지 확인하세요.
+- Postgres 12 이상을 사용하고 있는지 확인하세요.

@@ -1,0 +1,181 @@
+---
+title: 로그 레벨
+description: 로그 레벨을 사용하여 로그의 상세도를 제어하고 오류와 경고를 강조 표시하세요.
+sidebarTitle: 로그 레벨
+sourceRevision: 9c0d419484845ffbd56805fd068677856e5d764c
+translationStatus: machine
+---
+
+# 로그 레벨
+
+트레이스에는 많은 관찰(observation)이 포함될 수 있습니다 ([데이터 모델](/docs/tracing#introduction-to-traces-in-langfuse)). `level` 속성을 사용해 관찰의 중요도를 구분하고, 트레이스의 상세도를 제어하며 오류와 경고를 강조 표시할 수 있습니다. 사용 가능한 `levels`는 `DEBUG`, `DEFAULT`, `WARNING`, `ERROR`입니다.
+
+레벨 외에도 `statusMessage`를 포함하여 추가적인 컨텍스트를 제공할 수 있습니다.
+
+<Frame fullWidth>
+  ![Trace log level and statusMessage](/images/docs/trace-log-level.png)
+</Frame>
+
+<LangTabs items={["Python SDK", "JS/TS SDK", "OpenAI SDK", "Langchain"]}>
+<Tab>
+[`@observe()` 데코레이터](/docs/sdk/python/decorators)를 사용하는 경우:
+
+```python
+from langfuse import observe, get_client
+
+@observe()
+def my_function():
+    langfuse = get_client()
+
+    # ... 처리 로직 ...
+    # 현재 스팬을 경고 레벨로 업데이트
+    langfuse.update_current_span(
+        level="WARNING",
+        status_message="This is a warning"
+    )
+```
+
+스팬 또는 생성(generation)을 직접 생성하는 경우:
+
+```python
+from langfuse import get_client
+
+langfuse = get_client()
+
+# 컨텍스트 매니저 사용 (권장)
+with langfuse.start_as_current_observation(as_type="span", name="my-operation") as span:
+    # 생성 시 레벨과 상태 메시지 설정
+    with span.start_as_current_observation(
+        name="potentially-risky-operation",
+        level="WARNING",
+        status_message="Operation may fail"
+    ) as risky_span:
+        # ... 작업 수행 ...
+
+        # 또는 나중에 레벨과 상태 메시지를 업데이트
+        risky_span.update(
+            level="ERROR",
+            status_message="Operation failed with unexpected input"
+        )
+
+# 직접 참조 없이 현재 활성화된 스팬을 업데이트할 수도 있습니다
+with langfuse.start_as_current_observation(as_type="span", name="another-operation"):
+    # ... 일부 처리 ...
+    langfuse.update_current_span(
+        level="DEBUG",
+        status_message="Processing intermediate results"
+    )
+```
+
+생성(generation)을 만들 때도 레벨을 설정할 수 있습니다:
+
+```python
+langfuse = get_client()
+
+with langfuse.start_as_current_observation(
+    as_type="generation",
+    name="llm-call",
+    model="gpt-4o",
+    level="DEFAULT"  # 기본 레벨
+) as generation:
+    # ... LLM 호출 수행 ...
+
+    if error_detected:
+        generation.update(
+            level="ERROR",
+            status_message="Model returned malformed output"
+        )
+```
+
+</Tab>
+<Tab title="JS/TS SDK">
+
+컨텍스트 매니저를 사용하는 경우:
+
+```ts
+import { startActiveObservation, startObservation } from "@langfuse/tracing";
+
+await startActiveObservation("context-manager", async (span) => {
+  span.update({
+    input: { query: "What is the capital of France?" },
+  });
+
+  updateActiveObservation({
+    level: "WARNING",
+    statusMessage: "This is a warning",
+  });
+});
+```
+
+`observe` 래퍼를 사용하는 경우:
+
+```ts
+import { observe, updateActiveObservation } from "@langfuse/tracing";
+
+// 기존 함수
+async function fetchData(source: string) {
+  updateActiveObservation({
+    level: "WARNING",
+    statusMessage: "This is a warning",
+  });
+
+  // ... 데이터를 가져오는 로직
+  return { data: `some data from ${source}` };
+}
+
+// 함수를 래핑하여 트레이싱
+const tracedFetchData = observe(fetchData, {
+  name: "observe-wrapper",
+});
+
+const result = await tracedFetchData("API");
+```
+
+관찰(observation)을 수동으로 생성하는 경우:
+
+```ts
+import { startObservation } from "@langfuse/tracing";
+
+const span = startObservation("manual-observation", {
+  input: { query: "What is the capital of France?" },
+});
+
+span.update({
+  level: "WARNING",
+  statusMessage: "This is a warning",
+});
+
+span.update({ output: "Paris" }).end();
+```
+
+자세한 내용은 [JS/TS SDK 문서](/docs/sdk/typescript/guide)를 참조하세요.
+
+</Tab>
+<Tab title="OpenAI SDK">
+
+[OpenAI SDK 통합](/integrations/model-providers/openai-py)을 사용하는 경우, `level`과 `statusMessage`는 OpenAI API 응답을 기반으로 자동 설정됩니다. [예제](/integrations/model-providers/openai-py)를 참조하세요.
+
+</Tab>
+<Tab title="Langchain">
+
+[LangChain 통합](/integrations/frameworks/langchain)을 사용하는 경우, LangChain 파이프라인의 각 단계에 대해 `level`과 `statusMessage`가 자동으로 설정됩니다.
+
+</Tab>
+
+</LangTabs>
+
+## 로그 레벨로 트레이스 필터링
+
+단일 트레이스를 볼 때, 로그 레벨별로 관찰을 필터링할 수 있습니다.
+
+<Video
+  src="https://static.langfuse.com/docs-videos/250210-trace-log-level-filter.mp4"
+  aspectRatio={16 / 9}
+  gifStyle
+/>
+
+## GitHub 토론
+
+import { GhDiscussionsPreview } from "@/components/gh-discussions/GhDiscussionsPreview";
+
+<GhDiscussionsPreview labels={["feat-log-levels"]} />

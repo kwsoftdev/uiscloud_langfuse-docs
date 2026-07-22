@@ -1,0 +1,222 @@
+---
+title: SDK를 통한 쿼리
+sidebarTitle: SDK를 통한 쿼리
+description: 고성능 v2 데이터 API를 사용하여 Python 및 JS/TS SDK로 Langfuse 데이터를 쿼리합니다.
+sourceRevision: e83a1fe9108dd7dd6e687639df6c9b57ed19d5c8
+translationStatus: machine
+---
+
+# SDK를 통한 데이터 쿼리
+
+Langfuse는 [오픈소스](/open-source)이며 Langfuse로 트래킹된 데이터는 공개되어 있습니다. Python 및 JS/TS SDK를 사용하면 원시 HTTP 요청을 작성하지 않고도 동일한 공개 API를 쿼리할 수 있습니다.
+
+일반적인 사용 사례:
+
+- 평가 파이프라인, few-shot 예시, 또는 파인튜닝 데이터셋을 위한 행(row) 단위 관측(observation) 데이터를 쿼리합니다.
+- 대시보드나 청구 워크플로를 위한 집계 비용, 사용량, 지연 시간, 볼륨, 점수 메트릭을 쿼리합니다.
+- [데이터셋](/docs/evaluation/features/datasets)을 프로그래밍 방식으로 생성합니다.
+
+Langfuse를 처음 사용한다면 [Langfuse 데이터 모델](/docs/tracing-data-model)을 먼저 살펴보는 것을 권장합니다.
+
+<Callout type="info">
+
+새로운 데이터는 일반적으로 수집 후 15~30초 이내에 쿼리할 수 있게 되지만, 처리 시간은 상황에 따라 달라질 수 있습니다. 문제가 발생하면 [status.langfuse.com](https://status.langfuse.com)을 방문해 주세요.
+
+</Callout>
+
+## SDKs [#sdks]
+
+Python 및 JS/TS용 [SDK](/docs/sdk/overview)를 사용하면 HTTP 요청을 직접 작성하지 않고도 API를 쉽게 쿼리할 수 있습니다.
+
+`api` 네임스페이스는 공개 API(OpenAPI)로부터 자동 생성됩니다. 메서드 이름은 REST 리소스를 그대로 반영하며 필터와 페이지네이션을 지원합니다.
+
+<Callout type="warning">
+
+Python SDK v4 및 JS/TS SDK v5부터는 고성능 v2 데이터 API가 기본값입니다:
+
+- `api.observations` (이전 `api.observations_v_2` / `api.observationsV2`)
+- `api.scores` (이전 `api.score_v_2` / `api.scoreV2`)
+- `api.metrics` (이전 `api.metrics_v_2` / `api.metricsV2`)
+
+기존 v2 별칭은 Python SDK v4 및 JS/TS SDK v5에서 제거되었습니다.
+
+기존의 trace, observation, metrics 조회 API도 계속 사용할 수 있지만, 대규모 환경에서는 성능이 떨어지므로 새로운 데이터 추출 워크플로의 기본값으로는 권장하지 않습니다. 행 단위 데이터는 [Observations API v2](/docs/api-and-data-platform/features/observations-api#v2)를, 집계 데이터는 [Metrics API v2](/docs/metrics/features/metrics-api#v2)를 참고하세요.
+
+</Callout>
+
+<LangTabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab title="Python SDK">
+
+```bash
+pip install langfuse
+```
+
+```python
+from langfuse import get_client
+langfuse = get_client()  # uses environment variables to authenticate
+```
+
+### Observations
+
+```python
+observations = langfuse.api.observations.get_many(
+    trace_id="abcdef1234",
+    type="GENERATION",
+    limit=100,
+    fields="core,basic,usage"
+)
+```
+
+`trace_id`를 사용하여 특정 trace에 속한 observation을 조회합니다. 필요한 경우 응답에 포함된 `parent_observation_id`를 사용하여 observation 트리를 재구성할 수 있습니다.
+
+### Metrics
+
+전체 쿼리 스키마, 지원되는 차원(dimension), 필터, 예시는 [Metrics API v2 문서](/docs/metrics/features/metrics-api#v2)를 참고하세요.
+
+```python
+query = """
+{
+  "view": "observations",
+  "metrics": [{"measure": "totalCost", "aggregation": "sum"}],
+  "dimensions": [{"field": "providedModelName"}],
+  "filters": [],
+  "fromTimestamp": "2025-05-01T00:00:00Z",
+  "toTimestamp": "2025-05-13T00:00:00Z"
+}
+"""
+
+metrics = langfuse.api.metrics.get(query = query)
+```
+
+### 기타 리소스
+
+Sessions:
+
+```python
+sessions = langfuse.api.sessions.list(limit=50)
+```
+
+Scores:
+
+```python
+scores = langfuse.api.scores.get_many(score_ids = "ScoreId")
+```
+
+Prompts:
+
+프롬프트 조회 방법은 [프롬프트 관리 문서](/docs/prompt-management/get-started)를 참고하세요.
+
+Datasets:
+
+```python
+# Namespaces:
+# - langfuse.api.datasets.*
+# - langfuse.api.dataset_items.*
+# - langfuse.api.dataset_run_items.*
+```
+
+#### 비동기(Async) 대응 메서드
+
+```python
+# All endpoints are also available as async under `async_api`:
+observations = await langfuse.async_api.observations.get_many(
+    trace_id="abcdef1234",
+    limit=100,
+    fields="core,basic,usage",
+)
+metrics = await langfuse.async_api.metrics.get(query = query)
+```
+
+행 단위 observation 필터, 필드 선택, 커서 페이지네이션에 대해서는 [Observations API v2 문서](/docs/api-and-data-platform/features/observations-api#v2)를 참고하세요.
+
+</Tab>
+<Tab title="JS/TS SDK">
+
+<Callout type="info">
+
+`langfuse.api`의 메서드는 API 레퍼런스로부터 자동 생성되며 모든 엔티티를 다룹니다. Intellisense를 통해 더 많은 엔티티를 탐색할 수 있습니다.
+
+</Callout>
+
+```bash
+npm install @langfuse/client
+```
+
+```ts
+import { LangfuseClient } from "@langfuse/client";
+
+const langfuse = new LangfuseClient();
+```
+
+### Observations
+
+```ts
+const observations = await langfuse.api.observations.getMany({
+  traceId: "abcdef1234",
+  type: "GENERATION",
+  limit: 100,
+  fields: "core,basic,usage",
+});
+```
+
+`traceId`를 사용하여 특정 trace에 속한 observation을 조회합니다. 필요한 경우 응답에 포함된 `parentObservationId`를 사용하여 observation 트리를 재구성할 수 있습니다.
+
+행 단위 observation 필터, 필드 선택, 커서 페이지네이션에 대해서는 [Observations API v2 문서](/docs/api-and-data-platform/features/observations-api#v2)를 참고하세요.
+
+### Metrics
+
+전체 쿼리 스키마, 지원되는 차원(dimension), 필터, 예시는 [Metrics API v2 문서](/docs/metrics/features/metrics-api#v2)를 참고하세요.
+
+```ts
+const query = {
+  view: "observations",
+  metrics: [{ measure: "totalCost", aggregation: "sum" }],
+  dimensions: [{ field: "providedModelName" }],
+  filters: [],
+  fromTimestamp: "2025-05-01T00:00:00Z",
+  toTimestamp: "2025-05-13T00:00:00Z",
+};
+
+const metrics = await langfuse.api.metrics.get({
+  query: JSON.stringify(query),
+});
+```
+
+### 기타 리소스
+
+Sessions:
+
+```ts
+const sessions = await langfuse.api.sessions.list({ limit: 50 });
+```
+
+Scores:
+
+```ts
+const scores = await langfuse.api.scores.getMany();
+```
+
+Prompts:
+
+프롬프트 조회 방법은 [프롬프트 관리 문서](/docs/prompt-management/get-started)를 참고하세요.
+
+Datasets:
+
+```ts
+// Namespaces:
+// - langfuse.api.datasets.*
+// - langfuse.api.datasetItems.*
+// - langfuse.api.datasetRunItems.*
+```
+
+`langfuse.api`에서 Intellisense를 통해 더 많은 엔티티를 탐색할 수 있습니다.
+
+</Tab>
+</LangTabs>
+
+## 관련 리소스
+
+- 기존 trace 또는 observation 조회를 v2로 전환하려면 [Observations API v2](/docs/api-and-data-platform/features/observations-api#v2)를 참고하세요.
+- 기존 metrics 쿼리를 v2로 전환하려면 [Metrics API v2](/docs/metrics/features/metrics-api#v2)를 참고하세요.
+- 대규모 데이터 내보내기(예: 파인튜닝이나 분석을 위한 전체 trace)의 경우, API를 페이지네이션으로 순회하는 대신 [Blob Storage Export](/docs/api-and-data-platform/features/export-to-blob-storage)를 사용하여 S3, GCS, Azure로 데이터를 일정에 따라 자동 동기화하는 것을 고려해 보세요.
+- Langfuse UI에서 필터링된 데이터를 수동으로 내보내려면 [UI에서 내보내기](/docs/api-and-data-platform/features/export-from-ui)를 참고하세요.

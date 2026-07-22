@@ -1,0 +1,266 @@
+---
+title: "LLM 회귀 테스트: 회귀가 배포되기 전에 CI를 실패시키기"
+description: "CI를 실패시키는 LLM 회귀 테스트를 구축합니다: 골든 데이터셋, 실험 임계값, RegressionError, 그리고 langfuse/experiment-action을 통한 GitHub Actions."
+tags: [guide, evaluation]
+sourceRevision: 467238ceb51a6352fd65938f4a2f8b8fccc0dd42
+translationStatus: machine
+---
+
+# LLM 회귀 테스트: 회귀가 배포되기 전에 CI를 실패시키기
+
+하나의 불만을 해결하기 위한 프롬프트 수정이 다른 열 개의 답변을 조용히 망가뜨릴 수 있습니다. LLM 회귀 테스트는 이런 문제가 병합되기 전에 잡아냅니다. 프롬프트, 모델, 검색(retrieval) 컴포넌트에 변경이 생길 때마다 고정된 테스트 케이스 집합에 대해 실행되고, 점수가 매겨지며, 점수가 임계값 아래로 떨어지면 CI 파이프라인을 실패시킵니다. 이 가이드는 Langfuse를 이용한 전체 설정을 게이트 스크립트부터 풀 리퀘스트를 차단하는 GitHub Actions 워크플로우까지 보여줍니다.
+
+**요약:** LLM 회귀 테스트는 애플리케이션을 골든 데이터셋에 대해 실행하고, 모든 출력을 평가기(결정론적 코드 검사와 LLM 판정자)로 채점한 뒤, 집계 점수가 임계값에 미달하면 `RegressionError`를 발생시킵니다. GitHub Actions에서는 `langfuse/experiment-action`이 이 스크립트를 Langfuse 데이터셋에 대해 실행하고, 점수를 풀 리퀘스트 코멘트로 게시하며, 회귀가 발생하면 작업을 실패시킵니다. 이미 Langfuse로 트레이싱하고 있다면 이 게이트에는 새로운 서비스가 필요하지 않습니다. 동일한 SDK와 동일한 API 키를 그대로 사용합니다.
+
+## LLM 회귀 테스트란 무엇인가?
+
+LLM 회귀 테스트는 LLM 애플리케이션에 가해진 변경이 이전에는 잘 동작하던 입력에 대한 출력 품질을 저하시키지 않았는지 검증하는 방법입니다. LLM 출력은 비결정적이기 때문에 이 검사는 정확히 일치하는지 확인하는 어서션이 아니라 평가입니다. 각 출력에 점수가 매겨지고, 점수가 정의된 임계값을 충족하면 테스트가 통과합니다. 테스트 대상 단위는 함수가 아니라 애플리케이션의 동작입니다.
+
+회귀 게이트는 출력을 좌우하는 컴포넌트가 변경될 때마다 실행되어야 합니다.
+
+- **프롬프트 수정**: 코드베이스 외부에서 관리되는 프롬프트의 새 버전을 포함합니다.
+- **모델 교체 및 프로바이더 모델 업그레이드**: 동일한 프롬프트라도 다르게 동작할 수 있습니다.
+- **RAG 및 검색 변경**: 새로운 청킹 전략이나 임베딩 모델 등이 해당됩니다.
+- **도구 및 에이전트 변경**: 도구 설명을 다시 표현한 것만으로도 에이전트의 동작이 바뀔 수 있습니다.
+
+이 페이지는 오프라인 게이트를 깊이 있게 다룹니다. 이 게이트가 품질 차원, 프로덕션 모니터링, 사람이 검토하는 과정을 포함한 완전한 평가 프로그램 안에서 어디에 위치하는지는 [LLM 평가 전략 구축](/resources/engineering/llm-evaluation-strategy)에 대한 더 넓은 범위의 가이드를 참고하세요.
+
+## 최소한의 회귀 게이트: 골든 데이터셋, 실험, 임계값
+
+회귀 게이트는 세 가지 요소로 구성됩니다.
+
+1. **골든 데이터셋**: 예상 출력이 포함된 대표성 있는 입력들의 집합으로, 버전 관리되고 공유될 수 있도록 Langfuse 데이터셋으로 저장합니다.
+2. **실험**: 모든 데이터셋 항목에 대해 애플리케이션을 실행하고 평가기로 출력을 채점합니다.
+3. **임계값 검사**: 집계 점수가 너무 낮을 때 `RegressionError`를 발생시켜 파이프라인을 실패시킵니다.
+
+아래 스크립트는 Langfuse Python SDK(v4)를 사용한 완전한 게이트입니다. 무료이며 매번 실행마다 동일한 판정을 내리는 결정론적 코드 평가기와, 문자열 검사로는 판단할 수 없는 품질 차원을 위한 LLM 판정자(LLM-as-a-judge) 평가기를 결합합니다. `experiment(context)` 진입점은 다음 섹션의 GitHub Action이 따르는 계약입니다. `RunnerContext`는 Langfuse 클라이언트를 초기화하고, 워크플로우에서 설정한 데이터셋을 로드하며, CI 메타데이터(커밋 SHA, 브랜치, 작업 URL, 액터)를 실행에 연결합니다.
+
+```python title="experiments/regression-gate.py"
+import json
+
+from langfuse import Evaluation, RegressionError, RunnerContext
+from langfuse.openai import OpenAI
+
+client = OpenAI()
+
+THRESHOLDS = {
+    "avg_contains_answer": 0.9,
+    "avg_faithfulness": 0.8,
+}
+
+
+def support_agent_task(*, item, **kwargs):
+    """Run the application under test on one dataset item."""
+    response = client.chat.completions.create(
+        model="gpt-4.1",
+        messages=[
+            {"role": "system", "content": "Answer using only the provided context."},
+            {"role": "user", "content": item.input["question"]},
+        ],
+    )
+    return response.choices[0].message.content
+
+
+def contains_answer(*, output, expected_output, **kwargs):
+    """Code evaluator: deterministic, free, runs on every item."""
+    passed = bool(expected_output) and expected_output.lower() in (output or "").lower()
+    return Evaluation(name="contains_answer", value=1.0 if passed else 0.0)
+
+
+def faithfulness_judge(*, input, output, expected_output, **kwargs):
+    """LLM-as-a-judge evaluator: returns a binary verdict with a reason."""
+    judgment = client.chat.completions.create(
+        model="gpt-4.1-mini",
+        messages=[
+            {
+                "role": "user",
+                "content": (
+                    "Is the answer faithful to the reference? "
+                    'Respond with JSON: {"score": 0 or 1, "reason": "<one sentence>"}\n'
+                    f"Question: {input}\nReference: {expected_output}\nAnswer: {output}"
+                ),
+            }
+        ],
+        response_format={"type": "json_object"},
+    )
+    verdict = json.loads(judgment.choices[0].message.content)
+    return Evaluation(
+        name="faithfulness",
+        value=float(verdict["score"]),
+        comment=verdict["reason"],
+    )
+
+
+def average_of(score_name: str):
+    """Build a run-level evaluator that averages one item-level score."""
+
+    def run_evaluator(*, item_results, **kwargs):
+        values = [
+            evaluation.value
+            for result in item_results
+            for evaluation in result.evaluations
+            if evaluation.name == score_name
+            and isinstance(evaluation.value, (int, float))
+        ]
+        return Evaluation(
+            name=f"avg_{score_name}",
+            value=sum(values) / len(values) if values else 0.0,
+        )
+
+    return run_evaluator
+
+
+def experiment(context: RunnerContext):
+    result = context.run_experiment(
+        name="PR gate: support agent",
+        task=support_agent_task,
+        evaluators=[contains_answer, faithfulness_judge],
+        run_evaluators=[average_of("contains_answer"), average_of("faithfulness")],
+    )
+
+    scores = {e.name: e.value for e in result.run_evaluations}
+
+    for metric, threshold in THRESHOLDS.items():
+        value = scores.get(metric)
+        if not isinstance(value, (int, float)) or value < threshold:
+            raise RegressionError(
+                result=result,  # lets the action include scores in the PR comment
+                metric=metric,
+                value=float(value) if isinstance(value, (int, float)) else 0.0,
+                threshold=threshold,
+            )
+
+    return result
+```
+
+`support_agent_task`를 실제 애플리케이션 호출로 교체하세요. 나머지는 모두 재사용 가능합니다. 평가기는 태스크가 반환하는 값이 무엇이든 채점하고, 임계값 루프는 실행 수준 점수를 게이트로 바꿔줍니다. CI 밖에서 동일한 실험을 실행하려면 데이터셋을 가져와서 동일한 태스크와 평가기로 `langfuse.get_dataset("support-agent-golden-set").run_experiment(...)`를 호출하면 됩니다.
+
+## GitHub Actions로 CI를 실패시키기: langfuse/experiment-action
+
+[`langfuse/experiment-action`](https://github.com/langfuse/experiment-action)은 CI에서 Langfuse 실험을 실행하기 위한 공식 GitHub Action입니다. 위 스크립트를 기준으로 다음 네 가지를 수행합니다.
+
+1. 워크플로우에 지정된 데이터셋을 로드합니다. 재현 가능한 실행을 위해 선택적으로 `dataset_version` 타임스탬프에 고정할 수 있습니다.
+2. `experiment_path`(파일, 디렉터리, 또는 glob 패턴이며 Python, TypeScript, JavaScript를 지원합니다)에서 발견되는 모든 실험 스크립트를 실행합니다.
+3. 스크립트별 통과/회귀/오류 상태, 실행 수준 점수, 항목 수준 결과 테이블, Langfuse 내 실험으로의 링크를 포함해 풀 리퀘스트 코멘트를 게시하거나 갱신합니다.
+4. 스크립트가 `RegressionError`를 발생시키거나(`should_fail_on_regression`, 기본값 `true`) 크래시가 나면(`should_fail_on_script_error`, 기본값 `true`) 작업을 실패시킵니다.
+
+```yaml title=".github/workflows/llm-regression-tests.yml"
+name: LLM regression tests
+
+on:
+  pull_request:
+
+permissions:
+  contents: read # check out the repository
+  pull-requests: write # post the experiment result comment
+  actions: read # optional: link results to this job's logs
+
+jobs:
+  regression-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      # Pin to the latest release tag (v1.0.6 as of July 2026)
+      - uses: langfuse/experiment-action@v1.0.6
+        env:
+          # Provider keys for your task and judge; the experiment
+          # subprocess inherits the step environment.
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        with:
+          langfuse_public_key: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
+          langfuse_secret_key: ${{ secrets.LANGFUSE_SECRET_KEY }}
+          langfuse_base_url: https://cloud.langfuse.com # or your self-hosted URL
+          experiment_path: experiments/regression-gate.py
+          dataset_name: support-agent-golden-set
+          dataset_version: "2026-07-01T00:00:00Z" # optional: pin for reproducibility
+          github_token: ${{ github.token }} # enables the PR comment
+```
+
+이 액션은 기본적으로 최신 Langfuse SDK를 설치하며, Python SDK v4.6.0+ 또는 JS SDK v5.3.0+를 요구합니다. 특정 버전을 고정하려면 `python_sdk_version` 또는 `js_sdk_version`을 설정하고, 직접 환경을 관리한다면 `should_skip_sdk_installation: true`를 설정하세요. `result_json` 출력은 정규화된 결과를 다운스트림 단계(예: Slack 알림이나 아티팩트 업로드)에서 사용할 수 있도록 노출합니다. 전체 입력 레퍼런스와 게이트 스크립트의 JS/TS 버전은 [CI/CD에서의 실험 문서](/docs/evaluation/experiments/experiments-ci-cd)에서 확인할 수 있습니다.
+
+`on: pull_request`를 사용하면 애플리케이션을 건드리는 모든 PR이 리뷰 전에 채점된 판정을 받습니다. 이 작업을 브랜치 보호 규칙의 필수 상태 검사로 지정하면 게이트가 강제력을 갖게 되어, 회귀가 있는 변경은 병합될 수 없습니다.
+
+## 다른 CI 시스템에서 pytest나 Vitest로 게이트 실행하기
+
+GitHub Action은 편의를 위한 래퍼일 뿐 필수 요건이 아닙니다. GitLab CI, Jenkins, CircleCI, 또는 다른 어떤 러너에서도 동일한 `run_experiment` 호출이 기존 테스트 프레임워크 안에서 그대로 동작합니다. pytest나 Vitest 테스트 안에서 실험을 실행하고, `result.run_evaluations`에서 실행 수준 점수를 읽어 임계값과 비교하는 어서션을 작성하면 됩니다. 어서션이 실패하면 테스트 스위트가 실패하고, 테스트 스위트가 실패하면 파이프라인이 실패합니다. [LLM 애플리케이션 테스트](/blog/2025-10-21-testing-llm-applications) 가이드에서는 네트워크 요청에 의존하지 않아야 하는 게이트를 위한 로컬 데이터셋을 포함해 전체 pytest 설정을 다룹니다.
+
+## 라벨 승격 전 프롬프트 버전 회귀 테스트
+
+Langfuse에서 관리되는 프롬프트는 버전 관리되며, 배포는 라벨로 제어됩니다. 애플리케이션은 `production`으로 태그된 버전을 가져오므로, 새 프롬프트 버전을 승격한다는 것은 곧 그 라벨을 옮기는 것을 의미합니다. 이 구조 덕분에 재배포 없이도 프롬프트 변경이 코드 변경과 동일한 게이트를 거치게 됩니다.
+
+1. 후보를 새로운 프롬프트 버전으로 저장하고 `staging` 라벨을 부여합니다.
+2. 골든 데이터셋에 대해 후보 버전으로 회귀 실험을 실행합니다.
+3. 실험이 임계값을 통과할 때만 `production` 라벨을 승격합니다.
+
+게이트 스크립트는 한 곳만 바뀝니다. 태스크가 프롬프트를 하드코딩하는 대신 라벨로 후보를 가져오고, 이를 생성 호출에 전달하여 실행이 정확한 프롬프트 버전과 연결되도록 합니다.
+
+```python title="experiments/prompt-gate.py (task excerpt)"
+from langfuse import get_client
+from langfuse.openai import OpenAI
+
+langfuse = get_client()
+client = OpenAI()
+
+candidate = langfuse.get_prompt("support-agent", label="staging")
+
+
+def support_agent_task(*, item, **kwargs):
+    response = client.chat.completions.create(
+        model="gpt-4.1",
+        messages=[
+            {"role": "system", "content": candidate.compile()},
+            {"role": "user", "content": item.input["question"]},
+        ],
+        langfuse_prompt=candidate,  # link this run to the exact prompt version
+    )
+    return response.choices[0].message.content
+```
+
+이 연결은 두 가지 방식으로 도움이 됩니다. 프롬프트의 Metrics 탭은 연결된 모든 생성(generation)에 대해 프롬프트 버전별로 점수, 지연 시간, 비용을 집계합니다. 그리고 게이트가 실험당 하나의 데이터셋 실행(run)을 만들기 때문에, 비교 뷰는 결정을 내리기 전에 후보 버전의 실행과 프로덕션 버전의 실행을 동일한 데이터셋 위에서 항목별로 나란히 보여줍니다.
+
+승격 자체도 잠글 수 있습니다. [보호된 프롬프트 라벨](/docs/prompt-management/features/prompt-version-control)은 `member`와 `viewer` 역할이 `production`과 같은 라벨을 옮기거나 삭제하지 못하도록 막습니다. 오직 프로젝트 `admin`과 `owner` 역할만 가능합니다. 실험 통과와 승인된 승격 담당자가 라벨을 옮기는 것을 결합하면 그 자체가 승격 게이트가 됩니다. 라벨 보호 기능은 Teams 애드온이 포함된 Pro 플랜, Enterprise, 그리고 셀프 호스팅 Enterprise Edition에서 사용할 수 있습니다.
+
+## 시간에 따른 회귀 실행 비교
+
+Langfuse 데이터셋에 대한 모든 게이트 실행은 데이터셋 실행(dataset run)으로 기록되므로 이력이 자동으로 쌓입니다. 실험 비교 뷰는 실행별 집계 점수, 항목별 출력, 그리고 두 실행 사이에서 구체적으로 어떤 항목이 회귀했는지를 나란히 보여줍니다. PR 코멘트에서 `avg_faithfulness`가 0.86에서 0.71로 떨어졌다고 나오면, 비교 뷰가 어떤 열 개의 항목이 망가졌고 출력이 어떻게 보였는지에 대한 후속 질문에 답해줍니다. 액션이 첨부한 CI 메타데이터(커밋 SHA, 브랜치, 액터) 덕분에 각 실행을 그것을 발생시킨 변경까지 추적할 수 있습니다.
+
+게이트는 테스트하기로 생각했던 입력만 커버하므로, 온라인 보완책과 함께 사용하는 것이 좋습니다. 샘플링된 LLM 판정자 평가기는 프로덕션 트래픽의 일부를 채점하고, [모니터](/docs/metrics/features/monitors)(Langfuse Cloud에서 사용 가능)는 해당 점수 메트릭에 대해 경고 및 알림 임계값으로 알림을 보내며, 위반 사항을 Slack, 웹훅, 또는 GitHub Actions 트리거로 라우팅합니다. 오프라인 게이트는 재현 가능한 회귀를 막아주고, 모니터는 프로덕션이 대신 발견해주는 회귀를 잡아냅니다.
+
+## 게이트가 실행되는 골든 데이터셋 구축하기
+
+데이터셋은 게이트가 무엇을 잡아낼 수 있는지를 결정하며, 가장 강력한 소스는 프로덕션입니다. Langfuse에서는 어떤 트레이스나 관찰(observation)이든 UI에서 바로 데이터셋에 추가할 수 있어, 하나의 동작만으로 모든 인시던트가 영구적인 회귀 테스트가 됩니다. 우려되지만 아직 목격하지 못한 실패 사례에 대해서는 손으로 작성한 엣지 케이스를 추가하고, 예상 출력은 도메인 전문가가 처음부터 이상적인 답을 작성하는 대신 실제 출력을 교정하는 방식으로 확보하세요. PR 게이트용 데이터셋은 모든 풀 리퀘스트에서 실행할 수 있을 만큼 작게(수십 개에서 수백 개 미만) 유지하고, 전체 세트는 릴리스 브랜치를 위해 남겨두세요. [골든 데이터셋 평가](/resources/engineering/golden-dataset-evaluation) 가이드에서 구축, 규모 결정, 유지 관리를 깊이 있게 다룹니다.
+
+## Langfuse 회귀 게이트와 Promptfoo 비교
+
+[Promptfoo](https://github.com/promptfoo/promptfoo)는 LLM 앱을 평가하고 레드팀 테스트를 하기 위한 MIT 라이선스 CLI 겸 라이브러리이며, CI에서 평가 어서션을 실행하는 검증된 방법입니다. 완전히 로컬에서 실행되며, 테스트 케이스와 채점 방식은 설정 파일에 정의되고, 별도의 플랫폼이 필요하지 않습니다(2026년 7월 기준 확인된 사실). 외부 상태 없이 선언적인 프롬프트-모델 매트릭스 테스트를 원하는 팀에게는 합리적인 기본 선택지이며, [Promptfoo 통합](/integrations/other/promptfoo)을 통해 Langfuse에서 관리하는 프롬프트를 가져올 수도 있습니다.
+
+트레이드오프는 평가 데이터가 어디에 위치하는가입니다. 설정 파일 기반 하네스에서는 데이터셋, 점수, 이력이 저장소와 CI 로그 안에만 존재하며 프로덕션과 단절되어 있습니다. 이미 Langfuse로 트레이싱하고 있다면 이 페이지에서 설명한 회귀 게이트는 새로운 서비스를 전혀 추가하지 않습니다. 트레이싱에 사용하는 것과 동일한 퍼블릭 키와 시크릿 키로 인증하고, Langfuse Cloud나 셀프 호스팅 인스턴스에 대해 실행되며, 이미 프로덕션 트레이스, 데이터셋, 프롬프트 버전이 위치한 곳에 결과를 기록합니다. 실패한 프로덕션 트레이스는 별도의 내보내기 단계 없이 바로 데이터셋 항목이 되고, 게이트 점수는 이를 만들어낸 프롬프트 버전에 그대로 기록되며, 비교 뷰는 CI 실행과 수동 실험을 아울러 걸쳐 있습니다.
+
+자체 완결적인 로컬 하네스를 원하고 관측성 플랫폼이 관여하지 않는 경우라면 Promptfoo를 선택하세요. Langfuse가 이미 트레이스, 데이터셋, 또는 프롬프트에 대한 소스 오브 트루스이고, 회귀 테스트를 그 데이터와 병렬로 두는 대신 동일한 데이터에 연결하고 싶다면 Langfuse 게이트를 선택하세요.
+
+## 자주 묻는 질문
+
+### CI 회귀 게이트에는 몇 개의 데이터셋 항목이 필요한가요? [#how-many-items]
+
+알려진 실패 모드를 충분히 커버하면서도 모든 풀 리퀘스트에서 실행할 수 있을 만큼 작아야 합니다. PR 게이트로는 수십 개에서 수백 개 미만이 실용적인 범위입니다. 약 20개 미만이면 하나의 불안정한(flaky) 출력만으로도 평균 점수가 5퍼센트포인트 이상 움직일 수 있어 임계값이 잡음에 취약해집니다. 지연 시간과 평가 비용이 덜 중요한 릴리스 브랜치나 야간 실행을 위해서는 더 큰 전체 회귀 세트를 별도로 유지하세요.
+
+### LLM 판정자가 CI를 불안정하게(flaky) 만들지 않으려면 어떻게 해야 하나요? [#flaky-judges]
+
+가능한 한 판정자를 결정론적으로 만드세요. 판정자 모델 버전을 고정하고, 1부터 10까지의 척도 대신 명시적인 루브릭을 갖춘 이진 통과/실패 판정을 사용하며, 구조화된 JSON 출력을 요청하세요. 전체 데이터셋에 걸쳐 평균을 내면 단일 항목의 잡음이 완화되고, 임계값을 기준선보다 여유를 두고 설정하면(예: 기준선이 0.88일 때 임계값을 0.8로 설정) 정상적인 변동을 흡수할 수 있습니다. 절대 불안정해서는 안 되는 검사에는 결정론적 코드 평가기를 차단용 게이트로 사용하고, 판정자 메트릭은 안정성이 입증될 때까지 경고로만 취급하세요.
+
+### 모델 업그레이드를 롤아웃하기 전에 어떻게 테스트하나요? [#model-upgrades]
+
+동일한 골든 데이터셋(가급적 동일한 데이터셋 버전에 고정)에 대해 새 모델로 동일한 회귀 실험을 실행하고, 실험 비교 뷰에서 두 실행을 비교하세요. 실행을 추적 가능하게 유지하려면 실험 메타데이터에 모델 이름을 기록하세요. 이는 프로바이더가 강제하는 업그레이드에도 적용됩니다. 의존하고 있던 모델이 지원 중단될 때, 게이트는 프로덕션이 알려주기 전에 대체 모델이 임계값을 통과하는지 알려줍니다.
+
+### 언제 회귀가 병합을 차단해야 하고, 언제 경고에 그쳐야 하나요? [#block-vs-warn]
+
+포맷 유효성, 필수 콘텐츠 검사, 안전 패턴처럼 명확한 통과 기준을 가진 결정론적 메트릭과, 충분한 실행에 걸쳐 안정적이라고 검증된 판정자 메트릭은 병합을 차단해야 합니다. 아직 보정 중인 판정자 메트릭은 경고로만 두세요. 실험에서는 실행하고 PR 코멘트에 게시하되, `RegressionError` 임계값에는 포함하지 마세요(또는 별도의 권고성 워크플로우에서 `should_fail_on_regression: false`로 설정하세요). 기준선이 안정적으로 유지되고 오탐이 사라지면 그 메트릭을 경고에서 차단으로 승격하세요.
+
+### Promptfoo에서 Langfuse 회귀 게이트로 마이그레이션할 수 있나요? [#migrate-from-promptfoo]
+
+네, 가능합니다. 개념은 직접적으로 대응됩니다. Promptfoo의 테스트 케이스는 Langfuse 데이터셋 항목이 되고, 어서션은 평가기 함수가 되며, CI 호출은 `langfuse/experiment-action`이 됩니다. 개념 매핑과 코드 전후 비교는 [Promptfoo에서 마이그레이션하기](/resources/engineering/migrate-from-promptfoo) 단계별 가이드를 참고하세요.

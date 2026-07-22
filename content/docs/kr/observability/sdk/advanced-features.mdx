@@ -1,0 +1,694 @@
+---
+title: 고급 기능
+description: Python 및 JS/TS를 위한 마스킹, 로깅, 샘플링, 다중 프로젝트 라우팅, 평가, 환경별 동작을 구성합니다.
+category: SDKs
+sourceRevision: 4c359b9dc9cb34f806b324f03b416eda36656953
+translationStatus: machine
+---
+
+# 고급 기능
+
+다음 메서드를 사용하여 Langfuse 계측(instrumentation)을 강화하고, 민감한 데이터를 보호하며, SDK를 특정 환경에 맞게 조정하세요.
+
+## 계측 범위별 필터링 [#filtering-by-instrumentation-scope]
+
+Langfuse는 이제 별도의 추가 설정 없이도 내보내기(export)를 LLM 중심으로 유지하기 위해 두 SDK 모두에 **기본 스팬 필터**를 적용합니다.
+
+기본적으로 다음 중 **하나라도** 해당하면 스팬이 내보내집니다.
+
+- Langfuse SDK에 의해 생성된 경우 (`instrumentation_scope.name == "langfuse-sdk"`)
+- `gen_ai.*` 속성을 하나 이상 가지고 있는 경우
+- 알려진 LLM 계측 범위(instrumentation scope)에서 발생한 경우 (예: `openinference.*`, `langsmith`, `haystack`, `litellm`, `agent_framework`, `strands-agents`, `vllm`, `opentelemetry.instrumentation.anthropic`)
+
+기본 계측 범위 허용 목록에 다른 통합을 추가하고 싶다면, 범위 이름과 샘플 스팬을 첨부하여 [langfuse/langfuse](https://github.com/langfuse/langfuse/issues)에 이슈를 등록해 주세요.
+
+Langfuse에서 `metadata.scope.name`을 통해 스팬의 계측 범위를 확인할 수 있습니다. 필터링되어 제외된 스팬은 UI에 표시되지 않습니다.
+
+필터링된 범위를 식별하려면:
+
+1. 디버그 로깅을 활성화합니다 (Python에서는 `Langfuse(debug=True)` 또는 `LANGFUSE_DEBUG="True"`, JS/TS에서는 `LANGFUSE_DEBUG="true"` 또는 `LANGFUSE_LOG_LEVEL="DEBUG"`).
+2. 애플리케이션을 실행하고 로그에서 제외된 스팬 메시지와 계측 범위 이름을 확인합니다.
+3. `is_default_export_span` / `isDefaultExportSpan`과 조합하여 허용 목록 로직에 해당 범위를 추가합니다.
+4. 선택 사항: 모든 스팬을 확인하기 위해 일시적으로 `should_export_span=lambda span: True` 또는 `shouldExportSpan: () => true`를 사용한 다음, 필터링을 복원합니다.
+
+<Callout type="info" title="동작 변경 사항">
+  이전 SDK 버전에서는 기본적으로 차단되지 않은 모든 스팬을 내보냈습니다. 해당
+  동작을 복원하려면 항상 true를 반환하는 사용자 정의 필터 콜백을 제공하세요.
+</Callout>
+
+<Callout type="warning" title="스팬 필터링이 트레이스 트리를 손상시킬 수 있음">
+  스팬을 필터링하면 트레이스 내 부모-자식 관계가 깨질 수 있습니다. 예를 들어
+  부모 스팬을 필터링하고 자식 스팬은 유지하는 경우, Langfuse UI에서 "고립된(orphaned)"
+  관측(observation)이 나타날 수 있습니다. 위의 디버깅 절차를 사용하여 필터링된
+  항목을 다시 추가하세요.
+</Callout>
+
+<LangTabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab title="Python SDK">
+
+기본 동작(권장):
+
+```python
+from langfuse import Langfuse
+
+# 스마트 기본 필터 (Langfuse + GenAI/LLM 스팬)
+langfuse = Langfuse()
+```
+
+모든 것을 내보내기:
+
+```python
+from langfuse import Langfuse
+
+langfuse = Langfuse(should_export_span=lambda span: True)
+```
+
+`should_export_span`을 전달하면 기본 필터가 대체됩니다. 기본 동작을 유지하면서 확장하려면 `is_default_export_span`과 조합하세요.
+
+내장 술어(predicate)와 사용자 정의 로직 조합하기:
+
+```python
+from langfuse import Langfuse
+from langfuse.span_filter import is_default_export_span
+
+langfuse = Langfuse(
+    should_export_span=lambda span: (
+        is_default_export_span(span)
+        or (
+            span.instrumentation_scope is not None
+            and span.instrumentation_scope.name.startswith("my_framework")
+        )
+    )
+)
+```
+
+Langfuse SDK가 생성한 스팬만 내보내기:
+
+```python
+from langfuse import Langfuse
+from langfuse.span_filter import is_langfuse_span
+
+langfuse = Langfuse(should_export_span=is_langfuse_span)
+```
+
+사용 가능한 Python 헬퍼: `is_default_export_span`, `is_langfuse_span`, `is_genai_span`, `is_known_llm_instrumentor`, `KNOWN_LLM_INSTRUMENTATION_SCOPE_PREFIXES`.
+
+`blocked_instrumentation_scopes`는 하위 호환성을 위해 여전히 동작하지만, 더 이상 사용되지 않으며 향후 버전에서 제거될 예정입니다. 거부 규칙은 `should_export_span`으로 표현하는 것을 권장합니다.
+
+더 이상 사용되지 않는 호환성 예시:
+
+```python
+from langfuse import Langfuse
+
+langfuse = Langfuse(
+    should_export_span=lambda span: True,
+    blocked_instrumentation_scopes=["sqlalchemy", "psycopg"],
+)
+```
+
+</Tab>
+<Tab title="JS/TS SDK">
+
+기본 동작(권장):
+
+```ts filename="instrumentation.ts"
+import { NodeSDK } from "@opentelemetry/sdk-node";
+import { LangfuseSpanProcessor } from "@langfuse/otel";
+
+const sdk = new NodeSDK({
+  // 스마트 기본 필터 (Langfuse + GenAI/LLM 스팬)
+  spanProcessors: [new LangfuseSpanProcessor()],
+});
+
+sdk.start();
+```
+
+사용자 정의 필터링:
+
+```ts filename="instrumentation.ts" /shouldExportSpan/
+import { NodeSDK } from "@opentelemetry/sdk-node";
+import { LangfuseSpanProcessor, ShouldExportSpan } from "@langfuse/otel";
+
+const shouldExportSpan: ShouldExportSpan = ({ otelSpan }) =>
+  otelSpan.instrumentationScope.name !== "express";
+
+const sdk = new NodeSDK({
+  spanProcessors: [new LangfuseSpanProcessor({ shouldExportSpan })],
+});
+
+sdk.start();
+```
+
+`shouldExportSpan`을 전달하면 기본 필터가 대체되므로, 기본 동작을 대체하지 않고 확장하려면 콜백에 기본 조건을 포함하세요.
+
+기본 필터와 조합하기:
+
+```ts filename="instrumentation.ts"
+import { isDefaultExportSpan, type ShouldExportSpan } from "@langfuse/otel";
+
+const shouldExportSpan: ShouldExportSpan = ({ otelSpan }) =>
+  isDefaultExportSpan(otelSpan) ||
+  otelSpan.instrumentationScope.name.startsWith("my-framework");
+```
+
+`@langfuse/otel`에서 사용 가능한 JS/TS 헬퍼: `isDefaultExportSpan`, `isLangfuseSpan`, `isGenAISpan`, `isKnownLLMInstrumentor`, `KNOWN_LLM_INSTRUMENTATION_SCOPE_PREFIXES`.
+
+모든 것을 내보내기:
+
+```ts filename="instrumentation.ts"
+new LangfuseSpanProcessor({ shouldExportSpan: () => true });
+```
+
+</Tab>
+</LangTabs>
+
+기존 OpenTelemetry 설정과 함께 Langfuse를 사용하는 방법은 [여기](/faq/all/existing-otel-setup)에서 자세히 확인할 수 있습니다.
+
+## 민감한 데이터 마스킹
+
+트레이스 데이터에 PII나 비밀 정보와 같은 민감한 정보가 포함될 수 있다면, Langfuse로 스팬을 전송하기 전에 마스킹 훅을 구성하세요. Python SDK 애플리케이션의 경우, 서드파티 계측(instrumentation)이 생성한 스팬을 포함하여 원시 OpenTelemetry 스팬 속성에 대해 내보내기(export) 단계에서 실행되는 `mask_otel_spans`를 사용하는 것을 권장합니다.
+
+<LangTabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab title="Python SDK">
+
+`mask_otel_spans`를 사용하여 내보내기 전에 변경되어야 하는 OpenTelemetry 스팬에 대한 부분 패치(sparse patch)를 반환하세요.
+
+```python
+import re
+from typing import Optional
+
+from langfuse import Langfuse
+from langfuse.types import (
+    MaskOtelSpansParams,
+    MaskOtelSpansResult,
+    OtelSpanPatch,
+)
+
+email_pattern = re.compile(r"\b[\w.-]+?@[\w.-]+?\.\w+?\b")
+
+
+def mask_otel_spans(
+    *, params: MaskOtelSpansParams
+) -> Optional[MaskOtelSpansResult]:
+    patches = {}
+
+    for identifier, span in params.spans.items():
+        replacements = {}
+
+        for key, value in span.attributes.items():
+            if isinstance(value, str):
+                masked_value = email_pattern.sub("[EMAIL_REDACTED]", value)
+
+                if masked_value != value:
+                    replacements[key] = masked_value
+
+        if replacements:
+            patches[identifier] = OtelSpanPatch(set_attributes=replacements)
+
+    return MaskOtelSpansResult(span_patches=patches)
+
+
+langfuse = Langfuse(mask_otel_spans=mask_otel_spans)
+```
+
+`mask_otel_spans`는 동기적으로 실행되며 일반적으로 OpenTelemetry 배치 스팬 프로세서(batch span processor)의 워커 스레드에서 실행됩니다. 단, `flush()` 및 종료(shutdown) 중에는 호출자 스레드에서 실행될 수 있습니다. 내보내기 큐가 밀리지 않도록 함수를 빠르게 유지하세요. 전체 동작, 오류 처리, 레거시 `mask`와의 비교는 [마스킹](/docs/observability/features/masking)을 참고하세요.
+
+</Tab>
+<Tab title="JS/TS SDK">
+
+[`LangfuseSpanProcessor`](https://langfuse-js-git-main-langfuse.vercel.app/classes/_langfuse_otel.LangfuseSpanProcessor.html)에 `mask` 함수를 제공할 수 있습니다. 이 함수는 모든 관측(observation)의 입력, 출력, 메타데이터에 적용됩니다.
+
+이 함수는 `{ data }` 형태의 객체를 받으며, 여기서 `data`는 속성 값을 문자열화한 JSON입니다. 마스킹된 데이터를 반환해야 합니다.
+
+```ts filename="instrumentation.ts" /mask: /
+import { NodeSDK } from "@opentelemetry/sdk-node";
+import { LangfuseSpanProcessor } from "@langfuse/otel";
+
+const spanProcessor = new LangfuseSpanProcessor({
+  mask: ({ data }) =>
+    data.replace(/\b\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?\d{4}\b/g, "***MASKED_CREDIT_CARD***"),
+});
+
+const sdk = new NodeSDK({ spanProcessors: [spanProcessor] });
+
+sdk.start();
+```
+
+</Tab>
+</LangTabs>
+
+## 로깅 및 디버깅
+
+Langfuse SDK는 애플리케이션 문제를 해결하는 데 도움이 되는 상세한 로깅 및 디버깅 정보를 제공할 수 있습니다.
+
+<LangTabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab title="Python SDK">
+
+**환경 변수를 통한 설정:**
+
+`LANGFUSE_DEBUG` 환경 변수를 사용하여 로그 레벨을 설정하고 디버그 모드를 활성화할 수 있습니다.
+
+```bash
+export LANGFUSE_DEBUG="True"
+```
+
+**코드에서 설정:**
+
+Langfuse SDK는 Python의 표준 `logging` 모듈을 사용합니다. 메인 로거의 이름은 `"langfuse"`입니다.
+상세한 디버그 로깅을 활성화하려면 다음 중 하나를 수행하세요.
+
+1.  `Langfuse` 클라이언트를 초기화할 때 `debug=True` 매개변수를 설정합니다.
+2.  `"langfuse"` 로거를 직접 구성합니다.
+
+```python
+import logging
+
+langfuse_logger = logging.getLogger("langfuse")
+langfuse_logger.setLevel(logging.DEBUG)
+```
+
+`langfuse` 로거의 기본 로그 레벨은 `logging.WARNING`입니다.
+
+</Tab>
+<Tab title="JS/TS SDK">
+
+전역 SDK 로거를 구성하여 로그 출력의 상세도를 제어할 수 있습니다. 이는 디버깅에 유용합니다.
+
+**환경 변수를 통한 설정:**
+
+`LANGFUSE_LOG_LEVEL` 환경 변수를 사용하여 로그 레벨을 설정하고 디버그 모드를 활성화할 수 있습니다.
+
+```bash
+export LANGFUSE_LOG_LEVEL="DEBUG"
+```
+
+**코드에서 설정:**
+
+```typescript /configureGlobalLogger/
+import { configureGlobalLogger, LogLevel } from "@langfuse/core";
+
+// 모든 로그 메시지를 보려면 로그 레벨을 DEBUG로 설정합니다
+configureGlobalLogger({ level: LogLevel.DEBUG });
+```
+
+사용 가능한 로그 레벨은 `DEBUG`, `INFO`, `WARN`, `ERROR`입니다.
+
+</Tab>
+</LangTabs>
+
+## 샘플링
+
+샘플링을 사용하면 트레이스의 일부만 Langfuse로 전송할 수 있습니다. 이는 대용량 애플리케이션에서 비용과 노이즈를 줄이는 데 유용합니다.
+
+<LangTabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab title="Python SDK">
+
+**코드에서 설정:**
+
+클라이언트 초기화 시 `sample_rate` 매개변수를 설정하여 SDK가 트레이스를 샘플링하도록 구성할 수 있습니다. 이 값은 `0.0`(트레이스의 0% 샘플링)에서 `1.0`(트레이스의 100% 샘플링) 사이의 부동소수점 값이어야 합니다.
+
+트레이스가 샘플링되지 않으면, 해당 트레이스의 관측(스팬, 생성) 또는 관련 점수는 Langfuse로 전송되지 않습니다.
+
+```python
+from langfuse import Langfuse
+
+# 트레이스의 약 20%를 샘플링
+langfuse_sampled = Langfuse(sample_rate=0.2)
+```
+
+**환경 변수를 통한 설정:**
+
+`LANGFUSE_SAMPLE_RATE` 환경 변수를 사용하여 샘플링 비율을 설정할 수도 있습니다.
+
+```bash
+export LANGFUSE_SAMPLE_RATE="0.2"
+```
+
+</Tab>
+<Tab title="JS/TS SDK">
+
+**코드에서 설정:**
+
+Langfuse는 OpenTelemetry의 샘플링 결정을 따릅니다. OTEL `NodeSDK`에 샘플러(sampler)를 구성하여 Langfuse로 전달되는 트레이스를 제어하고 대용량 워크로드에서 노이즈/비용을 줄일 수 있습니다.
+
+```ts filename="instrumentation.ts" /TraceIdRatioBasedSampler/
+import { NodeSDK } from "@opentelemetry/sdk-node";
+import { LangfuseSpanProcessor } from "@langfuse/otel";
+import { TraceIdRatioBasedSampler } from "@opentelemetry/sdk-trace-base";
+
+const sdk = new NodeSDK({
+  sampler: new TraceIdRatioBasedSampler(0.2),
+  spanProcessors: [new LangfuseSpanProcessor()],
+});
+
+sdk.start();
+```
+
+**환경 변수를 통한 설정:**
+
+`LANGFUSE_SAMPLE_RATE` 환경 변수를 사용하여 샘플링 비율을 설정할 수도 있습니다.
+
+```bash
+export LANGFUSE_SAMPLE_RATE="0.2"
+```
+
+</Tab>
+</LangTabs>
+
+## 분리된 TracerProvider [#isolated-tracer-provider]
+
+Langfuse와 함께 사용할 별도의 OpenTelemetry TracerProvider를 구성할 수 있습니다. 이렇게 하면 Langfuse 트레이싱과 다른 관측성 시스템 간에 분리가 이루어집니다.
+
+분리의 이점:
+
+- Langfuse 스팬이 다른 관측성 백엔드(예: Datadog, Jaeger, Zipkin)로 전송되지 않습니다
+- 서드파티 라이브러리 스팬이 Langfuse로 전송되지 않습니다
+- 독립적인 구성 및 샘플링 비율을 가질 수 있습니다
+
+<Callout type="warning">
+TracerProvider는 서로 분리되어 있지만, 활성 스팬을 추적하기 위한 동일한 OpenTelemetry 컨텍스트를 공유합니다. 이로 인해 다음과 같은 스팬 관계 문제가 발생할 수 있습니다.
+
+- 한 TracerProvider의 부모 스팬이 다른 TracerProvider의 자식을 가질 수 있습니다
+- 부모 스팬이 다른 TracerProvider에 속해 있는 경우 일부 스팬이 "고립된(orphaned)" 것처럼 보일 수 있습니다
+- 트레이스 계층 구조가 불완전하거나 혼란스러울 수 있습니다
+
+혼란스러운 트레이스 구조를 피하기 위해 계측을 신중하게 계획하세요.
+
+</Callout>
+
+<LangTabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab title="Python SDK">
+
+```python {4, 5}
+from opentelemetry.sdk.trace import TracerProvider
+from langfuse import Langfuse
+
+langfuse_tracer_provider = TracerProvider() # 분리를 유지하기 위해 전역 tracer provider로 설정하지 않습니다
+langfuse = Langfuse(tracer_provider=langfuse_tracer_provider)
+langfuse.start_observation(name="myspan").end() # 이 스팬은 나머지 OTEL 계측과 분리됩니다
+```
+
+</Tab>
+<Tab title="JS/TS SDK">
+사용자 정의 provider로 Langfuse 스팬을 분리하고 다른 익스포터로 전송되지 않도록 합니다.
+
+```ts /setLangfuseTracerProvider/
+import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
+import { setLangfuseTracerProvider } from "@langfuse/tracing";
+
+// 새 TracerProvider를 생성하고 LangfuseSpanProcessor를 등록합니다
+// 이 TracerProvider를 전역 TracerProvider로 설정하지 마세요
+const langfuseTracerProvider = new NodeTracerProvider({
+  spanProcessors: [new LangfuseSpanProcessor()],
+})
+
+// 분리된 TracerProvider를 등록합니다
+setLangfuseTracerProvider(langfuseTracerProvider)
+```
+
+</Tab>
+</LangTabs>
+
+기존 OpenTelemetry 설정과 함께 Langfuse를 사용하는 방법은 [여기](/faq/all/existing-otel-setup)에서 자세히 확인할 수 있습니다.
+
+## 다중 프로젝트 설정 [#multi-project-setup-experimental]
+
+<LangTabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab title="Python SDK">
+
+<Callout type="warning">
+다중 프로젝트 설정은 Python SDK에서 **실험적** 기능이며, 서드파티 OpenTelemetry 통합과 관련하여 중요한 제약이 있습니다.
+</Callout>
+
+Langfuse Python SDK는 여러 공개 키(public key)를 사용하여 동일한 애플리케이션 내에서 서로 다른 프로젝트로 트레이스를 라우팅하는 기능을 지원합니다. 이는 Langfuse SDK가 생성하는 모든 스팬에 공개 키를 포함하는 특정 스팬 속성을 추가하기 때문에 가능합니다.
+
+**동작 방식:**
+
+1. **스팬 속성**: Langfuse SDK는 생성하는 스팬에 공개 키를 포함하는 특정 스팬 속성을 추가합니다
+2. **다중 프로세서**: 전역 tracer provider에 여러 스팬 프로세서가 등록되며, 각각 특정 공개 키에 바인딩된 익스포터를 가집니다
+3. **필터링**: 각 스팬 프로세서 내에서 공개 키 속성의 존재 여부와 값을 기준으로 스팬이 필터링됩니다
+
+**서드파티 라이브러리와 관련된 중요한 제약 사항:**
+
+OpenTelemetry 스팬을 자동으로 방출하는 서드파티 라이브러리(예: HTTP 클라이언트, 데이터베이스, 기타 계측 라이브러리)에는 Langfuse 공개 키 스팬 속성이 **없습니다**. 그 결과:
+
+- 내보내기 필터를 통과했지만 공개 키가 없는 서드파티 스팬은 특정 프로젝트로 라우팅될 수 없습니다
+- 이러한 스팬은 모든 스팬 프로세서에서 처리되어 모든 프로젝트로 전송될 수 있습니다
+- 기본 필터를 사용하는 경우, 이는 주로 서드파티 계측기(instrumentor)의 GenAI/LLM 스팬에 영향을 미칩니다(인프라 스팬은 일반적으로 필터링되어 제외됩니다)
+
+**왜 실험적 기능인가?**
+이 방식은 올바른 라우팅을 보장하기 위해 모든 통합에서 실행되는 모든 Langfuse SDK 호출에 `public_key` 매개변수를 전달해야 하며, 필터링을 통과한 서드파티 스팬은 모든 프로젝트에 나타날 수 있습니다.
+
+### 초기화
+
+여러 프로젝트를 설정하려면, 각 프로젝트에 대해 별도의 Langfuse 클라이언트를 초기화하세요.
+
+```python
+from langfuse import Langfuse
+
+# 서로 다른 프로젝트를 위한 클라이언트 초기화
+project_a_client = Langfuse(
+    public_key="pk-lf-project-a-...",
+    secret_key="sk-lf-project-a-...",
+    base_url="https://cloud.langfuse.com"
+)
+
+project_b_client = Langfuse(
+    public_key="pk-lf-project-b-...",
+    secret_key="sk-lf-project-b-...",
+    base_url="https://cloud.langfuse.com"
+)
+```
+
+### 통합 사용법
+
+다중 프로젝트 설정에서 모든 통합에 대해, 트레이스가 올바른 프로젝트로 라우팅되도록 하려면 `public_key` 매개변수를 반드시 지정해야 합니다.
+
+**Observe 데코레이터:**
+
+`langfuse_public_key`를 (데코레이터가 아닌) _최상위_ 관측 대상 함수에 키워드 인자로 전달하세요. Python SDK 3.2.2 이상부터는, 중첩된 데코레이트 함수가 현재 실행 컨텍스트로부터 공개 키를 자동으로 가져옵니다. 또한 `get_client` 호출도 데코레이트 함수 실행 컨텍스트 내의 현재 `langfuse_public_key`를 인식하므로, 여기서 다시 `langfuse_public_key`를 전달할 필요는 없습니다.
+
+```python
+from langfuse import observe
+
+@observe
+def nested():
+    # get_client 호출은 컨텍스트를 인식합니다
+    # langfuse_public_key가 전달된 다른 데코레이트 함수 내부에서
+    # 실행된다면, 여기서 다시 전달할 필요가 없습니다
+
+
+@observe
+def process_data_for_project_a(data):
+    # 실행 컨텍스트에 저장되어 있으므로
+    # 여기서 `langfuse_public_key`를 다시 전달할 필요는 없습니다
+    nested()
+
+    return {"processed": data}
+
+@observe
+def process_data_for_project_b(data):
+    # 실행 컨텍스트에 저장되어 있으므로
+    # 여기서 `langfuse_public_key`를 다시 전달할 필요는 없습니다
+    nested()
+
+    return {"enhanced": data}
+
+# 프로젝트 A로 라우팅
+# 최상위 데코레이트 함수에 `langfuse_public_key` kwarg가 필요합니다
+result_a = process_data_for_project_a(
+    data="input data",
+    langfuse_public_key="pk-lf-project-a-..."
+)
+
+# 프로젝트 B로 라우팅
+# 최상위 데코레이트 함수에 `langfuse_public_key` kwarg가 필요합니다
+result_b = process_data_for_project_b(
+    data="input data",
+    langfuse_public_key="pk-lf-project-b-..."
+)
+```
+
+**OpenAI 통합:**
+
+OpenAI 실행에 `langfuse_public_key`를 키워드 인자로 추가하세요.
+
+```python
+from langfuse.openai import openai
+
+client = openai.OpenAI()
+
+# 프로젝트 A로 라우팅
+response_a = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "Hello from Project A"}],
+    langfuse_public_key="pk-lf-project-a-..."
+)
+
+# 프로젝트 B로 라우팅
+response_b = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "Hello from Project B"}],
+    langfuse_public_key="pk-lf-project-b-..."
+)
+```
+
+**Langchain 통합:**
+
+CallbackHandler 생성자에 `public_key`를 추가하세요.
+
+```python
+from langfuse.langchain import CallbackHandler
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+
+# 서로 다른 프로젝트를 위한 핸들러 생성
+handler_a = CallbackHandler(public_key="pk-lf-project-a-...")
+handler_b = CallbackHandler(public_key="pk-lf-project-b-...")
+
+llm = ChatOpenAI(model_name="gpt-4o")
+prompt = ChatPromptTemplate.from_template("Tell me about {topic}")
+chain = prompt | llm
+
+# 프로젝트 A로 라우팅
+response_a = chain.invoke(
+    {"topic": "machine learning"},
+    config={"callbacks": [handler_a]}
+)
+
+# 프로젝트 B로 라우팅
+response_b = chain.invoke(
+    {"topic": "data science"},
+    config={"callbacks": [handler_b]}
+)
+```
+
+**중요 고려 사항:**
+
+- 모든 통합에서 실행되는 모든 Langfuse SDK 호출에는 적절한 공개 키 매개변수가 포함되어야 합니다
+- 공개 키 매개변수가 누락되면 트레이스가 기본 프로젝트로 라우팅되거나 유실될 수 있습니다
+- 필터링을 통과한 서드파티 OpenTelemetry 스팬은 Langfuse 공개 키 속성이 없기 때문에 모든 프로젝트에 나타날 수 있습니다
+
+</Tab>
+
+<Tab title="JS/TS SDK">
+
+SDK를 구성하여 여러 Langfuse 프로젝트로 트레이스를 전송할 수 있습니다. 이는 멀티 테넌트 애플리케이션이나 서로 다른 환경으로 트레이스를 전송하는 데 유용합니다. 각각 고유한 자격 증명을 가진 여러 `LangfuseSpanProcessor` 인스턴스를 등록하기만 하면 됩니다.
+
+```ts filename="instrumentation.ts"
+import { NodeSDK } from "@opentelemetry/sdk-node";
+import { LangfuseSpanProcessor } from "@langfuse/otel";
+
+const sdk = new NodeSDK({
+  spanProcessors: [
+    new LangfuseSpanProcessor({
+      publicKey: "pk-lf-public-key-project-1",
+      secretKey: "sk-lf-secret-key-project-1",
+    }),
+    new LangfuseSpanProcessor({
+      publicKey: "pk-lf-public-key-project-2",
+      secretKey: "sk-lf-secret-key-project-2",
+    }),
+  ],
+});
+
+sdk.start();
+```
+
+이 구성은 각 프로세서의 필터를 통과한 모든 스팬을 두 프로젝트 모두로 전송합니다. 각 프로세서에 대해 사용자 정의 `shouldExportSpan` 필터를 구성하여 어떤 트레이스가 어느 프로젝트로 갈지 제어할 수 있습니다.
+
+</Tab>
+</LangTabs>
+
+## 첫 토큰까지의 시간 (TTFT)
+
+LLM 호출의 첫 토큰까지의 시간(time to first token, TTFT)을 수동으로 설정할 수 있습니다. 이는 LLM 호출의 지연 시간을 측정하고 느린 LLM 호출을 식별하는 데 유용합니다.
+
+<LangTabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab title="Python">
+
+`completion_start_time` 속성을 사용하여 LLM 호출의 첫 토큰까지의 시간(TTFT)을 수동으로 설정할 수 있습니다. 이는 LLM 호출의 지연 시간을 측정하고 느린 LLM 호출을 식별하는 데 유용합니다.
+
+```python
+from langfuse import get_client
+import datetime, time
+
+langfuse = get_client()
+
+with langfuse.start_as_current_observation(as_type="generation", name="TTFT-Generation") as generation:
+    time.sleep(3)
+    generation.update(
+        completion_start_time=datetime.datetime.now(),
+        output="some response",
+    )
+
+langfuse.flush()
+```
+
+</Tab>
+<Tab title="JS/TS SDK">
+
+`completionStartTime` 속성을 사용하여 LLM 호출의 첫 토큰까지의 시간(TTFT)을 수동으로 설정할 수 있습니다. 이는 LLM 호출의 지연 시간을 측정하고 느린 LLM 호출을 식별하는 데 유용합니다.
+
+```ts
+import { startActiveObservation } from "@langfuse/tracing";
+
+startActiveObservation("llm-call", async (span) => {
+  span.update({
+    completionStartTime: new Date().toISOString(),
+  });
+});
+```
+
+</Tab>
+</LangTabs>
+
+## 자체 서명된 SSL 인증서 (셀프 호스팅 Langfuse)
+
+Langfuse를 [셀프 호스팅](/docs/deployment/self-host)하면서 자체 서명된 SSL 인증서를 사용하려면, 해당 인증서를 신뢰하도록 SDK를 구성해야 합니다.
+
+<Callout type='warning'>
+SSL 설정을 변경하면 환경에 따라 중요한 보안상의 영향이 있을 수 있습니다. 진행하기 전에 이러한 영향을 충분히 이해하시기 바랍니다.
+</Callout>
+
+**1. OpenTelemetry 스팬 익스포터가 자체 서명된 인증서를 신뢰하도록 설정**
+
+```bash filename=".env"
+OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE="/path/to/my-selfsigned-cert.crt"
+```
+
+**2. Langfuse 인스턴스로의 다른 모든 API 요청에 대해 HTTPX가 인증서를 신뢰하도록 설정**
+
+```python filename="main.py"
+import os
+
+import httpx
+
+from langfuse import Langfuse
+
+httpx_client = httpx.Client(verify=os.environ["OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE"])
+
+langfuse = Langfuse(httpx_client=httpx_client)
+```
+
+## Sentry와 함께 설정하기
+
+애플리케이션에서 Sentry와 Langfuse를 함께 사용하는 경우, 두 도구 모두 트레이싱에 OpenTelemetry를 사용하므로 사용자 정의 OpenTelemetry 설정이 필요합니다. [이 가이드에서는 Sentry로 오류 모니터링 데이터를 전송하는 동시에 Langfuse에서 LLM 관측성 트레이스를 캡처하는 방법을 보여줍니다](/faq/all/existing-sentry-setup).
+
+## 스레드 풀과 멀티프로세싱
+
+<LangTabs items={["Python SDK"]}>
+<Tab title="Python">
+
+워커 스레드 전반에 걸쳐 컨텍스트가 전달되도록 OpenTelemetry 스레딩 계측기(threading instrumentor)를 사용하세요.
+
+```python
+from opentelemetry.instrumentation.threading import ThreadingInstrumentor
+
+ThreadingInstrumentor().instrument()
+```
+
+멀티프로세싱의 경우, [OpenTelemetry 가이드](https://github.com/open-telemetry/opentelemetry-python/issues/2765#issuecomment-1158402076)를 따르세요. Pydantic Logfire를 사용하는 경우 `distributed_tracing=True`를 활성화하세요. 별도의 서비스나 프로세스 간의 트레이싱에 대해서는 [트레이스 ID 및 분산 트레이싱](/docs/observability/features/trace-ids-and-distributed-tracing)을 참고하세요.
+
+</Tab>
+</LangTabs>

@@ -1,0 +1,15 @@
+---
+title: 개인정보 관리
+description: Langfuse에서 처리되는 개인정보를 관리하는 방법.
+sourceRevision: 9c0d419484845ffbd56805fd068677856e5d764c
+translationStatus: machine
+---
+
+# 개인정보 관리
+
+Langfuse에서 어떤 종류의 개인정보를 처리할지는 사용자가 직접 결정합니다.
+다음을 통해 개인정보가 처리되고 보관되는 방식을 관리할 수 있습니다:
+
+- [데이터 마스킹](/docs/tracing-features/masking): 트레이스, observation, 점수에서 PII 데이터를 마스킹합니다.
+- [데이터 삭제](/docs/data-deletion): 요청 시 개인정보를 삭제하고, 효율적인 삭제를 위해 트레이싱 데이터에 [userId](/docs/tracing-features/users)를 추가합니다.
+- [데이터 보관](/docs/data-retention): Langfuse에 데이터가 저장되는 기간을 제어합니다.

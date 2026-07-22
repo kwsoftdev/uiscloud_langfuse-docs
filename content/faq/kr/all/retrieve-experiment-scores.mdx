@@ -1,0 +1,201 @@
+---
+title: UI 또는 API/SDK를 통해 실험 점수를 조회하는 방법
+description: Langfuse UI를 통하거나 API/SDK를 통해 프로그래밍 방식으로 실험 점수를 내보내고 조회하는 방법을 알아봅니다.
+tags: [evaluation]
+sourceRevision: 024095cba883fbb0b8b2e1839c930baaed4e67da
+translationStatus: machine
+---
+
+# 실험 점수를 조회하는 방법은?
+
+<Callout type="info">
+**용어 참고**: "Experiment(실험)"와 "dataset run(데이터셋 실행)"은 Langfuse 전반에서 서로 바꿔 사용됩니다. 현재는 "dataset run"이라는 용어를 점차 폐기하고 "experiment"로 통일하는 방향으로 나아가고 있지만, 두 용어는 현재 동일한 개념을 가리킵니다.
+</Callout>
+
+Langfuse는 두 가지 유형의 실험 점수를 지원합니다:
+
+1. **실험 수준 점수(Experiment-level scores)**: 전체 실험 실행에 대한 종합 메트릭(예: precision, recall, F1-score)입니다. 이 점수는 변경 불가능하며 집계된 성능을 나타냅니다. [실행 수준 점수에 대해 자세히 알아보기](/changelog/2025-05-07-run-level-scores)
+2. **실험 항목 수준 점수(Experiment-item-level scores)**: 실험 내 개별 항목에 대한 점수입니다(예: 생성된 출력별 평가).
+
+## API/SDK를 통한 방법
+
+### 실험 수준 점수
+
+지원 예정: `datasetRunId` 파라미터를 사용해 Langfuse SDK 또는 scores API로 실험 수준 점수를 가져올 수 있습니다.
+점수 속성에 대한 자세한 내용은 [점수 데이터 모델](/docs/evaluation/scores/data-model#scores)을 참고하세요.
+
+### 실험 항목 수준 점수
+
+<Callout type="warning">
+**현재의 우회 방법**: 아래 방법은 실험 항목 수준 점수를 조회하기 위한 임시 우회 방법입니다. 다음을 권장합니다:
+1. 모든 점수에 문맥과 함께 직접 접근할 수 있는 [Experiment Runner SDK](/changelog/2025-09-17-experiment-runner-sdk) 사용
+2. 가까운 시일 내에 실험 점수/메트릭 전용 API 라우트를 추가할 수도 있습니다
+</Callout>
+
+프로그래밍 방식으로 실험 항목 수준 점수를 조회하려면:
+
+<Steps>
+
+### 1단계: 실험 실행 가져오기
+
+모든 트레이스 ID를 포함한 실험 실행 상세 정보를 가져옵니다:
+
+<LangTabs items={["Python SDK", "JS/TS SDK", "API"]}>
+<Tab>
+
+```python
+from langfuse import Langfuse
+from urllib.parse import quote
+
+langfuse = Langfuse()
+
+dataset_name = "your-dataset-name"
+run_name = "your-run-name"
+
+# 특수 문자가 포함된 경우 이름을 URL 인코딩합니다
+encoded_dataset_name = quote(dataset_name, safe="")
+encoded_run_name = quote(run_name, safe="")
+
+# 실험 실행 가져오기
+run = langfuse.get_run(
+    dataset_name=encoded_dataset_name,
+    run_name=encoded_run_name
+)
+
+# 트레이스 ID 추출
+trace_ids = [item["trace_id"] for item in run["dataset_run_items"]]
+```
+
+</Tab>
+<Tab>
+
+```ts
+import { LangfuseClient } from "@langfuse/client";
+
+const langfuse = new LangfuseClient();
+
+const datasetName = "your-dataset-name";
+const runName = "your-run-name";
+
+// 특수 문자가 포함된 경우 이름을 URL 인코딩합니다
+const encodedDatasetName = encodeURIComponent(datasetName);
+const encodedRunName = encodeURIComponent(runName);
+
+// 실험 실행 가져오기; 실행을 가져올 때는 인코딩된 이름을 사용해야 합니다
+const run = await langfuse.dataset.getRun({
+  datasetName: encodedDatasetName,
+  runName: encodedRunName
+});
+
+// 트레이스 ID 추출
+const traceIds = run.datasetRunItems.map(item => item.traceId);
+```
+
+</Tab>
+<Tab>
+
+```bash
+GET https://api.langfuse.com/api/public/datasets/{datasetName}/runs/{runName}
+```
+
+[API 레퍼런스](https://api.reference.langfuse.com/#tag/datasets/get/api/public/datasets/{datasetName}/runs/{runName})
+
+</Tab>
+</LangTabs>
+
+### 2단계: 각 트레이스의 점수 가져오기
+
+트레이스 ID를 사용해 각 실험 항목의 점수를 조회합니다:
+
+<LangTabs items={["Python SDK", "JS/TS SDK", "API"]}>
+<Tab>
+
+```python
+# 점수를 포함한 트레이스 상세 정보 가져오기
+for trace_id in trace_ids:
+    trace = langfuse.get_trace(trace_id)
+    scores = trace["scores"]
+
+    print(f"Trace {trace_id}: {scores}")
+```
+
+</Tab>
+<Tab>
+
+```ts
+// 점수를 포함한 트레이스 상세 정보 가져오기
+for (const traceId of traceIds) {
+  const trace = await langfuse.trace.get(traceId);
+  const scores = trace.scores;
+
+  console.log(`Trace ${traceId}:`, scores);
+}
+```
+
+</Tab>
+<Tab>
+
+```bash
+GET https://api.langfuse.com/api/public/traces/{traceId}
+```
+
+[API 레퍼런스](https://api.reference.langfuse.com/#tag/trace/get/api/public/traces/{traceId})
+
+</Tab>
+</LangTabs>
+
+</Steps>
+
+### 권장: Experiment Runner SDK 사용
+
+더 나은 개발 경험을 위해, 모든 실험 점수와 결과에 대한 내장 접근 기능을 제공하는 [Experiment Runner SDK](/changelog/2025-09-17-experiment-runner-sdk)를 사용하세요:
+
+<LangTabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab>
+
+```python
+from langfuse import get_client
+
+langfuse = get_client()
+
+# 자동 점수 수집과 함께 실험 실행
+result = langfuse.run_experiment(
+    name="my-experiment",
+    data=my_dataset,
+    task=my_task,
+    evaluators=[my_evaluator]  # 선택 사항
+)
+
+# 모든 점수에 직접 접근
+print(result.format())  # 포맷된 출력에 모든 점수가 포함됩니다
+```
+
+</Tab>
+<Tab>
+
+```ts
+import { LangfuseClient } from "@langfuse/client";
+
+const langfuse = new LangfuseClient();
+
+// 자동 점수 수집과 함께 실험 실행
+const result = await langfuse.experiment.run({
+  name: "my-experiment",
+  data: myDataset,
+  task: myTask,
+  evaluators: [myEvaluator]  // 선택 사항
+});
+
+// 모든 점수에 직접 접근
+console.log(await result.format());  // 포맷된 출력에 모든 점수가 포함됩니다
+```
+
+</Tab>
+</LangTabs>
+
+## 관련 자료
+
+- [점수 데이터 모델](/docs/evaluation/scores/data-model#scores)
+- [실행 수준 점수 변경 로그](/changelog/2025-05-07-run-level-scores)
+- [Experiment Runner SDK](/changelog/2025-09-17-experiment-runner-sdk)
+- [실험 문서](/docs/evaluation/experiments/experiments-via-sdk)

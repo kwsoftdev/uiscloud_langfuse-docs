@@ -1,0 +1,33 @@
+{
+  "title": "기능",
+  "pages": [
+    "---필수---",
+    "sessions",
+    "users",
+    "environments",
+    "tags",
+    "metadata",
+    "trace-ids-and-distributed-tracing",
+    "---고급---",
+    "comments",
+    "corrections",
+    "user-feedback",
+    "log-levels",
+    "agent-graphs",
+    "filter-search-bar",
+    "full-text-search",
+    "masking",
+    "mcp-tracing",
+    "multi-modality",
+    "observation-types",
+    "queuing-batching",
+    "releases-and-versioning",
+    "sampling",
+    "token-and-cost-tracking",
+    "url",
+    "web-callouts",
+    "[데이터 쿼리 ↗](/docs/api-and-data-platform/overview)",
+    "[메트릭 API ↗](/docs/metrics/features/metrics-api)",
+    "[커스텀 대시보드 ↗](/docs/metrics/features/custom-dashboards)"
+  ]
+}

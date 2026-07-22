@@ -1,0 +1,205 @@
+---
+title: "Langfuse는 어떻게 지금에 이르렀나요?"
+sourceRevision: 96099390bd0c51569e5b81e2efd3e70ecbb23b89
+translationStatus: machine
+---
+
+import { ProductUpdateSignup } from "@/components/ProductUpdateSignup";
+
+# Langfuse는 어떻게 지금에 이르렀나요?
+
+Langfuse는 지난 몇 년간 크게 성장했습니다. 이 문서는 지금까지 걸어온 길에 대한 상위 수준의 개요입니다. 더 자세한 내용이 궁금하다면 [체인지로그](/changelog)를 확인해 보세요.
+
+## 타임라인
+
+<Steps>
+
+### 2022년: Clemens, Max, Marc가 함께 일하기 시작하다
+
+우리는 2022년에 함께 일하기 시작했습니다. 다양한 아이디어를 탐색한 끝에, 이전 직장에서 겪었던 문제를 해결하기 위해 사용량 기반 청구(billing) 제품(*Finto*라는 이름)을 만들기로 했습니다.
+
+초기 제품과 고객을 확보한 후, 2022년 11월 YC W23에 합격했습니다.
+
+### 2023년 1월-4월: YC W23에서 AI 애플리케이션 구축하기
+
+<Frame className="max-w-sm">
+  ![YC Sign](/images/handbook/story/2023_founders.jpeg)
+</Frame>
+
+우리는 YC W23 배치를 위해 샌프란시스코로 이주했습니다. 고객들은 Finto(청구 제품)에 대해 흥미를 보였지만, 우리 자신은 이미 자리 잡은 (작은) 시장에서 _n번째_ 세대의 제품을 만드는 일에는 흥미를 느끼지 못한다는 것을 깨달았습니다. LLM의 발전을 고려할 때, 훨씬 더 크고 흥미로운 문제들이 있다는 것을 알게 되었습니다.
+
+우리는 YC 배치 기간의 대부분을 다양한 AI 애플리케이션 문제를 다루는 데 사용했습니다:
+
+- AI로부터 배우기: 모든 주제에 대한 교육 코스
+- LLM 기반 웹 리서치를 통한 세일즈 데이터 강화
+- 팀을 위한 협업형 LLM 애그노스틱 ChatGPT
+- 우리 봇에게 할당된 모든 GitHub 이슈에 대해 LLM이 생성하는 PR
+
+우리는 대부분의 아이디어를 꽤 빠르게(보통 각 2주 미만) 거쳐 나갔습니다. 마지막 아이디어에는 훨씬 더 오랜 시간을 들였는데, 멀티 파일 편집을 구현하는 일이 훨씬 더 많은 작업이었고 동시에 더 흥미로웠기 때문입니다. 이 과정에서 우리는 다음을 배웠습니다:
+
+1. 이 기술에는 매우 많은 사용 사례가 있으며, 스타트업을 만드는 것은 문제/페인 포인트를 검증하는 것보다 이를 해결하는 AI 기반 제품을 실제로 만들어 낼 수 있음을 보여주는 것에 더 가깝습니다. 많은 기업들이 시도하고 싶어 하고, 높은 수익을 기대하며 AI 제품에 기꺼이 비용을 지불할 의향이 있습니다.
+2. 우리는 사용자를 깊이 아끼는 문제를 다루고 싶습니다.
+3. LLM 애플리케이션을 만드는 것은 어렵습니다. 많은 사람들이 이를 단순한 *GPT 래퍼*로 치부하지만, 실제로는 가치 창출의 핵심이며 _그냥 작동하지_ 않고 체계적인 평가와 반복 작업이 필요합니다.
+
+마지막 포인트는 고객을 확보하기 위해 제품을 작동시키려 애쓰는 다른 YC 창업자들을 매주 만날 때마다 재확인되었습니다.
+
+### 2023년 5월-8월: Langfuse v0.x 및 퍼블릭 런칭
+
+이러한 깨달음은 마침내 우리가 LLM 애플리케이션 개발자를 위한 오픈소스 도구를 만드는 데 집중하도록 이끌었습니다([_우리는 왜 존재하는가?_](/handbook/chapters/mission) 참고). 이는 훨씬 더 큰 문제로 보였고, 이를 해결하면 더 많은 팀이 더 나은 LLM 애플리케이션을 만들도록 도와 큰 영향을 미칠 수 있을 것 같았습니다.
+
+우리는 초기 버전을 만들었고 YC 배치 내에서 첫 고객을 확보했습니다. 이 초기 고객들이 애플리케이션을 반복하고 테스트하기 위해 제품 안에서 얼마나 많은 시간을 보내는지, 그리고 그들로부터 얼마나 많은 피드백과 다른 팀으로의 추천을 받았는지를 지켜보는 것은 흥미로운 경험이었습니다. 우리는 Langfuse를 오픈소스로 만들기로 결정했고(자세한 내용은 [여기](/handbook/chapters/open-source)) 저장소를 공개했습니다.
+
+제품이 충분히 안정화된(semver 의미에서는 아니지만) 이후, 2023년 7월/8월에 Langfuse를 *LLM 앱을 위한 프로덕트 애널리틱스*로 공식 런칭했습니다:
+
+- [Show HN](https://news.ycombinator.com/item?id=37310070)
+- [Launch YC](https://www.ycombinator.com/launches/J2s-langfuse-open-source-product-analytics-for-llm-apps)
+- [Product Hunt](https://www.producthunt.com/products/langfuse/launches/langfuse) (Product of the Day, Golden Kitty Award)
+
+### 2023년 9월: Lightspeed Venture Partners, La Famiglia, Y Combinator가 주도한 400만 달러 시드 투자
+
+Langfuse가 실제로 *작동한다*는 것이 빠르게 명확해졌고, 고객들은 초기 제품을 마음에 들어 했으며, 우리도 이를 만드는 데 흥분해 있었습니다.
+
+이 프로젝트에 대한 우리의 열정과 런칭에 대한 고객들의 좋은 피드백을 바탕으로, 우리는 Lightspeed Venture Partners, La Famiglia, Y Combinator, 그리고 엔젤 투자자들이 주도한 [400만 달러 시드 라운드](/blog/announcing-our-seed-round)를 유치했습니다.
+
+### 2023년 10월: GitHub 스타 1,000개
+
+### 2024년 1월: 프롬프트 관리 기능 런칭
+
+Langfuse 초기 몇 달 동안 우리는 트레이싱/관측성 기능을 제대로 만드는 데 전념했습니다. 연초를 지나며, (1) 많은 초기 고객들이 요청했고, (2) 트레이싱/관측성 기능과 긴밀히 통합된 프롬프트 관리 제품에 큰 이점이 있다고 보았기 때문에 프롬프트 관리 영역으로 확장하기로 결정했습니다. 우리는 며칠 만에 [초기 버전](/changelog/2024-01-03-prompt-management)을 런칭했고, 이는 이후 Langfuse의 [핵심 부분](/docs/prompt-management)으로 성장했습니다.
+
+### 2024년 2월: 초기 팀 구성
+
+<Frame className="max-w-sm">
+  ![Team 2024](/images/handbook/story/2024_team_foundingeng.jpg)
+</Frame>
+
+트랙션이 강하게 증가함에 따라 초기 팀을 구성할 적기였습니다. Marlies와 Hassieb가 파운딩 엔지니어로 합류했습니다.
+
+### 2024년 4월: Launch Week 1과 _AI 엔지니어링 플랫폼_
+
+우리의 목표는 관측성과 프롬프트 관리를 넘어 LLM 애플리케이션의 전체 개발 라이프사이클을 지원하는 것으로 확장되었습니다. 이 라이프사이클은 여전히 모호했고, 우리는 성장하는 커뮤니티와 함께 이를 정의해 나가는 것에 큰 기대를 걸고 있었습니다.
+
+[첫 번째 Launch Week](/blog/launch-week-1)에서 우리는 Langfuse를 [AI 엔지니어링 플랫폼](/blog/2024-04-introducing-langfuse-2.0)으로 재소개하고, 워크플로우를 지원하는 핵심 기능들을 런칭했습니다:
+
+- [LLM 플레이그라운드](/docs/prompt-management/features/playground)
+- [데이터셋](/docs/evaluation/experiments/datasets)
+- Langfuse가 실행하는 [LLM-as-Judge 평가](/docs/evaluation/evaluation-methods/llm-as-a-judge)
+
+우리는 Product Hunt에서 [두 번째로 런칭](https://www.producthunt.com/products/langfuse/launches/langfuse-2-0)했고 다시 한번 Product of the Day가 되었습니다. Launch Week를 기념하기 위해 [첫 커뮤니티 타운홀](https://www.youtube.com/watch?v=WGERHcRnBYQ)을 개최했으며, 이는 그 이후로 커뮤니티 중심 문화의 핵심 요소가 되었습니다.
+
+### 2024년 9월: 월간 SDK 설치 200만 건 이상
+
+SDK 설치 수를 살펴보다가 다운로드가 _정말 많이_ 이루어지고 있다는 것을 알게 되었습니다. 멋지다고 생각해서 이를 웹사이트에 [추가](https://github.com/langfuse/langfuse-docs/commit/8909c0d9ea6169515087ce526ebcbf4a521fb5c7)했습니다.
+
+### 2024년 11월: Launch Week 2
+
+첫 Launch Week의 성공 이후, 다음 세대 모델을 지원하고 Langfuse 내에서 엔드투엔드 개발 루프를 완성하기 위해 두 번째 Launch Week를 진행하기로 했습니다. 우리는 다음을 런칭했습니다:
+
+- 실험 비교 뷰
+- 실험에 대한 LLM-as-a-Judge
+- 멀티모달 지원
+- 프롬프트 실험
+
+### 2024년 12월: Langfuse v3 (ClickHouse로 전환)
+
+<Frame className="max-w-sm">
+  ![Langfuse
+  v3](/images/blog/2024-12-langfuse-v3-infrastructure-evolution/og.png)
+</Frame>
+
+Langfuse는 크게 성장하고 있었고, 수억 건의 레코드 수집을 감당할 수 있도록 훨씬 더 확장 가능한 구조가 필요했습니다. Langfuse v3는 Langfuse를 구동하는 인프라의 대대적인 업그레이드였으며, 단순한 프로토타입(Postgres 기반)에서 확장 가능한 관측성 플랫폼(ClickHouse 기반)으로의 성숙을 의미했습니다.
+
+v3를 출시하면서 이 변화에 대해 [자세히 다뤘습니다](/blog/2024-12-langfuse-v3-infrastructure-evolution). 이는 Langfuse 역사상 가장 큰 변화였습니다.
+
+### 2025년 4월: GitHub 스타 10,000개
+
+Langfuse 커뮤니티는 크게 성장하여 GitHub 스타 10,000개를 달성했습니다. GitHub Discussions는 커뮤니티가 Langfuse에 관한 모든 것을 논의하는 주요 장소가 되었으며, 1,400개 이상의 스레드가 시작되었습니다.
+
+### 2025년 2월: 샌프란시스코 오피스
+
+Clemens가 샌프란시스코로 이주하여 베이 에어리어 커뮤니티/고객들과 더 긴밀히 협업하기 위한 SF 오피스를 시작했습니다. Akio도 곧이어 합류하여 Langfuse의 비즈니스 측면을 구축했습니다. 그때까지 우리는 베를린 오피스에서 오직 엔지니어링에만 집중해 왔습니다.
+
+### 2025년 5월: Launch Week 3
+
+Langfuse v3의 확장성 덕분에 트레이싱 볼륨이 급격히 증가했습니다. [Launch Week 3](/blog/2025-05-19-launch-week-3)에서는 이 데이터를 더 접근하기 쉽고 활용 가능하게 만드는 데 집중했습니다. 우리는 다음을 릴리스했습니다:
+
+- 전문 검색(Full-text search)
+- 저장/공유 테이블 뷰
+- 커스텀 대시보드
+
+커스텀 대시보드는 오랫동안 만들고 싶었던, 매우 인기 있는 요청이었습니다. 처음에는 여력이 없었고, 그다음에는 Langfuse가 처리하는 데이터 양이 Postgres 기반의 Langfuse v2에서 시각화하기에는 실현 불가능한 수준이었습니다. 우리가 이를 어떻게 만들었는지에 대해 [여기](/blog/2025-05-21-customizable-dashboards)에서 더 자세히 다뤘습니다.
+
+### 2025년 6월: 오픈소스에 대한 전면적인 투자
+
+<Frame className="max-w-sm">
+  ![Doubling Down on Open
+  Source](/images/blog/2025-06-04-open-sourcing-langfuse-product/langfuse-open-source-og.png)
+</Frame>
+
+[2025년 6월](/blog/2025-06-04-open-sourcing-langfuse-product), 우리는 중대한 결정을 내렸습니다: 모든 Langfuse 제품 기능을 MIT 라이선스로 오픈소스화한 것입니다. LLM-as-a-Judge 평가, 주석 큐, 프롬프트 실험, 플레이그라운드 등 이전에는 상용 사용자에게만 제공되던 기능들이 이제 누구나 자유롭게 셀프 호스팅할 수 있게 되었습니다.
+
+이는 우리의 오픈 코어의 대대적인 확장을 의미했습니다. 이제 SCIM, 감사 로그, 데이터 보존 정책과 같은 필수적인 엔터프라이즈 보안 및 플랫폼 기능만이 상용 라이선스 하에 남아 있습니다. 우리의 [목표](/handbook/chapters/mission)는 엔지니어링 팀이 견고한 [오픈소스](/handbook/chapters/open-source) 도구로 야심 찬 LLM 애플리케이션을 만들 수 있도록 지원하는 것입니다.
+
+### 2025년 6월-8월: OpenTelemetry
+
+2025년, 우리는 개방성, 확장성, 벤더 중립성, 상호운용성을 높이기 위해 관측성 제품에 OpenTelemetry를 전면적으로 도입했습니다.
+다음을 런칭했습니다:
+
+- Langfuse용 OpenTelemetry 엔드포인트
+- Python SDK v3 (OpenTelemetry 기반)
+- JS SDK v4 (OpenTelemetry 기반)
+
+### 2025년 9월: 2번째 연례 오프사이트
+
+<Frame className="max-w-sm">
+  ![Langfuse team together in Portugal, September
+  2025](/images/handbook/story/2025_team_offsite.jpg)
+</Frame>
+
+2025년, 베를린과 SF의 팀 규모가 꽤 커졌습니다. 우리는 모두 포르투갈에 모여 흥미로운 새로운 주제들을 다루고, 서로를 알아가며, 함께 조금 축하하는 시간을 가졌습니다.
+
+### 2025년 9월: 누진 가격제 + 가격 인하 + 셀프서비스 엔터프라이즈
+
+이 몇 달 동안 비즈니스 측면에서 빠르게 성장하면서, 더 빠르게 확장하는 데 도움이 되는 몇 가지 변화를 결정했습니다:
+
+- 누진 가격제(Graduated Pricing): Langfuse를 더 많이 사용할수록 더 저렴해집니다. 우리가 성장하는 만큼 그 혜택을 협상을 시도하는 일부가 아니라 모든 사용자와 나누고 싶습니다.
+- 가격 인하: Core 플랜 가격을 월 59달러에서 29달러로 50% 인하하여, 아주 작은 팀도 Langfuse를 손쉽게 시작할 수 있도록 했습니다.
+- 셀프서비스 엔터프라이즈: 마찬가지로, 가능한 한 고객이 스스로 이용할 수 있게 하고 싶으며, 필요하지 않은 경우 세일즈 프로세스나 통화를 거치도록 강요하고 싶지 않습니다.
+
+### 2026년 1월: Langfuse, ClickHouse에 합류하다
+
+<Frame className="max-w-sm">
+  ![Langfuse joins ClickHouse](/images/blog/acquisition/banner.jpg)
+</Frame>
+
+1월 16일, ClickHouse가 [Langfuse를 인수](/blog/joining-clickhouse)했습니다. 우리는 회사를 매각할 계획이 없었습니다. 사실 시리즈 A 텀시트를 이미 확보한 상태였고, 크리스마스 휴가를 기대하고 있었습니다. 상황이 바뀐 계기는 오픈소스, 셀프 호스팅, 그리고 실제 프로덕션 워크로드를 위한 제품이라는 Langfuse의 본질을 지키면서도 ClickHouse와 함께라면 얼마나 더 빠르게 나아갈 수 있는지를 깨달은 것이었습니다.
+
+Langfuse는 v3부터 이미 ClickHouse 위에서 실행되고 있었기 때문에, 오랫동안 긴밀히 협업해 왔습니다: 데이터베이스 팀과 피드백을 공유하고, 베를린, 샌프란시스코, 암스테르담에서 커뮤니티 밋업을 공동 주최했으며, v2에서 v3로의 업그레이드 경로를 통해 수천 개의 셀프 호스팅 팀에게 ClickHouse를 소개했습니다. Langfuse Cloud는 ClickHouse Cloud의 대형 고객이며, ClickHouse의 팀들은 자사의 에이전틱 애플리케이션을 개선하기 위해 Langfuse를 사용합니다. 여러 면에서 우리는 이미 장기적인 파트너처럼 협력하고 있었으며, 이번 인수는 그 파트너십을 영구적인 것으로 만든 것입니다.
+
+사용자에게 달라지는 것은 없습니다: Langfuse는 기존 MIT 라이선스 하에서 계속 오픈소스로 유지되며, 셀프 호스팅은 여전히 최우선 지원 경로이고, Langfuse Cloud도 이전과 다름없이 운영됩니다. 전체 팀이 ClickHouse에 합류하여 Langfuse를 계속 만들어 나가며, 이제 성능, 신뢰성, 엔터프라이즈 준비성을 위해 더 많은 리소스를 확보하게 되었습니다.
+
+### 2026년 3월: 대규모 확장을 위한 Langfuse 단순화
+
+<Frame className="max-w-sm">
+  ![Simplifying Langfuse for
+  Scale](/images/blog/2026-03-10-simplify-langfuse-for-scale/og.jpg)
+</Frame>
+
+한 해 동안 처리 데이터가 19배 성장한 후, 우리는 Postgres 시대부터 이어져 온 데이터 모델의 한계에 부딪혔습니다. 우리는 조인과 읽기 시점 중복 제거를 없애는, 하나의 넓고 대부분 불변인 ClickHouse 테이블을 사용하는 관측(observation) 중심 데이터 모델로 전환했습니다. 대규모 프로젝트의 대시보드 로딩 시간은 최소 10배 개선되었고, 초기 테이블 로딩은 초 단위에서 밀리초 단위로 단축되었습니다. 이는 현재 Langfuse Cloud에서 베타로 제공되고 있으며, 셀프 호스팅 사용자를 위해서는 v4로 출시될 예정입니다. 자세한 내용은 [기술 블로그](/blog/2026-03-10-simplify-langfuse-for-scale)에서 확인할 수 있습니다.
+
+</Steps>
+
+## 우리는 어디로 향하고 있나요?
+
+- 단기: [로드맵](/roadmap)
+- 장기: [Langfuse는 왜 존재하는가?](/handbook/chapters/mission)
+
+계속 소식을 받아보고 싶으신가요? 메일링 리스트를 구독해 보세요:
+
+<ProductUpdateSignup source="Handbook Story" className="mt-4" />
+
+## 커뮤니티 지표
+
+import PublicMetricsDashboard from "@/components-mdx/public-metrics-dashboard.mdx";
+
+<PublicMetricsDashboard />

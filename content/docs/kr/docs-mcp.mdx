@@ -1,0 +1,53 @@
+---
+title: Docs MCP 서버
+sourceRevision: 5cc22b0d7f672fc2fa9acd4fa134e28929557a20
+translationStatus: machine
+---
+
+# Langfuse Docs MCP 서버
+
+Langfuse Docs MCP 서버는 Langfuse 문서를 AI 에이전트에 노출합니다.
+
+핵심 사용 사례: Cursor(또는 다른 AI 코딩 에이전트)를 사용하여 Langfuse 트레이싱을 코드베이스에 자동으로 통합할 수 있습니다. 자세한 안내와 예시 프롬프트는 [get started](/docs/get-started)를 참고하세요.
+
+<Callout type="info">
+
+이는 Langfuse 문서를 위한 공개 MCP 서버입니다. Langfuse 데이터 플랫폼의 나머지 기능과 통합할 수 있는 인증된 MCP 서버도 별도로 존재합니다 ([문서](/docs/api-and-data-platform/features/mcp-server)).
+
+</Callout>
+
+## 설치
+
+import DocsMcpServerInstallation from "@/components-mdx/docs-mcp-server-installation.mdx";
+
+<DocsMcpServerInstallation />
+
+## 개요
+
+- 엔드포인트: `https://langfuse.com/api/mcp`
+- 전송 방식: `streamableHttp`
+- 인증: 없음
+
+<Callout type="info">
+
+[MCP Reference](https://mcp.reference.langfuse.com)는 현재 Docs MCP 도구, 입력 스키마, 생성된 요청 예시에 대한 정본(canonical source)입니다.
+
+</Callout>
+
+## 참고 자료
+
+- MCP 서버 구현: [route.ts](https://github.com/langfuse/langfuse-docs/blob/main/app/api/mcp/route.ts)
+- [MCP Reference](https://mcp.reference.langfuse.com): MCP 서버, 설정 스니펫, 도구, 스키마, 요청에 대한 레퍼런스
+- MCP 서버 기반의 [Agentic Onboarding](/docs/get-started)
+- [Ask AI](/docs/ask-ai): Langfuse 문서를 활용한 RAG 채팅으로 질문에 대한 답변을 얻을 수 있습니다
+- [langfuse.com/llms.txt](https://langfuse.com/llms.txt): 페이지 제목과 세부 하위 파일([llms-docs.txt](https://langfuse.com/llms-docs.txt), [llms-integrations.txt](https://langfuse.com/llms-integrations.txt), [llms-self-hosting.txt](https://langfuse.com/llms-self-hosting.txt))에 대한 링크를 담은 간결한 개요
+
+## REST 엔드포인트
+
+기본이 되는 문서 검색(`searchLangfuseDocs` 도구)은 `https://langfuse.com/api/search-docs`에서 REST API로도 독립적으로 사용할 수 있습니다.
+
+```bash
+curl "https://langfuse.com/api/search-docs?query=Langfuse+Docs+MCP+Server"
+```
+
+MCP 없이 가벼운 시맨틱 검색이 필요할 때 이 엔드포인트를 직접 사용하세요.

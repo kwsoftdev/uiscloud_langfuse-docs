@@ -1,0 +1,150 @@
+---
+title: 핵심 개념
+description: Langfuse에서 LLM 평가의 기본 개념인 점수, 평가 방법, 데이터셋, 실험에 대해 알아보세요.
+sourceRevision: 00d476da78d4aadfc3c0b8f86ec78ca5fa880f8b
+translationStatus: machine
+---
+
+# 핵심 개념
+
+이 페이지에서는 평가의 다양한 개념과 Langfuse에서 제공하는 기능을 자세히 살펴봅니다.
+
+바로 시작해볼까요?
+
+- [데이터셋을 생성](/docs/evaluation/experiments/datasets)하여 LLM 애플리케이션의 성능을 일관되게 측정하세요
+- [실험을 실행](/docs/evaluation/core-concepts#experiments)하여 애플리케이션의 동작 현황을 파악하세요
+- [LLM-as-a-Judge를 설정](/docs/evaluation/evaluation-methods/llm-as-a-judge)하여 실시간 트레이스를 평가하세요
+- 결정론적 검증을 위해 [코드 평가기를 생성](/docs/evaluation/evaluation-methods/code-evaluators)하세요
+
+## 평가 루프
+
+LLM 애플리케이션은 대개 테스트와 모니터링이 끊임없이 반복되는 루프를 가집니다.
+
+**오프라인 평가**를 통해 배포 전에 고정된 데이터셋을 기준으로 애플리케이션을 테스트할 수 있습니다. 새로운 프롬프트나 모델을 테스트 케이스에 대해 실행하고, [점수](#scores)를 검토하며, 결과가 만족스러울 때까지 반복한 다음 변경 사항을 배포합니다. Langfuse에서는 [실험](/docs/evaluation/core-concepts#experiments)을 실행하여 이 작업을 수행할 수 있습니다.
+
+**온라인 평가**는 실시간 트레이스를 채점하여 실제 트래픽에서 발생하는 문제를 포착합니다. 데이터셋에서 다루지 못한 엣지 케이스를 발견하면, 이를 데이터셋에 추가하여 이후 실험에서 이러한 케이스를 잡아낼 수 있도록 합니다.
+
+<LoopDiagram />
+
+> **다음은 고객 지원 챗봇을 구축하는 예시 워크플로입니다**
+>
+> 1. 응답 톤을 덜 격식 있게 만들기 위해 프롬프트를 수정합니다.
+> 2. 배포 전에 **실험**을 실행합니다: 고객 질문 데이터셋을 기준으로 새 프롬프트를 테스트합니다 **(오프라인 평가)**.
+> 3. 점수와 출력 결과를 검토합니다. 톤은 개선되었지만 응답이 길어졌고 일부 응답에서는 중요한 링크가 누락되었습니다.
+> 4. 프롬프트를 다듬고 실험을 다시 실행합니다.
+> 5. 이제 결과가 만족스럽습니다. 새 프롬프트를 프로덕션에 배포합니다.
+> 6. **온라인 평가**로 모니터링하여 새로운 엣지 케이스를 포착합니다.
+> 7. 한 고객이 프랑스어로 질문했지만 챗봇이 영어로 응답한 것을 발견합니다.
+> 8. 이 프랑스어 질의를 데이터셋에 추가하여 향후 실험에서 이 문제를 잡아낼 수 있도록 합니다.
+> 9. 프랑스어 응답을 지원하도록 프롬프트를 수정하고 실험을 다시 실행합니다.
+>
+> 시간이 지나면서 데이터셋은 몇 개의 예시에서 실제 상황을 대표하는 다양한 테스트 케이스 모음으로 성장합니다.
+
+## 점수 [#scores]
+
+[점수](/docs/evaluation/scores/overview)는 평가 결과를 저장하기 위한 Langfuse의 범용 데이터 객체입니다. 사람이 직접 주석을 달거나, LLM 판정기를 사용하거나, 프로그래밍 방식으로 검증하거나, 최종 사용자 피드백을 받는 등 LLM 출력에 품질 판정을 부여하고자 할 때마다 그 결과는 점수로 저장됩니다.
+
+점수는 트레이스, 관찰(observation), 세션, 또는 데이터셋 실행에 연결될 수 있습니다. 모든 점수는 **이름(name)**, **값(value)**, **데이터 타입**(`NUMERIC`, `CATEGORICAL`, `BOOLEAN`, 또는 `TEXT`)을 가집니다. [점수](/docs/evaluation/scores/overview) 전용 페이지에서 [점수 유형](/docs/evaluation/scores/overview#score-types), [점수 생성 방법](/docs/evaluation/scores/overview#how-to-create-scores), [점수 분석](/docs/evaluation/scores/score-analytics)에 대해 더 자세히 알아보세요.
+
+## 평가 방법 [#evaluation-methods]
+
+평가 방법은 트레이스, 관찰, 세션, 또는 데이터셋 실행을 채점하는 함수입니다. 다양한 평가 방법을 사용하여 [점수](#scores)를 추가할 수 있습니다.
+
+| 방법                                                                           | 내용                                                                     | 사용 시점                                                     |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------ | ------------------------------------------------------------- |
+| [LLM-as-a-Judge](/docs/evaluation/evaluation-methods/llm-as-a-judge)           | LLM을 사용하여 사용자 정의 기준에 따라 출력을 평가                       | 대규모의 주관적 평가(톤, 정확성, 유용성 등)에 사용            |
+| [코드 평가기](/docs/evaluation/evaluation-methods/code-evaluators)             | 사용자 정의 Python 또는 TypeScript 로직을 실행하여 관찰 또는 실험을 채점 | 결정론적 검증, 구조화된 출력 검증, 사용자 정의 비즈니스 규칙  |
+| [UI를 통한 점수 입력](/docs/evaluation/evaluation-methods/scores-via-ui)       | Langfuse UI에서 직접 트레이스에 점수를 수동으로 추가                     | 빠른 품질 점검, 개별 트레이스 검토                            |
+| [주석 큐](/docs/evaluation/evaluation-methods/annotation-queues)               | 사용자 정의 가능한 큐를 통한 구조화된 사람 검토 워크플로                 | 정답 데이터 구축, 체계적인 라벨링, 팀 협업                    |
+| [API/SDK를 통한 점수 입력](/docs/evaluation/evaluation-methods/scores-via-sdk) | Langfuse API 또는 SDK를 사용하여 프로그래밍 방식으로 점수를 추가         | 사용자 정의 평가 파이프라인, 결정론적 검증, 자동화된 워크플로 |
+
+새로운 평가 방법을 설정할 때는 [점수 분석](/docs/evaluation/scores/score-analytics)을 사용하여 생성된 점수를 분석하거나 검증할 수 있습니다.
+
+## 실험 [#experiments]
+
+실험은 애플리케이션을 데이터셋에 대해 실행하고 그 출력을 평가합니다. 이는 프로덕션에 배포하기 전 변경 사항을 테스트하는 방법입니다.
+
+### 정의
+
+실험을 자세히 살펴보기 전에, Langfuse에서 사용되는 핵심 구성 요소인 데이터셋, 데이터셋 항목, 태스크, 점수, 실험을 이해하는 것이 도움이 됩니다.
+
+| 객체              | 정의                                                                                                                                                                                                                                                                                                                      |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **데이터셋**      | 테스트 케이스(데이터셋 항목)의 모음입니다. 데이터셋에 대해 실험을 실행할 수 있습니다.                                                                                                                                                                                                                                     |
+| **데이터셋 항목** | 데이터셋 내의 하나의 항목입니다. 각 데이터셋 항목에는 입력(테스트할 시나리오)이 포함되며, 선택적으로 예상 출력도 포함될 수 있습니다.                                                                                                                                                                                      |
+| **태스크**        | 실험에서 테스트하려는 애플리케이션 코드입니다. 각 데이터셋 항목에 대해 실행되며, 그 출력을 채점하게 됩니다.                                                                                                                                                                                                               |
+| **평가 방법**     | 실험 결과를 채점하는 함수입니다. Langfuse 실험 맥락에서는 [코드 평가기](/docs/evaluation/evaluation-methods/code-evaluators), [API/SDK](/docs/evaluation/evaluation-methods/scores-via-sdk)를 통해 자체 코드에서 수집한 점수, 또는 [LLM-as-a-Judge](/docs/evaluation/evaluation-methods/llm-as-a-judge)가 될 수 있습니다. |
+| **점수**          | 평가의 출력 결과입니다. 사용 가능한 데이터 타입과 자세한 내용은 [점수](#scores)를 참고하세요.                                                                                                                                                                                                                             |
+| **실험 실행**     | 데이터셋의 모든 항목에 대해 태스크를 한 번 실행하여 출력(및 점수)을 생성하는 것입니다.                                                                                                                                                                                                                                    |
+
+이러한 객체의 데이터 모델은 [여기](/docs/evaluation/experiments/data-model)에서 확인할 수 있습니다.
+
+### 이 요소들이 함께 동작하는 방식
+
+개념적으로는 다음과 같은 과정이 일어납니다.
+
+주어진 **데이터셋**에 대해 실험을 실행하면, 각 **데이터셋 항목**이 정의한 **태스크 함수**로 전달됩니다. 태스크 함수는 일반적으로 테스트하고자 하는 애플리케이션 내에서 이루어지는 LLM 호출입니다. 태스크 함수는 각 데이터셋 항목에 대한 출력을 생성합니다. 이 과정을 **실험 실행**이라고 합니다. 데이터셋 항목에 연결된 출력들의 모음이 **실험 결과**입니다.
+
+대개는 이 실험 결과를 채점하고 싶을 것입니다. 다양한 [평가 방법](#evaluation-methods)을 사용하여 데이터셋 항목과 태스크 함수가 생성한 출력을 입력받아, 정의한 기준에 따라 점수를 생성할 수 있습니다. 이러한 점수를 바탕으로 모든 테스트 케이스에 걸쳐 애플리케이션이 어떻게 동작하는지 전체적인 그림을 파악할 수 있습니다.
+
+<Frame fullWidth>
+  ![Experiments flow](/images/docs/evaluation/experiments-flow.jpg)
+</Frame>
+
+실험 실행 결과를 비교하여 새 프롬프트 버전이 점수를 개선했는지 확인하거나, 애플리케이션이 어려움을 겪는 특정 입력을 파악할 수 있습니다. 이러한 실험 결과를 바탕으로 변경 사항을 프로덕션에 배포할 준비가 되었는지 판단할 수 있습니다.
+
+이러한 객체들이 내부적으로 어떻게 연결되는지에 대한 더 자세한 내용은 [데이터 모델 페이지](/docs/evaluation/experiments/data-model)에서 확인할 수 있습니다.
+
+### 실험을 실행하는 두 가지 방법
+
+**Langfuse SDK를 사용하여 프로그래밍 방식으로 실험을 실행**할 수 있습니다. 이 방법은 태스크, 평가 로직 등을 완전히 제어할 수 있게 해줍니다. [SDK를 통한 실험 실행에 대해 더 알아보세요](/docs/evaluation/experiments/experiments-via-sdk).
+
+또 다른 방법은 데이터셋과 프롬프트 버전을 선택하여 **Langfuse 인터페이스에서 직접 실험을 실행**하는 것입니다. 이는 코드를 작성하지 않고 프롬프트를 빠르게 반복적으로 개선할 때 유용합니다. [UI를 통한 실험 실행에 대해 더 알아보세요](/docs/evaluation/experiments/experiments-via-ui).
+
+<div className="my-6">
+  <div className="grid grid-cols-3 gap-2">
+    {/* Header row */}
+    <div></div>
+    <div className="text-center font-medium p-3 bg-gray-50 dark:bg-gray-800 rounded border dark:border-gray-700">
+      **Langfuse 실행**
+    </div>
+    <div className="text-center font-medium p-3 bg-gray-50 dark:bg-gray-800 rounded border dark:border-gray-700">
+      **로컬/CI 실행**
+    </div>
+
+    {/* Langfuse Data row */}
+    <div className="font-medium p-3 bg-gray-50 dark:bg-gray-800 rounded border dark:border-gray-700 text-center">
+      **Langfuse 데이터셋**
+    </div>
+    <div className="p-3 border dark:border-gray-700 rounded text-center bg-green-50 dark:bg-green-900/30">
+      [UI를 통한 실험](/docs/evaluation/experiments/experiments-via-ui)
+    </div>
+    <div className="p-3 border dark:border-gray-700 rounded text-center bg-blue-50 dark:bg-blue-900/30">
+      [SDK를 통한 실험](/docs/evaluation/experiments/experiments-via-sdk)
+    </div>
+
+    {/* Local Data row */}
+    <div className="font-medium p-3 bg-gray-50 dark:bg-gray-800 rounded border dark:border-gray-700 text-center">
+      **로컬 데이터셋**
+    </div>
+    <div className="p-3 border dark:border-gray-700 rounded text-center bg-red-50 dark:bg-red-900/30">
+      지원되지 않음
+    </div>
+    <div className="p-3 border dark:border-gray-700 rounded text-center bg-blue-50 dark:bg-blue-900/30">
+      [SDK를 통한 실험](/docs/evaluation/experiments/experiments-via-sdk)
+    </div>
+
+  </div>
+</div>
+
+_선택 사항이지만, [1] 동일한 데이터에 대한 여러 실험을 UI 내에서 비교 테이블로 보고 [2] 프로덕션/스테이징 트레이스를 기반으로 데이터셋을 반복적으로 개선할 수 있도록, 기반이 되는 [데이터셋](/docs/evaluation/experiments/datasets)을 Langfuse에서 관리하는 것을 권장합니다._
+
+## 온라인 평가 [#online-evaluation]
+
+온라인 평가에서는 평가 방법을 구성하여 프로덕션 트레이스를 자동으로 채점할 수 있습니다. 이를 통해 문제를 즉시 파악할 수 있습니다.
+
+Langfuse는 온라인 평가를 위해 LLM-as-a-Judge, 코드 평가기, 그리고 사람이 직접 검토하는 주석 확인 기능을 지원합니다.
+
+### 대시보드를 통한 모니터링
+
+Langfuse는 애플리케이션 성능을 실시간으로 모니터링할 수 있는 대시보드를 제공합니다. 대시보드에서 점수를 모니터링할 수도 있습니다. 대시보드 사용 방법에 대한 자세한 내용은 [여기](/docs/metrics/features/custom-dashboards)에서 확인할 수 있습니다.

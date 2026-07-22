@@ -1,0 +1,11 @@
+{
+  "title": "태그별",
+  "pages": [
+    "cloud",
+    "product",
+    "prompt-management",
+    "security",
+    "self-hosting",
+    "tracing"
+  ]
+}

@@ -1,0 +1,325 @@
+---
+title: Langfuse 백업 전략
+description: ClickHouse, Postgres, MinIO를 포함한 셀프 호스팅 Langfuse 배포의 백업 방법에 대한 종합 가이드입니다.
+label: "Version: v3"
+sidebarTitle: "백업"
+sourceRevision: 4ada0ac8c3d8e2648f9a5d3a3de9b9b5176940de
+translationStatus: machine
+---
+
+# 백업 전략
+
+이 가이드는 셀프 호스팅 Langfuse 배포를 위한 백업 전략을 다룹니다.
+시작하려면 [배포 가이드](/self-hosting#deployment-options) 중 하나를 따라 진행하세요.
+
+적절한 백업 전략은 Langfuse 데이터를 보호하고 비즈니스 연속성을 보장하는 데 필수적입니다.
+이 가이드는 셀프 호스팅 Langfuse 배포의 모든 구성 요소에 대한 백업 접근 방식을 다룹니다.
+
+## ClickHouse
+
+ClickHouse는 트레이스, observation, 점수를 포함한 관측성 데이터를 저장합니다.
+백업 전략은 관리형 서비스를 사용하는지, 셀프 호스팅 배포를 사용하는지에 따라 달라집니다.
+
+### ClickHouse Cloud/BYOC (관리형 서비스)
+
+**자동 백업**: ClickHouse Cloud/BYOC는 다음과 같은 기능으로 백업을 자동으로 관리합니다.
+
+- 지속적인 증분 백업
+- 특정 시점 복구 기능
+- 리전 간 복제 옵션
+- 엔터프라이즈급 내구성 보장
+
+**별도 작업 불필요**: ClickHouse Cloud/BYOC를 사용하는 경우 백업이 자동으로 처리됩니다.
+백업 보존 정책 및 복구 절차에 대한 자세한 내용은 [ClickHouse Cloud 문서](https://clickhouse.com/docs/en/cloud/manage/backups)를 참고하세요.
+
+### 셀프 호스팅 ClickHouse
+
+셀프 호스팅 ClickHouse 인스턴스의 경우 직접 백업 전략을 구현해야 합니다.
+
+#### Kubernetes 배포
+
+**1. 볼륨 스냅샷 (권장)**
+
+대부분의 클라우드 제공업체는 퍼시스턴트 볼륨에 대한 볼륨 스냅샷을 지원합니다.
+ClickHouse zookeeper 볼륨에 대해서도 스냅샷을 추가하고 있는지 확인하세요.
+
+```bash
+# 각 ClickHouse 레플리카에 대한 VolumeSnapshot 생성
+kubectl apply -f - <<EOF
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: clickhouse-backup-$(date +%Y%m%d-%H%M%S)
+  namespace: langfuse
+spec:
+  source:
+    persistentVolumeClaimName: data-langfuse-clickhouse-0
+  volumeSnapshotClassName: csi-hostpath-snapclass
+EOF
+```
+
+**2. 전체 클러스터 백업을 위한 Velero**
+
+[Velero](https://velero.io/)는 포괄적인 Kubernetes 백업 솔루션을 제공합니다.
+
+```bash
+# Velero 설치
+velero install --provider aws --plugins velero/velero-plugin-for-aws:v1.8.0 \
+  --bucket langfuse-backups --secret-file ./credentials-velero
+
+# 백업 일정 생성
+velero schedule create langfuse-daily \
+  --schedule="0 2 * * *" \
+  --include-namespaces langfuse \
+  --ttl 720h0m0s
+```
+
+**3. ClickHouse 네이티브 백업**
+
+ClickHouse에 내장된 백업 기능을 사용하세요.
+자세한 내용은 [ClickHouse 백업 가이드](https://clickhouse.com/docs/en/operations/backup)를 참고하세요.
+
+```sql
+-- 백업 생성
+BACKUP DATABASE default TO S3('s3://backup-bucket/clickhouse-backup-{timestamp}', 'access_key', 'secret_key');
+
+-- 백업으로부터 복원
+RESTORE DATABASE default FROM S3('s3://backup-bucket/clickhouse-backup-{timestamp}', 'access_key', 'secret_key');
+```
+
+#### Docker 배포
+
+Docker 기반 배포의 경우 정기적인 볼륨 백업을 구현하세요.
+
+```bash
+#!/bin/bash
+# ClickHouse Docker 볼륨을 위한 백업 스크립트
+
+BACKUP_DIR="/backups/clickhouse"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+CONTAINER_NAME="clickhouse-server"
+
+# 백업 디렉터리 생성
+mkdir -p "$BACKUP_DIR"
+
+# 일관된 백업을 위해 ClickHouse 일시 중지
+docker stop "$CONTAINER_NAME"
+
+# 데이터 볼륨의 tar 아카이브 생성
+docker run --rm \
+  -v clickhouse_data:/source:ro \
+  -v "$BACKUP_DIR":/backup \
+  alpine tar czf "/backup/clickhouse-backup-$TIMESTAMP.tar.gz" -C /source .
+
+# ClickHouse 재시작
+docker start "$CONTAINER_NAME"
+
+# 오래된 백업 정리 (최근 7일치만 유지)
+find "$BACKUP_DIR" -name "clickhouse-backup-*.tar.gz" -mtime +7 -delete
+```
+
+## Postgres
+
+Postgres는 사용자, 조직, 프로젝트, API 키를 포함한 중요한 트랜잭션 데이터를 저장합니다.
+프로덕션 배포에는 관리형 데이터베이스 서비스 사용을 강력히 권장합니다.
+
+### 관리형 데이터베이스 서비스 (권장)
+
+**클라우드 제공업체 서비스**: 자동 백업을 제공하는 관리형 PostgreSQL 서비스를 사용하세요.
+
+### 셀프 호스팅 Postgres 백업
+
+Postgres를 반드시 셀프 호스팅해야 하는 경우, 포괄적인 백업 전략을 구현하세요.
+
+#### Kubernetes 범용 백업 솔루션
+
+**1. CronJob을 활용한 pg_dump**
+
+```yaml
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup
+  namespace: langfuse
+spec:
+  schedule: "0 2 * * *" # 매일 오전 2시
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: postgres-backup
+              image: postgres:15
+              env:
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-credentials
+                      key: password
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+                  pg_dump -h postgres-service -U langfuse -d langfuse > /backup/langfuse-backup-$TIMESTAMP.sql
+
+                  # S3에 업로드 (선택 사항)
+                  aws s3 cp /backup/langfuse-backup-$TIMESTAMP.sql s3://langfuse-backups/postgres/
+
+                  # 3일 이상 지난 로컬 파일 정리
+                  find /backup -name "langfuse-backup-*.sql" -mtime +3 -delete
+              volumeMounts:
+                - name: backup-storage
+                  mountPath: /backup
+          volumes:
+            - name: backup-storage
+              persistentVolumeClaim:
+                claimName: postgres-backup-pvc
+          restartPolicy: OnFailure
+```
+
+**2. 볼륨 스냅샷**
+
+```bash
+# Postgres PVC의 스냅샷 생성
+kubectl apply -f - <<EOF
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: postgres-backup-$(date +%Y%m%d-%H%M%S)
+  namespace: langfuse
+spec:
+  source:
+    persistentVolumeClaimName: postgres-data-pvc
+  volumeSnapshotClassName: csi-hostpath-snapclass
+EOF
+```
+
+#### Docker 배포
+
+```bash
+#!/bin/bash
+# Docker용 Postgres 백업 스크립트
+
+BACKUP_DIR="/backups/postgres"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+CONTAINER_NAME="postgres"
+DB_NAME="langfuse"
+DB_USER="langfuse"
+
+mkdir -p "$BACKUP_DIR"
+
+# SQL 덤프 생성
+docker exec "$CONTAINER_NAME" pg_dump -U "$DB_USER" "$DB_NAME" > "$BACKUP_DIR/langfuse-backup-$TIMESTAMP.sql"
+
+# 백업 압축
+gzip "$BACKUP_DIR/langfuse-backup-$TIMESTAMP.sql"
+
+# 클라우드 스토리지에 업로드 (선택 사항)
+aws s3 cp "$BACKUP_DIR/langfuse-backup-$TIMESTAMP.sql.gz" s3://langfuse-backups/postgres/
+
+# 오래된 백업 정리
+find "$BACKUP_DIR" -name "langfuse-backup-*.sql.gz" -mtime +7 -delete
+```
+
+## MinIO
+
+<Callout type="info">
+
+**클라우드 스토리지 사용 시 MinIO는 필요하지 않습니다**: AWS S3, Azure Blob Storage, Google Cloud Storage와 같은 클라우드 스토리지 서비스를 사용하는 경우 MinIO는 필요하지 않으며, 백업 전략은 사용 중인 클라우드 스토리지 제공업체의 네이티브 백업 기능에 집중해야 합니다.
+
+</Callout>
+
+MinIO는 클라우드 스토리지 서비스를 사용하지 않는 셀프 호스팅 배포에만 관련이 있습니다.
+대부분의 프로덕션 배포에서는 관리형 클라우드 스토리지 사용을 권장합니다.
+
+### MinIO를 사용하는 경우
+
+MinIO는 일반적으로 다음과 같은 환경에서 사용됩니다.
+
+- 에어갭 환경
+- 클라우드 접근이 불가능한 온프레미스 배포
+- 개발 환경
+- 특정 규정 준수 요건
+
+### MinIO 백업 전략
+
+#### 클라우드 스토리지 복제 (권장)
+
+클라우드 스토리지로 복제하도록 MinIO를 구성하세요.
+
+```bash
+# MinIO 클라이언트 구성
+mc alias set myminio http://localhost:9000 minio miniosecret
+mc alias set s3backup https://s3.amazonaws.com ACCESS_KEY SECRET_KEY
+
+# 버킷 복제 설정
+mc replicate add myminio/langfuse --remote-bucket s3backup/langfuse-backup
+```
+
+#### Kubernetes MinIO 백업
+
+**1. 볼륨 스냅샷**
+
+```bash
+# MinIO 데이터 볼륨 스냅샷 생성
+kubectl apply -f - <<EOF
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: minio-backup-$(date +%Y%m%d-%H%M%S)
+  namespace: langfuse
+spec:
+  source:
+    persistentVolumeClaimName: data-minio-0
+  volumeSnapshotClassName: csi-hostpath-snapclass
+EOF
+```
+
+**2. 외부 스토리지로의 예약된 동기화**
+
+```yaml
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: minio-backup-sync
+  namespace: langfuse
+spec:
+  schedule: "0 3 * * *" # 매일 오전 3시
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: minio-backup
+              image: minio/mc:latest
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  mc alias set source http://minio:9000 $MINIO_ACCESS_KEY $MINIO_SECRET_KEY
+                  mc alias set backup s3://backup-bucket $AWS_ACCESS_KEY $AWS_SECRET_KEY
+                  mc mirror source/langfuse backup/langfuse-backup/$(date +%Y%m%d)
+              env:
+                - name: MINIO_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: minio-credentials
+                      key: access-key
+                - name: MINIO_SECRET_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: minio-credentials
+                      key: secret-key
+                - name: AWS_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: aws-credentials
+                      key: access-key
+                - name: AWS_SECRET_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: aws-credentials
+                      key: secret-key
+          restartPolicy: OnFailure
+```

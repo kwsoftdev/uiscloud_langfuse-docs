@@ -1,0 +1,562 @@
+---
+title: 데이터셋
+description: Langfuse 데이터셋을 사용하여 LLM 애플리케이션을 테스트하고 벤치마킹하기 위한 구조화된 실험을 만드세요.
+sidebarTitle: 데이터셋
+sourceRevision: a2865cd5f5781fb09f59da194a7a21cf102a8250
+translationStatus: machine
+---
+
+# 데이터셋
+
+데이터셋은 입력과 예상 출력의 모음이며 애플리케이션을 테스트하는 데 사용됩니다. [UI 기반](/docs/evaluation/experiments/experiments-via-ui) 실험과 [SDK 기반](/docs/evaluation/experiments/experiments-via-sdk) 실험 모두 Langfuse 데이터셋을 지원합니다.
+
+_Langfuse 데이터셋 뷰_
+
+<Frame fullWidth>![Datasets](/images/docs/datasets-overview.png)</Frame>
+
+## 데이터셋을 사용하는 이유
+
+- 실제 프로덕션 트레이스를 사용하여 애플리케이션의 테스트 케이스를 생성합니다
+- 팀과 함께 협업하여 데이터셋 항목을 생성하고 수집합니다
+- 테스트 데이터에 대한 단일 진실 공급원(single source of truth)을 확보합니다
+
+## 시작하기
+
+<Steps>
+
+### 데이터셋 생성하기
+
+데이터셋은 프로젝트 내에서 고유한 이름을 가집니다.
+
+import CreateDataset from "@/components-mdx/datasets-create-dataset.mdx";
+
+<CreateDataset />
+
+### 새 데이터셋 항목 업로드 또는 생성하기
+
+데이터셋 항목은 입력과 선택적으로 예상 출력을 제공하여 데이터셋에 추가할 수 있습니다. 원하는 경우 Langfuse UI의 CSV 업로더를 사용하여 데이터셋 항목을 가져올 수도 있습니다.
+
+import CreateDatasetItem from "@/components-mdx/datasets-create-dataset-item.mdx";
+
+<CreateDatasetItem />
+</Steps>
+
+## 멀티모달 데이터셋 항목
+
+데이터셋 항목의 `input`, `expectedOutput`, `metadata` 필드에는 이미지, 오디오, 비디오, 문서 등 다양한 파일 형태의 미디어 첨부 파일을 포함할 수 있습니다. Langfuse UI에서 항목을 생성하거나 편집할 때 미디어를 추가하거나, Python 및 JS/TS SDK에서 `LangfuseMedia`를 사용하여 미디어를 업로드할 수 있습니다.
+
+<Callout type="info">
+  멀티모달 데이터셋은 Python SDK `>= 4.10.0` 및 JS/TS SDK `@langfuse/client
+  >= 5.6.0`을 사용하는 SDK 기반 실험에서 지원됩니다. UI 기반 실험은 아직 미디어
+  첨부 파일이 있는 데이터셋 항목을 지원하지 않습니다.
+</Callout>
+
+UI에서는 데이터셋 항목을 열고 첨부 버튼, 드래그 앤 드롭, 또는 붙여넣기를 사용하여 `input`, `expectedOutput`, `metadata` 편집기에 파일을 추가할 수 있습니다.
+
+<Video
+  src="https://static.langfuse.com/docs-videos/2026-06-17-create-multimodal-dataset-item.mp4"
+  aspectRatio={16 / 9}
+  gifStyle
+/>
+
+SDK에서는 데이터셋 항목을 생성하기 전에 미디어를 `LangfuseMedia`로 감싸주세요. SDK가 미디어를 업로드하고 데이터셋 항목에 참조를 저장하면, Langfuse UI가 첨부 파일 미리보기를 렌더링합니다.
+
+<LangTabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab>
+
+```python
+from langfuse import get_client
+from langfuse.media import LangfuseMedia
+
+langfuse = get_client()
+
+langfuse.create_dataset_item(
+    dataset_name="visual-qa",
+    input={
+        "question": "What is shown in this image?",
+        "image": LangfuseMedia(
+            file_path="./example.jpg",
+            content_type="image/jpeg",
+        ),
+    },
+    expected_output={"label": "invoice"},
+)
+
+dataset = langfuse.get_dataset("visual-qa")
+```
+
+</Tab>
+<Tab>
+
+```ts
+import { LangfuseClient, LangfuseMedia } from "@langfuse/client";
+import fs from "node:fs";
+
+const langfuse = new LangfuseClient();
+
+await langfuse.dataset.createItem({
+  datasetName: "visual-qa",
+  input: {
+    question: "What is shown in this image?",
+    image: new LangfuseMedia({
+      source: "bytes",
+      contentBytes: fs.readFileSync("./example.jpg"),
+      contentType: "image/jpeg",
+    }),
+  },
+  expectedOutput: { label: "invoice" },
+});
+
+const dataset = await langfuse.dataset.get("visual-qa");
+```
+
+</Tab>
+</LangTabs>
+
+실험에서 멀티모달 항목을 사용하는 방법은 [SDK를 통한 실험](/docs/evaluation/experiments/experiments-via-sdk#multimodal-experiments)을 참고하세요.
+
+<Callout type="info">
+  CSV 가져오기는 텍스트 및 구조화된 JSON 데이터셋 항목에 적합합니다. 멀티모달
+  데이터셋 항목에는 UI 항목 편집기 또는 SDK를 사용하세요.
+</Callout>
+
+## 데이터셋 폴더
+
+데이터셋은 유사한 사용 사례를 다루는 데이터셋을 그룹화하기 위해 가상 폴더로 구성할 수 있습니다.
+폴더를 생성하려면 데이터셋 이름에 슬래시(`/`)를 추가하세요. UI는 `/`로 끝나는 모든 세그먼트를 폴더로 자동 표시합니다.
+
+### 폴더 내 데이터셋 생성 및 가져오기
+
+Langfuse UI 또는 SDK를 사용하여 데이터셋 이름에 슬래시(`/`)를 추가함으로써 폴더 내 데이터셋을 생성하고 가져올 수 있습니다.
+
+<LangTabs items={["Python SDK", "JS/TS SDK", "Langfuse UI"]}>
+<Tab>
+
+```python
+dataset_name = "evaluation/qa-dataset"
+
+# When creating a dataset, use the full dataset name
+langfuse.create_dataset(
+    name=dataset_name,
+)
+
+# When fetching a dataset in a folder, use the full dataset name
+langfuse.get_dataset(
+    name=dataset_name
+)
+
+```
+
+이 코드는 `evaluation`이라는 폴더 안에 `qa-dataset`이라는 데이터셋을 생성하고 가져옵니다. 전체 데이터셋 이름은 `evaluation/qa-dataset`으로 유지됩니다.
+
+</Tab>
+<Tab>
+
+```ts
+import { LangfuseClient } from "@langfuse/client";
+
+const langfuse = new LangfuseClient();
+
+const datasetName = "evaluation/qa-dataset";
+const encodedName = encodeURIComponent(datasetName); // "evaluation%2Fqa-dataset"
+
+// When creating a dataset, use the full dataset name
+await langfuse.dataset.create(datasetName);
+
+// When fetching a dataset in a folder, use the encoded name
+await langfuse.dataset.get(encodedName);
+```
+
+이 코드는 `evaluation`이라는 폴더 안에 `qa-dataset`이라는 데이터셋을 생성하고 가져옵니다. 전체 데이터셋 이름은 `evaluation/qa-dataset`으로 유지됩니다.
+
+</Tab>
+<Tab>
+
+UI에서는 데이터셋을 생성할 때 이름 필드에 슬래시(`/`)를 사용하여 폴더로 구성할 수 있습니다. 폴더로 이동하여 폴더 이름을 클릭한 다음 목록에서 데이터셋 이름을 클릭하여 가져올 수 있습니다.
+
+</Tab>
+</LangTabs>
+
+<Callout type="info">
+  **URL 인코딩**: API 또는 JS/TS SDK에서 슬래시가 포함된 데이터셋 이름을 경로
+  매개변수로 사용할 때는 URL 인코딩을 사용하세요. 예를 들어 TypeScript에서는
+  `encodeURIComponent(name)`을 사용합니다.
+</Callout>
+
+## 버전 관리
+
+Langfuse UI를 통해 데이터셋 버전에 액세스하려면 다음으로 이동하세요: **Datasets** > **특정 데이터셋으로 이동** > **Items 탭 선택**. 이 페이지에서 버전 뷰를 전환할 수 있습니다.
+
+데이터셋 항목의 `add`, `update`, `delete`, `archive` 작업이 발생할 때마다 새로운 데이터셋 버전이 생성됩니다. 버전은 타임스탬프를 사용하여 시간에 따른 변경 사항을 추적합니다.
+
+`GET` API는 기본적으로 조회 시점의 최신 버전을 반환합니다. `version` 매개변수를 사용하여 특정 버전 타임스탬프의 데이터셋을 가져올 수 있습니다.
+
+버전 관리는 데이터셋 항목에만 적용되며 데이터셋 스키마에는 적용되지 않습니다. 데이터셋 스키마 변경은 새로운 버전을 생성하지 않습니다.
+
+### 특정 버전의 데이터셋 가져오기
+
+버전 타임스탬프를 제공하여 특정 시점에 존재했던 데이터셋을 가져올 수 있습니다. 이 경우 해당 타임스탬프에 존재했던 항목만 반환됩니다.
+
+<LangTabs items={["Python SDK", "JS/TS SDK", "Langfuse UI"]}>
+<Tab>
+
+```python
+from langfuse import get_client
+from datetime import datetime, timedelta
+
+langfuse = get_client()
+
+# Capture dataset state as of 2025-12-15 at 06:30:00 UTC
+version_timestamp = datetime(2025, 12, 15, 6, 30, 0, tzinfo=timezone.utc)
+
+# Fetch dataset at version timestamp
+dataset_at_version = langfuse.get_dataset(
+    name="my-dataset",
+    version=version_timestamp
+)
+
+# Fetch latest version
+dataset_latest = langfuse.get_dataset(name="my-dataset")
+```
+
+</Tab>
+<Tab>
+
+```typescript
+import { LangfuseClient } from "@langfuse/client";
+
+const langfuse = new LangfuseClient();
+
+// Capture the timestamp (use item's createdAt)
+const versionTimestamp = new Date("2025-12-15T06:30:00").toISOString();
+
+// Fetch dataset at version timestamp
+const datasetAtVersion = await langfuse.dataset.get("my-dataset", {
+  version: versionTimestamp
+});
+
+// Fetch latest version
+const datasetLatest = await langfuse.dataset.get("my-dataset");
+```
+
+</Tab>
+<Tab>
+
+**Datasets** → **데이터셋 선택** → **Items 탭** → **Version view** 전환을 통해 모든 데이터셋 버전을 볼 수 있습니다.
+
+<Frame fullWidth>![Dataset Version View](/images/docs/dataset-versioned-items.png)</Frame>
+
+</Tab>
+</LangTabs>
+
+### 버전이 지정된 데이터셋으로 실험 실행하기
+
+버전이 지정된 데이터셋에서 직접 실험을 실행할 수 있습니다. 이는 서로 다른 데이터셋 버전에 대한 모델 성능을 비교하거나 특정 시점의 정확한 데이터셋 상태로 실험 결과를 재현하는 데 유용합니다.
+
+<LangTabs items={["Python SDK", "JS/TS SDK", "Langfuse UI"]}>
+<Tab>
+
+```python
+from datetime import timedelta
+import time
+from langfuse import Langfuse
+
+langfuse = Langfuse()
+
+version_timestamp = datetime(2025, 12, 15, 6, 30, 0, tzinfo=timezone.utc)
+
+# Fetch versioned dataset
+versioned_dataset = langfuse.get_dataset("qa-dataset", version=version_timestamp)
+
+# Run experiment on the versioned dataset
+def my_llm_application(*, item, **kwargs):
+    # Your LLM application logic here
+    # For this example, we'll just return the expected output
+    return item.expected_output
+
+result = versioned_dataset.run_experiment(
+    name="Baseline Experiment v1",
+    description="Running on dataset v1",
+    task=my_llm_application
+)
+```
+
+</Tab>
+<Tab>
+
+```typescript
+import { LangfuseClient } from "@langfuse/client";
+
+const langfuse = new LangfuseClient();
+
+// Capture the version timestamp
+const versionTimestamp = new Date("2025-12-15T06:30:00").toISOString();
+
+// Fetch versioned dataset
+const versionedDataset = await langfuse.dataset.get("qa-dataset", {
+  version: versionTimestamp
+});
+// Run experiment on the versioned dataset
+const result = await versionedDataset.runExperiment({
+  name: "Baseline Experiment v1",
+  description: "Running on dataset v1",
+  task: async (item) => {
+    // Your LLM application logic here
+    // For this example, we'll just return the expected output
+    return item.expectedOutput;
+  }
+});
+```
+
+</Tab>
+<Tab>
+
+UI에서는 실험을 실행할 때 특정 데이터셋 버전을 선택할 수 있습니다:
+
+1. **Experiments** → **Run Experiment**로 이동합니다
+2. **Dataset Selection** 단계에서 데이터셋을 선택합니다
+3. **Dataset Version** 드롭다운에서 버전을 선택합니다
+4. 드롭다운에는 사용 가능한 버전 타임스탬프가 표시됩니다
+5. 실험은 해당 특정 시점의 데이터셋 상태를 기준으로 실행됩니다
+6. 버전을 선택하지 않으면 실험은 최신 버전을 기준으로 실행됩니다
+
+<Frame fullWidth>![Dataset Version Selection](/images/docs/dataset-versioned-items.png)</Frame>
+
+</Tab>
+</LangTabs>
+
+이 접근 방식을 통해 다음과 같은 방법으로 재현성을 보장할 수 있습니다:
+
+- 항목이 업데이트되거나 삭제된 후에도 과거 데이터셋 버전으로 실험을 다시 실행할 수 있습니다
+- 데이터셋 변경 전후의 모델 성능을 비교할 수 있습니다
+- 실험의 일관성을 유지하고 이전 실행의 정확한 결과를 재현할 수 있습니다
+- 동일한 기준 데이터셋 버전에 대해 개선 사항을 테스트할 수 있습니다
+
+## 스키마 검증
+
+선택적으로 데이터셋에 JSON 스키마 검증을 추가하여 모든 데이터셋 항목이 정의된 구조를 따르도록 할 수 있습니다. 이를 통해 데이터 품질을 유지하고, 오류를 조기에 발견하며, 팀 전체의 일관성을 보장할 수 있습니다.
+
+데이터셋을 생성하거나 업데이트할 때 `input` 및/또는 `expectedOutput` 필드에 대한 JSON 스키마를 정의할 수 있습니다. 스키마가 설정되면 모든 데이터셋 항목이 자동으로 이 스키마에 대해 검증됩니다. 유효한 항목은 허용되고, 유효하지 않은 항목은 검증 문제를 보여주는 상세한 오류 메시지와 함께 거부됩니다.
+
+<LangTabs items={["Python SDK", "JS/TS SDK", "Langfuse UI"]}>
+<Tab>
+
+```python
+langfuse.create_dataset(
+    name="qa-conversations",
+    input_schema={
+        "type": "object",
+        "properties": {
+            "messages": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "role": {"type": "string", "enum": ["user", "assistant", "system"]},
+                        "content": {"type": "string"}
+                    },
+                    "required": ["role", "content"]
+                }
+            }
+        },
+        "required": ["messages"]
+    },
+    expected_output_schema={
+        "type": "object",
+        "properties": {"response": {"type": "string"}},
+        "required": ["response"]
+    }
+)
+```
+
+</Tab>
+<Tab>
+
+```typescript
+await langfuse.createDataset({
+  name: "qa-conversations",
+  inputSchema: {
+    type: "object",
+    properties: {
+      messages: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            role: { type: "string", enum: ["user", "assistant", "system"] },
+            content: { type: "string" }
+          },
+          required: ["role", "content"]
+        }
+      }
+    },
+    required: ["messages"]
+  },
+  expectedOutputSchema: {
+    type: "object",
+    properties: { response: { type: "string" } },
+    required: ["response"]
+  }
+});
+```
+
+</Tab>
+<Tab>
+
+**Datasets** → **New Dataset**으로 이동하거나 기존 데이터셋을 편집합니다 → **Schema Validation** 섹션을 펼칩니다 → JSON 스키마를 추가합니다 → **Save**를 클릭합니다.
+
+</Tab>
+</LangTabs>
+
+## 합성 데이터셋 생성하기
+
+애플리케이션을 테스트하기 위해 합성 예제를 생성하여 데이터셋을 구축하고 싶은 경우가 많습니다. LLM은 일반적인 질문/작업에 대한 프롬프트를 통해 이러한 예제를 생성하는 데 매우 뛰어납니다.
+
+합성 데이터셋을 생성하는 방법에 대한 예제는 다음 쿡북을 참고하여 시작하세요:
+
+import { FileCode } from "lucide-react";
+
+<Cards num={1}>
+  <Card
+    title="Notebook: Synthetic Datasets"
+    href="/docs/evaluation/features/synthetic-datasets"
+    icon={<FileCode />}
+  />
+</Cards>
+
+## 프로덕션 데이터로부터 항목 생성하기
+
+일반적인 워크플로는 애플리케이션이 예상대로 동작하지 않은 프로덕션 트레이스를 선택하는 것입니다. 그런 다음 전문가가 예상 출력을 추가하여 동일한 데이터에 대해 애플리케이션의 새 버전을 테스트할 수 있게 합니다.
+
+<LangTabs items={["Python SDK", "JS/TS SDK", "Langfuse UI"]}>
+<Tab>
+
+```python
+langfuse.create_dataset_item(
+    dataset_name="<dataset_name>",
+    input={ "text": "hello world" },
+    expected_output={ "text": "hello world" },
+    # link to a trace
+    source_trace_id="<trace_id>",
+    # optional: link to a specific span, event, or generation
+    source_observation_id="<observation_id>"
+)
+```
+
+</Tab>
+<Tab>
+
+```ts
+import { LangfuseClient } from "@langfuse/client";
+
+const langfuse = new LangfuseClient();
+
+await langfuse.dataset.createItem({
+  datasetName: "<dataset_name>",
+  input: { text: "hello world" },
+  expectedOutput: { text: "hello world" },
+  // link to a trace
+  sourceTraceId: "<trace_id>",
+  // optional: link to a specific span, event, or generation
+  sourceObservationId: "<observation_id>",
+});
+```
+
+</Tab>
+<Tab>
+UI에서는 프로덕션 트레이스의 모든 관찰(스팬, 이벤트, 생성)에서 `+ Add to dataset`을 사용할 수 있습니다.
+
+<Video
+  src="https://static.langfuse.com/docs-videos/datasets-add-from-trace.mp4"
+  aspectRatio={16 / 9}
+  gifStyle
+/>
+
+</Tab>
+</LangTabs>
+
+## 관찰을 데이터셋에 일괄 추가하기
+
+관찰(observation) 테이블에서 직접 여러 관찰을 데이터셋에 일괄 추가할 수 있습니다. 이는 프로덕션 데이터로부터 테스트 데이터셋을 빠르게 구축하는 데 유용합니다.
+
+필드 매핑 시스템을 통해 관찰 데이터가 데이터셋 항목으로 변환되는 방식을 제어할 수 있습니다. 필드 전체를 그대로 사용하거나(예: 전체 관찰 입력을 데이터셋 항목 입력에 매핑), JSON 경로 표현식을 사용하여 특정 값을 추출하거나, 여러 필드로부터 사용자 지정 객체를 구성할 수 있습니다.
+
+1. **Observations** 테이블로 이동합니다
+2. 필터를 사용하여 관련 관찰을 찾습니다
+3. 체크박스를 사용하여 관찰을 선택합니다
+4. **Actions** → **Add to dataset**을 클릭합니다
+5. 새 데이터셋을 생성하거나 기존 데이터셋을 선택합니다
+6. 관찰 데이터가 데이터셋 항목 필드에 매핑되는 방식을 제어하기 위해 필드 매핑을 구성합니다
+7. 매핑을 미리보고 확인합니다
+
+일괄 작업은 부분 성공을 지원하며 백그라운드에서 실행됩니다. 일부 관찰이 데이터셋 스키마 검증에 실패하더라도 유효한 항목은 계속 추가되며 오류는 검토를 위해 로그에 기록됩니다. **Settings** → **Batch Actions**에서 진행 상황을 모니터링할 수 있습니다.
+
+## 데이터셋 항목 편집/보관하기
+
+데이터셋 항목을 편집하거나 보관(archive)할 수 있습니다. 항목을 보관하면 향후 실험 실행에서 제외됩니다.
+
+<LangTabs items={["Python SDK", "JS/TS SDK", "Langfuse UI"]}>
+
+<Tab>
+
+업데이트하려는 항목의 `id`를 제공하여 항목을 업서트(upsert)할 수 있습니다.
+
+```python
+langfuse.create_dataset_item(
+    dataset_name="<dataset_name>",
+    id="<item_id>",
+    # example: update status to "ARCHIVED"
+    status="ARCHIVED"
+)
+```
+
+</Tab>
+<Tab>
+
+업데이트하려는 항목의 `id`를 제공하여 항목을 업서트(upsert)할 수 있습니다.
+
+```ts
+import { LangfuseClient } from "@langfuse/client";
+
+const langfuse = new LangfuseClient();
+
+await langfuse.dataset.createItem({
+  datasetName: "<dataset_name>",
+  id: "<item_id>",
+  // example: update status to "ARCHIVED"
+  status: "ARCHIVED",
+});
+```
+
+</Tab>
+<Tab>
+UI에서는 항목 ID를 클릭하여 항목을 편집할 수 있습니다. 항목을 보관하거나 삭제하려면 항목 옆의 점(dots)을 클릭하고 `Archive` 또는 `Delete`를 선택하세요.
+
+<Frame fullWidth>![Delete items](/images/docs/dataset-delete-items.png)</Frame>
+
+</Tab>
+</LangTabs>
+
+## 데이터셋 실행
+
+데이터셋을 생성한 후에는 이를 기반으로 애플리케이션을 테스트하고 평가할 수 있습니다.
+
+import { Table, WandSparkles, CodeXml, Database } from "lucide-react";
+
+<Cards num={1}>
+
+  <Card
+    icon={<WandSparkles size="24" />}
+    title="Experiments via SDK"
+    href="/docs/evaluation/experiments/experiments-via-sdk"
+    arrow
+  />
+  <Card
+    icon={<CodeXml size="24" />}
+    title="Experiments via UI"
+    href="/docs/evaluation/experiments/experiments-via-ui"
+    arrow
+  />
+</Cards>
+
+자세한 내용은 [실험 데이터 모델](/docs/evaluation/experiments/data-model)을 참고하세요.

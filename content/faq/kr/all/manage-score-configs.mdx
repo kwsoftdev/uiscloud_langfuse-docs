@@ -1,0 +1,103 @@
+---
+title: Langfuse에서 점수 설정(Score Config)을 생성하고 관리하는 방법
+description: Langfuse에서 점수 설정(score config)을 생성하고 관리하는 방법을 알아보세요.
+tags: [evaluation]
+sourceRevision: 024095cba883fbb0b8b2e1839c930baaed4e67da
+translationStatus: machine
+---
+
+# 점수 설정(ScoreConfig)을 생성하고 관리하는 방법
+
+`ScoreConfigs`는 점수가 특정 스키마를 따르도록 보장하는 데 사용됩니다. `ScoreConfigs`를 사용하면 팀 전체에서 점수 스키마를 표준화하고, 향후 분석을 위해 점수가 일관되고 비교 가능하도록 유지할 수 있습니다.
+
+`ScoreConfigs`는 [주석 작업(Human Annotation)](/docs/evaluation/evaluation-methods/annotation)을 사용하기 위해 **필수**이며, [API/SDK를 통한 커스텀 평가](/docs/evaluation/evaluation-methods/custom-scores)에는 **선택 사항**입니다.
+
+`ScoreConfigs`는 변경할 수 없습니다(immutable). 다만 더 이상 주석 작업에 사용하고 싶지 않은 설정은 보관(archive)할 수 있습니다. 보관된 설정은 언제든지 복원할 수 있습니다.
+
+`ScoreConfig` 객체의 자세한 속성은 [점수 데이터 모델](/docs/evaluation/scores/data-model#score-config)을 참고하세요.
+
+## SDK를 통한 방법
+
+### 점수 설정 생성 또는 업데이트
+
+Langfuse SDK를 통해 `scoreConfig`를 생성하거나 업데이트하려면 [여기](/docs/api-and-data-platform/features/public-api#access-via-sdks)에 명시된 대로 Langfuse 클라이언트의 `api` 속성을 사용해야 합니다. 구체적인 `POST`, `PATCH`, `GET` API 엔드포인트는 [API 레퍼런스](/docs/api)에 문서화되어 있습니다.
+
+### 점수 설정 사용
+
+SDK를 통해 `ScoreConfig`를 사용하는 경우는 대부분 [API/SDK를 통한 커스텀 평가(자세한 방법은 여기 참고)](/docs/evaluation/evaluation-methods/custom-scores#score-ingestion-referencing-configs-via-sdk) 맥락에서 이루어집니다.
+
+## Langfuse UI를 통한 방법
+
+### 점수 설정 생성
+
+<Steps>
+
+#### 프로젝트 설정으로 이동
+
+`Your Project` > `Project Settings` > `Scores / Evaluation`으로 이동한 다음 `Create new score config`를 클릭합니다.
+
+<Frame className="mt-2" fullWidth>
+  ![점수 설정](/images/docs/scoreconfigs.png)
+</Frame>
+
+#### 새 점수 설정 추가
+
+<Frame className="mt-2">
+  ![점수 설정](/images/docs/add_new_score_config.png)
+</Frame>
+
+값을 설정합니다:
+
+- **Score name**:
+- **Data type**: NUMERIC, CATEGORICAL, BOOLEAN, TEXT
+- **점수 값 범위 제약 조건** (수치형의 경우 최소/최대값, 범주형 데이터의 경우 커스텀 카테고리)
+
+**"submit"**을 클릭하여 점수 설정을 생성합니다.
+
+</Steps>
+
+### 점수 설정 사용
+
+UI를 통해 `ScoreConfig`를 사용하는 경우는 대부분 [주석 작업(Human Annotation)](/docs/evaluation/evaluation-methods/annotation) 맥락에서 이루어집니다.
+
+### 점수 설정 업데이트
+
+<Steps>
+
+#### 프로젝트 설정으로 이동
+
+`Your Project` > `Project Settings` > `Scores / Evaluation`으로 이동한 다음 업데이트하려는 점수 설정의 "edit" 아이콘을 클릭합니다.
+
+<Frame className="mt-2" fullWidth>
+  ![점수 설정](/images/docs/modify_score_config.png)
+</Frame>
+
+#### 점수 설정 업데이트
+
+- 점수 설정은 언제든지 업데이트할 수 있습니다.
+- 점수 설정을 업데이트해도 기존 점수 데이터는 영향을 받지 않습니다.
+- 새 점수를 생성할 때는 생성 시점에 적용 중인 점수 설정 스키마를 준수해야 합니다.
+- 기존 점수를 업데이트할 때(예: 점수 값이나 코멘트 변경)는 업데이트 시점에 적용 중인 점수 설정 스키마를 준수해야 합니다.
+- 연결된 점수 설정이 수정되었거나 보관되었는지 여부와 관계없이 점수는 언제든지 삭제할 수 있습니다.
+
+</Steps>
+
+### 점수 설정 보관
+
+<Steps>
+
+#### 프로젝트 설정으로 이동
+
+`Your Project` > `Project Settings` > `Scores / Evaluation`으로 이동한 다음 보관하려는 점수 설정의 "archive" 아이콘을 클릭합니다.
+
+<Frame className="mt-2" fullWidth>
+  ![점수 설정](/images/docs/modify_score_config.png)
+</Frame>
+
+#### 점수 설정 보관
+
+- 점수 설정을 보관하면 해당 설정을 더 이상 [주석 작업(Human Annotation)](/docs/evaluation/evaluation-methods/annotation)에서 선택할 수 없게 됩니다.
+- 보관된 설정의 "archive" 아이콘을 클릭하면 언제든지 복원할 수 있습니다.
+- 보관된 설정과 연결된 점수는 프로젝트에 계속 표시되지만 삭제할 수 있습니다.
+
+</Steps>

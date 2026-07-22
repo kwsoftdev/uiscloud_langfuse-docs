@@ -1,0 +1,738 @@
+---
+title: 기존 OpenTelemetry 설정에 Langfuse를 통합하는 방법
+description: 애플리케이션 코드를 변경하지 않고 기존 OpenTelemetry 계측에 Langfuse를 백엔드로 추가하는 방법을 알아보세요.
+tags: [observability, integration]
+sourceRevision: 1ffa57735c7176da786b2ac6a39d514f5ff1273d
+translationStatus: machine
+---
+
+# 기존 OpenTelemetry 설정에서 Langfuse 사용하기
+
+Sentry, Datadog, Honeycomb, Pydantic Logfire와 같은 다른 관측성 도구와 함께 Langfuse를 사용하고 있다면, 이들 모두 OpenTelemetry에 의존하기 때문에 충돌이 발생할 수 있습니다. 이 가이드는 이러한 충돌이 왜 발생하는지, 그리고 어떻게 해결할 수 있는지 설명합니다.
+
+**이 페이지에서는 다음과 같은 일반적인 문제를 다룹니다:**
+
+- [Langfuse에 트레이스가 나타나지 않는 경우](#no-traces-in-langfuse)
+- [다른 백엔드에 Langfuse 스팬이 나타나는 경우](#langfuse-spans-in-other-backends)
+- [Langfuse에 원치 않는 스팬이 나타나는 경우](#unwanted-spans-in-langfuse)
+- [고아 트레이스](#orphaned-traces)
+- [사용량/비용 데이터가 누락되는 경우](#missing-usage-cost-data)
+
+## 개념 [#core-concepts]
+
+이 개념들을 이해하면 특정 문제가 왜 발생하는지, 그리고 설정이 저희 예시와 정확히 일치하지 않더라도 [OpenTelemetry](https://opentelemetry.io/) 관련 문제를 어떻게 디버깅할 수 있는지 이해하는 데 도움이 됩니다.
+
+### Langfuse가 OpenTelemetry를 사용하는 방식 [#how-langfuse-uses-otel]
+
+최신 Langfuse SDK(Python SDK v3+ 및 JS SDK v4+)는 [OpenTelemetry (OTEL)](https://opentelemetry.io/) 기반으로 만들어졌습니다. Langfuse를 초기화하면 기본적으로 트레이스 데이터를 캡처하여 Langfuse로 전송하는 [**스팬 프로세서**](#span-processors)가 등록됩니다.
+
+기본적으로 Langfuse는 다른 OTEL 기반 도구들이 사용하는 것과 동일한 [**전역 TracerProvider**](#global-tracer-provider)에 스팬 프로세서를 연결합니다. 바로 여기서 충돌이 발생합니다.
+
+Langfuse는 트레이스를 LLM 중심으로 유지하기 위해 기본 내보내기 필터를 적용합니다. 기본적으로 다음을 내보냅니다:
+
+- Langfuse SDK(`langfuse-sdk`)가 생성한 스팬
+- `gen_ai.*` 속성을 가진 스팬
+- 알려진 LLM 계측 스코프에서 생성된 스팬
+
+기본 필터를 우회하고 모든 것을 내보내려면, 항상 참(true)을 반환하는 커스텀 콜백을 사용하세요.
+
+### 전역 TracerProvider [#global-tracer-provider]
+
+[OpenTelemetry](https://opentelemetry.io/)는 애플리케이션당 **단일한 전역 TracerProvider**를 사용합니다. 모든 트레이싱이 통과하는 중앙 허브라고 생각하면 됩니다.
+
+```
+┌─────────────────────────────────────────────────────────┐
+│              Global TracerProvider                      │
+│                                                         │
+│  Span Processors:                                       │
+│  ├── LangfuseSpanProcessor  → sends to Langfuse         │
+│  ├── SentrySpanProcessor    → sends to Sentry           │
+│  └── OTLPExporter           → sends to Datadog/etc.     │
+│                                                         │
+│  ALL spans go through ALL processors                    │
+└─────────────────────────────────────────────────────────┘
+```
+
+여기서 여러 문제가 발생합니다:
+
+- 여러 도구가 전역 provider에 각자의 프로세서를 등록하면, **모든 라이브러리의 모든 스팬이 모든 프로세서에 보이게 됩니다.** 각 프로세서는 그 후 무엇을 내보낼지 스스로 결정합니다.
+- 한 도구가 다른 도구보다 먼저 전역 provider를 초기화하면, **두 번째 도구의 설정이 전혀 적용되지 않을 수 있습니다.**
+- 서드파티 SDK가 전역 TracerProvider를 호환되지 않는 방식으로 조작하고 있다면, 예상치 못한 동작과 디버깅하기 어려운 문제로 이어질 수 있습니다.
+
+### 스팬 프로세서와 데이터 흐름 [#span-processors]
+
+코드가 스팬을 생성하면, 다음과 같은 파이프라인을 거쳐 흐릅니다:
+
+```
+Your Code → TracerProvider → Span Processors → Exporters → Backend
+                                   │
+                                   ├── LangfuseSpanProcessor → Langfuse
+                                   ├── SentrySpanProcessor → Sentry
+                                   └── OTLPExporter → Honeycomb/Datadog
+```
+
+[TracerProvider](#global-tracer-provider)에 연결된 모든 스팬 프로세서는 **모든 스팬**을 보게 됩니다. 무엇이 내보내지는지는 각 프로세서의 필터링 규칙에 따라 달라집니다.
+
+이것이 바로 (내보내기-전체 또는 관대한 커스텀 필터가 활성화된 경우) Langfuse에 인프라 스팬이 여전히 보이거나, APM 도구에 LLM 호출이 보이는 이유입니다.
+
+### 계측 스코프 [#instrumentation-scopes]
+
+모든 스팬은 **계측 스코프(instrumentation scope)**를 가집니다. 이는 어떤 라이브러리가 해당 스팬을 생성했는지 식별하는 레이블입니다. 예를 들면:
+
+| 스코프 이름                           | 생성 주체            |
+| ------------------------------------- | -------------------- |
+| `langfuse-sdk`                        | Langfuse SDK         |
+| `ai`                                  | Vercel AI SDK        |
+| `openai`                              | OpenAI 계측          |
+| `fastapi`                             | FastAPI 계측         |
+| `sqlalchemy`                          | SQLAlchemy 계측      |
+| `@opentelemetry/instrumentation-http` | HTTP 클라이언트 계측 |
+
+계측 스코프를 사용하여 [**Langfuse에 도달하는 스팬을 필터링**](#unwanted-spans-in-langfuse)할 수 있습니다. 이는 대부분의 충돌을 해결하는 핵심 방법입니다.
+
+**스코프 이름 찾기:** Langfuse UI에서 임의의 스팬을 클릭하고 `metadata.scope.name`을 확인하면 어떤 라이브러리가 이를 생성했는지 알 수 있습니다.
+
+### 컨텍스트와 부모-자식 관계 [#context-parent-child]
+
+[OpenTelemetry](https://opentelemetry.io/)는 현재 어떤 스팬이 "활성" 상태인지 추적하는 **컨텍스트**를 유지합니다. 새 스팬을 생성하면 자동으로 활성 스팬의 자식이 됩니다.
+
+```
+HTTP Request (parent)
+└── LLM Call (child)
+    └── Token Streaming (grandchild)
+```
+
+**중요:** [격리된 TracerProvider](/docs/observability/sdk/advanced-features#isolated-tracer-provider)(아래에서 다룸)를 사용하는 경우에도 이 컨텍스트는 공유됩니다. 즉:
+
+- 한 [TracerProvider](#global-tracer-provider)의 부모 스팬이 다른 provider의 자식을 가질 수 있습니다.
+- 스팬 프로세서의 규칙에 의해 또는 다른 TraceProvider에서 발생했다는 이유로 부모 스팬이 필터링되면, 그 자식들은 "고아(orphaned)"가 되어 UI에서 연결이 끊긴 것처럼 보입니다.
+
+스팬을 필터링할 때 이 점을 염두에 두세요.
+
+## 문제 해결
+
+아래는 일반적인 문제와 해결 방법입니다.
+
+### Langfuse에 트레이스가 나타나지 않는 경우 [#no-traces-in-langfuse]
+
+Langfuse를 설정했지만 대시보드가 비어 있거나 예상한 트레이스가 보이지 않습니다.
+
+**왜 이런 일이 발생하나요**
+
+(예를 들어 Sentry 같은) 다른 도구가 Langfuse보다 먼저 OTEL을 초기화하여, Langfuse의 스팬 프로세서가 스팬을 받지 못하는 방식으로 [전역 TracerProvider](#global-tracer-provider)를 설정한 경우입니다.
+
+**디버깅 방법**
+
+<LangTabs items={["Python", "JS/TS"]}>
+
+<Tab>
+
+{/* PYTHON */}
+
+1. 디버그 로깅을 활성화하여 무슨 일이 일어나는지 확인합니다:
+
+```python
+import os
+os.environ["LANGFUSE_DEBUG"] = "True"
+```
+
+2. 초기화 순서를 확인합니다: 어떤 도구가 먼저 초기화되는지 로깅을 추가해 확인하세요.
+
+```python
+print("Initializing Sentry...")
+sentry_sdk.init(...)
+print("Initializing Langfuse...")
+langfuse = Langfuse()
+```
+
+3. 현재 활성화된 TracerProvider를 확인합니다:
+
+```python
+from opentelemetry import trace
+provider = trace.get_tracer_provider()
+print(f"Global provider: {type(provider)}")
+```
+
+4. 스팬이 애초에 생성되고 있는지 테스트합니다:
+
+```python
+from opentelemetry import trace
+tracer = trace.get_tracer(__name__)
+with tracer.start_as_current_span("test-span"):
+    print("Created test span")
+```
+
+</Tab>
+
+<Tab>
+
+{/* JS/TS */}
+
+1. 디버그 로깅을 활성화하여 무슨 일이 일어나는지 확인합니다:
+
+```typescript
+process.env.LANGFUSE_DEBUG = "true";
+// or: process.env.LANGFUSE_LOG_LEVEL = "debug";
+```
+
+2. 초기화 순서를 확인합니다: 어떤 도구가 먼저 초기화되는지 로깅을 추가해 확인하세요.
+
+```typescript
+console.log("Initializing Sentry...");
+Sentry.init({ dsn: "..." });
+console.log("Initializing Langfuse...");
+// Langfuse initialization
+```
+
+3. 현재 활성화된 TracerProvider를 확인합니다:
+
+```typescript
+import { trace } from "@opentelemetry/api";
+const provider = trace.getTracerProvider();
+console.log("Global provider:", provider);
+```
+
+4. 스팬이 애초에 생성되고 있는지 테스트합니다:
+
+```typescript
+import { trace } from "@opentelemetry/api";
+const tracer = trace.getTracer("test");
+const span = tracer.startSpan("test-span");
+console.log("Created test span");
+span.end();
+```
+
+</Tab>
+
+</LangTabs>
+
+**해결 방법**
+
+- Sentry를 사용 중이라면 [Sentry 통합 가이드](/faq/all/existing-sentry-setup)를 참고하세요.
+- AWS Bedrock AgentCore에 배포하는 경우, 런타임의 ADOT 자동 계측이 SDK 호출을 가로채고 있을 수 있습니다. [AWS Bedrock AgentCore (ADOT)](#aws-bedrock-agentcore-adot)를 참고하세요.
+
+다른 도구의 경우, 두 가지 옵션이 있습니다:
+
+**옵션 A: 기존 OTEL 설정에 Langfuse 추가하기**
+
+사용 중인 다른 도구가 [스팬 프로세서](#span-processors) 추가를 허용한다면, 해당 설정에 `LangfuseSpanProcessor`를 추가하세요. 이렇게 하면 두 도구 모두가 모든 스팬을 볼 수 있는 하나의 [TracerProvider](#global-tracer-provider)를 계속 유지하면서, Langfuse에 도달하는 내용은 필터링할 수 있습니다.
+
+<LangTabs items={["Python", "JS/TS"]}>
+
+<Tab>
+
+{/* PYTHON */}
+
+```python
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from langfuse.opentelemetry import LangfuseSpanProcessor
+
+# Create a shared provider
+provider = TracerProvider()
+
+# Add Langfuse processor (default exports Langfuse + GenAI/LLM spans)
+provider.add_span_processor(LangfuseSpanProcessor())
+
+# Add your APM exporter
+provider.add_span_processor(
+    BatchSpanProcessor(OTLPSpanExporter(endpoint="https://your-apm-endpoint.com/v1/traces"))
+)
+
+# Register as global
+trace.set_tracer_provider(provider)
+```
+
+</Tab>
+
+<Tab>
+
+{/* JS/TS */}
+
+```typescript
+import { NodeSDK } from "@opentelemetry/sdk-node";
+import { LangfuseSpanProcessor } from "@langfuse/otel";
+import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
+import { SimpleSpanProcessor } from "@opentelemetry/sdk-trace-base";
+
+const sdk = new NodeSDK({
+  spanProcessors: [
+    // Langfuse processor (default exports Langfuse + GenAI/LLM spans)
+    new LangfuseSpanProcessor(),
+    // Your APM exporter - receives everything
+    new SimpleSpanProcessor(new OTLPTraceExporter({
+      url: "https://your-apm-endpoint.com/v1/traces",
+    })),
+  ],
+});
+
+sdk.start();
+```
+
+</Tab>
+
+</LangTabs>
+
+이 방식을 사용해야 하는 경우:
+
+- 애플리케이션 전체에서 분산 트레이싱을 원하는 경우
+- APM이 모든 것을 보되, Langfuse는 LLM 트레이스만 보기를 원하는 경우
+- 일관된 부모-자식 관계를 원하는 경우
+
+**옵션 B: Langfuse용 격리된 TracerProvider 사용하기**
+
+Langfuse만 사용하는 별도의 [TracerProvider](#global-tracer-provider)를 만듭니다. 이렇게 하면 Langfuse가 다른 관측성 도구와 완전히 분리됩니다.
+
+<LangTabs items={["Python", "JS/TS"]}>
+
+<Tab>
+
+{/* PYTHON */}
+
+```python
+from opentelemetry.sdk.trace import TracerProvider
+from langfuse import Langfuse
+
+# Create isolated provider - do NOT register as global
+langfuse = Langfuse(tracer_provider=TracerProvider())
+```
+
+</Tab>
+
+<Tab>
+
+{/* JS/TS */}
+
+```typescript
+import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
+import { LangfuseSpanProcessor } from "@langfuse/otel";
+import { setLangfuseTracerProvider } from "@langfuse/tracing";
+
+const langfuseProvider = new NodeTracerProvider({
+  spanProcessors: [new LangfuseSpanProcessor()],
+});
+
+// Register for Langfuse only, not as global
+setLangfuseTracerProvider(langfuseProvider);
+```
+
+</Tab>
+
+</LangTabs>
+
+이 방식을 사용해야 하는 경우:
+
+- Langfuse에만 LLM 트레이스가 나타나기를 원하는 경우
+- APM에 Langfuse 스팬이 나타나지 않기를 원하는 경우
+- Langfuse와 APM 간에 분산 트레이싱이 필요하지 않은 경우
+
+트레이드오프:
+
+- 프로바이더 간에 스팬이 부모-자식 관계를 공유하지 않습니다.
+- 부모가 전역 provider에 있는 경우 일부 Langfuse 스팬이 고아로 나타날 수 있습니다.
+
+### 서드파티 백엔드에 Langfuse 스팬이 나타나는 경우 [#langfuse-spans-in-other-backends]
+
+Datadog, Honeycomb, 또는 다른 APM 대시보드에 Langfuse에서만 보고 싶은 LLM 관련 스팬이 표시됩니다.
+
+**왜 이런 일이 발생하나요**
+
+Langfuse가 다른 익스포터가 연결된 [전역 TracerProvider](#global-tracer-provider)를 사용하고 있기 때문입니다. 모든 스팬이 모든 목적지로 전송됩니다.
+
+**해결 방법**
+
+Langfuse용으로 [격리된 TracerProvider](/docs/observability/sdk/advanced-features#isolated-tracer-provider)를 사용하여 해당 스팬이 전역 provider를 거치지 않도록 하세요.
+
+<LangTabs items={["Python", "JS/TS"]}>
+
+<Tab>
+
+{/* PYTHON */}
+
+```python
+from opentelemetry.sdk.trace import TracerProvider
+from langfuse import Langfuse
+
+# Create a TracerProvider just for Langfuse
+# Do NOT register it as the global provider
+langfuse_provider = TracerProvider()
+langfuse = Langfuse(tracer_provider=langfuse_provider)
+```
+
+</Tab>
+
+<Tab>
+
+{/* JS/TS */}
+
+```typescript
+import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
+import { LangfuseSpanProcessor } from "@langfuse/otel";
+import { setLangfuseTracerProvider } from "@langfuse/tracing";
+
+const langfuseProvider = new NodeTracerProvider({
+  spanProcessors: [new LangfuseSpanProcessor()],
+});
+
+// Register for Langfuse only, not as global
+setLangfuseTracerProvider(langfuseProvider);
+```
+
+</Tab>
+
+</LangTabs>
+
+**주의:** [격리된 TracerProvider](/docs/observability/sdk/advanced-features#isolated-tracer-provider)도 여전히 OTEL 컨텍스트를 공유합니다. 부모가 다른 provider에서 생성된 경우 일부 스팬이 고아로 나타날 수 있습니다.
+
+### Langfuse에 원치 않는 스팬이 나타나는 경우 [#unwanted-spans-in-langfuse]
+
+Langfuse 대시보드에 LLM 트레이스 대신 HTTP 요청, 데이터베이스 쿼리, 또는 기타 인프라 스팬이 표시됩니다.
+
+<Callout type="warning">
+Langfuse에 도달하는 모든 스팬은 **과금 대상 관측(observation)**으로 수집됩니다. OpenTelemetry 파이프라인이 HTTP, 데이터베이스, 프레임워크 스팬을 전달하는 경우, 이들은 다른 관측과 마찬가지로 집계되고 과금되므로, 지나치게 허용적인 내보내기 설정은 사용량과 비용을 크게 증가시킬 수 있습니다. 아래 설명된 `should_export_span` / `shouldExportSpan` 콜백을 통해 Langfuse에 도달하는 내용을 직접 제어할 수 있습니다. 예상치 못한 사용량 증가를 조기에 파악하려면 [지출 알림](/docs/administration/spend-alerts)을 설정하고 [과금 단위](/docs/administration/billable-units)에서 사용량 집계 방식을 확인하세요.
+</Callout>
+
+**왜 이런 일이 발생하나요**
+
+Langfuse는 [TracerProvider](#global-tracer-provider)에 스팬 프로세서를 연결합니다. 해당 provider에 OTEL 자동 계측도 연결되어 있다면, 웹 프레임워크, 데이터베이스, HTTP 클라이언트의 스팬이 동일한 파이프라인을 통해 흐릅니다. 다음 중 하나가 해당되면 이들이 Langfuse에 도달합니다:
+
+- 커스텀 `should_export_span` / `shouldExportSpan` 콜백이 기본 필터보다 더 허용적인 경우
+- 서드파티 스팬이 기본 LLM 중심 기준(`gen_ai.*` 속성 또는 알려진 LLM 스코프)에 부합하는 경우
+
+이는 웹 프레임워크, 데이터베이스, HTTP 클라이언트 등을 계측하는 [OTEL 자동 계측](https://opentelemetry.io/docs/platforms/kubernetes/operator/automatic/)을 사용할 때 특히 흔하게 발생합니다. Langfuse에 무엇이 도달할지는 여러분이 결정합니다. 내보내기 필터는 여러분이 직접 설정하는 것입니다.
+
+**디버깅 방법**
+
+Langfuse에서 원치 않는 스팬을 확인하고 `metadata.scope.name` 필드를 확인하여 어떤 라이브러리가 이를 생성하는지 파악하세요.
+
+**해결 방법**
+
+1. 필터 규칙을 더 엄격하게 조정하세요(또는 기본 필터로 되돌리세요).
+2. 필요하다면 노이즈가 많은 라이브러리에 대해 명시적인 스코프 차단을 추가하세요.
+
+<LangTabs items={["Python", "JS/TS"]}>
+
+<Tab>
+
+{/* PYTHON */}
+
+블록리스트 방식(특정 스코프를 제외)으로 `should_export_span`을 사용합니다:
+
+```python
+from langfuse import Langfuse
+from langfuse.span_filter import is_default_export_span
+
+blocked_scopes = {
+    # Web frameworks
+    "fastapi",
+    "opentelemetry.instrumentation.fastapi",
+    "flask",
+    "django",
+
+    # Databases
+    "sqlalchemy",
+    "psycopg",
+    "psycopg2",
+
+    # HTTP clients
+    "opentelemetry.instrumentation.requests",
+    "opentelemetry.instrumentation.httpx",
+
+    # Other tools
+    "logfire",
+}
+
+langfuse = Langfuse(
+    should_export_span=lambda span: (
+        is_default_export_span(span)
+        and not (
+            span.instrumentation_scope is not None
+            and span.instrumentation_scope.name in blocked_scopes
+        )
+    )
+)
+```
+
+`blocked_instrumentation_scopes`는 하위 호환성을 위해 여전히 작동하지만, 더 이상 사용을 권장하지 않으며 향후 버전에서 제거될 예정입니다.
+
+</Tab>
+
+<Tab>
+
+{/* JS/TS */}
+
+블록리스트 방식(특정 스코프를 제외)으로 `shouldExportSpan`을 사용합니다:
+
+`shouldExportSpan`은 전체를 덮어쓰는 방식입니다. 기본 LLM 중심 동작을 유지하고 싶다면 `isDefaultExportSpan`과 조합하세요.
+
+```typescript
+import { NodeSDK } from "@opentelemetry/sdk-node";
+import { LangfuseSpanProcessor, isDefaultExportSpan } from "@langfuse/otel";
+
+const blockedScopes = ["express", "http", "pg", "redis", "fastify"];
+
+const sdk = new NodeSDK({
+  spanProcessors: [
+    new LangfuseSpanProcessor({
+      shouldExportSpan: ({ otelSpan }) =>
+        isDefaultExportSpan(otelSpan) &&
+        !blockedScopes.includes(otelSpan.instrumentationScope.name),
+    }),
+  ],
+});
+sdk.start();
+```
+
+또는 허용리스트 방식(특정 스코프만 포함)을 사용할 수도 있습니다:
+
+```typescript
+const allowedScopes = ["langfuse-sdk", "ai", "openai", "@ai-sdk/openai"];
+
+const sdk = new NodeSDK({
+  spanProcessors: [
+    new LangfuseSpanProcessor({
+      shouldExportSpan: ({ otelSpan }) =>
+        allowedScopes.includes(otelSpan.instrumentationScope.name),
+    }),
+  ],
+});
+sdk.start();
+```
+
+</Tab>
+
+</LangTabs>
+
+**필터링 관련 주의사항:** 다른 스팬의 부모가 되는 스팬을 필터링하면, 그 자식들은 고아 상태의 최상위 트레이스로 나타납니다. 이는 LLM 호출을 감싸는 웹 프레임워크 스팬(예: `fastapi`)을 필터링할 때 특히 흔하게 발생합니다. 아래 [고아 트레이스](#orphaned-traces)를 참고하세요.
+
+<Callout type="info">
+**AWS Bedrock AgentCore**에 배포하면서 헬스 체크 스팬(`/ping`, `/health`)이 보인다면, 이를 필터링하는 방법은 [AWS Bedrock AgentCore (ADOT)](#aws-bedrock-agentcore-adot)를 참고하세요.
+</Callout>
+
+### 고아 또는 연결이 끊긴 트레이스 [#orphaned-traces]
+
+Langfuse의 트레이스가 부모 아래에 중첩되어야 함에도 독립된 항목으로 나타나거나, 깨진 [계층 구조](#context-parent-child)가 보입니다.
+
+**왜 이런 일이 발생하나요**
+
+일반적으로 다음과 같은 경우에 발생합니다:
+
+1. 스팬을 필터링하고 있는데, 부모 스팬이 필터링되어 제거된 경우
+2. 여러 [TracerProvider](#global-tracer-provider)를 사용 중이며, 이들이 서로 교차되는 스팬 계층 구조를 생성하는 경우
+3. 루트 스팬이 [차단된 계측 스코프](/docs/observability/sdk/advanced-features#filtering-by-instrumentation-scope)에 속하는 경우
+
+예를 들면:
+
+```
+Before filtering:
+HTTP Request (fastapi)        ← You block this
+└── LLM Call (langfuse-sdk)   ← This becomes orphaned
+    └── Completion (ai)
+
+After filtering:
+LLM Call (langfuse-sdk)       ← Now a root span, missing context
+└── Completion (ai)
+```
+
+**해결 방법**
+
+이는 대체로 트레이드오프의 문제입니다. [계층 구조](#context-parent-child)에 영향을 주지 않고 부모 스팬을 필터링할 수는 없습니다. 선택할 수 있는 옵션은 다음과 같습니다:
+
+1. **고아 스팬을 그대로 수용하기:** 트레이스 데이터 자체가 정확하다면, 시각적 계층 구조 문제는 감수할 만할 수 있습니다.
+
+2. **더 선별적으로 필터링하기:** [스코프 전체를 차단](/docs/observability/sdk/advanced-features#filtering-by-instrumentation-scope)하는 대신, 루트 스팬은 통과시키고 더 깊은 수준의 인프라 스팬만 차단할 수 있는지 검토하세요.
+
+3. **트레이스 수준 데이터를 명시적으로 설정하기:** 루트 스팬에 있던 중요한 메타데이터를 잃고 있다면, Langfuse 트레이스에 이를 명시적으로 설정하세요:
+
+<LangTabs items={["Python", "JS/TS"]}>
+
+<Tab>
+
+{/* PYTHON */}
+
+```python
+from langfuse import get_client, propagate_attributes
+
+langfuse = get_client()
+
+with langfuse.start_as_current_observation(as_type="span", name="my-operation"):
+    with propagate_attributes(user_id="user-123", session_id="session-456"):
+        # Your code here
+        pass
+```
+
+</Tab>
+
+<Tab>
+
+{/* JS/TS */}
+
+```typescript
+propagateAttributes({ userId: "user_123" }, async () => {
+  const result = await startActiveObservation("parent", async (parentSpan) => {
+    // your code here
+  });
+});
+```
+
+</Tab>
+
+</LangTabs>
+
+Langfuse가 지원하는 트레이스 필드에 대한 자세한 내용은 전체 [OpenTelemetry 통합 가이드](/integrations/native/opentelemetry#property-mapping)를 참고하세요.
+
+### 사용량 또는 비용 데이터가 누락되는 경우 [#missing-usage-cost-data]
+
+Langfuse에 트레이스는 나타나지만 [토큰 수와 비용 정보](/docs/observability/features/token-and-cost-tracking)가 누락됩니다.
+
+**왜 이런 일이 발생하나요**
+
+Langfuse는 스팬에 사용량 속성(예: `gen_ai.usage.prompt_tokens`)이 존재할 것을 기대합니다. 특정 OTEL 설정을 사용하는 경우, 이러한 속성은:
+
+- 루트 스팬이 아닌 자식 스팬에만 존재할 수 있습니다
+- Langfuse가 기대하는 것과 다른 이름으로 지정될 수 있습니다
+- 스팬이 종료된 후에 추가될 수 있습니다
+
+**디버깅 방법**
+
+디버그 로깅을 활성화하고 내보내지는 스팬 데이터에 사용량 속성이 존재하는지 확인하세요.
+
+<LangTabs items={["Python", "JS/TS"]}>
+
+<Tab>
+
+{/* PYTHON */}
+
+```python
+import os
+os.environ["LANGFUSE_DEBUG"] = "True"
+```
+
+</Tab>
+
+<Tab>
+
+{/* JS/TS */}
+
+```typescript
+process.env.LANGFUSE_DEBUG = "true";
+// or: process.env.LANGFUSE_LOG_LEVEL = "debug";
+```
+
+</Tab>
+
+</LangTabs>
+
+**해결 방법**
+
+1. 최신 버전의 Langfuse SDK를 사용하고 있는지 확인하세요
+2. 사용 중인 LLM 라이브러리의 계측이 기대되는 속성을 설정하고 있는지 확인하세요
+3. 커스텀 설정을 사용하는 경우, 스팬이 종료되기 전에 사용량 속성이 설정되도록 하세요
+
+## 도구별 참고 사항
+
+### Sentry
+
+Sentry는 OpenTelemetry를 자동으로 초기화하기 때문에 특별한 설정이 필요합니다. 이를 비활성화하고 공유 provider를 수동으로 설정해야 합니다.
+
+**전체 가이드 참고:** [Sentry와 함께 Langfuse 사용하기](/faq/all/existing-sentry-setup)
+
+### Pydantic Logfire
+
+Logfire는 개인 식별 정보(PII)로 보이는 값을 자동으로 마스킹(scrub)합니다. 여기에는 "session", "password", "token" 등의 단어가 포함된 문자열이 해당됩니다. Langfuse에서 세션 ID를 설정하는 경우, 다음과 같이 표시될 수 있습니다:
+
+```
+[Scrubbed due to 'session']
+```
+
+Langfuse 관련 ID를 보존하는 커스텀 마스킹 콜백을 설정하여 이 문제를 해결할 수 있습니다:
+
+```python
+import logfire
+
+def preserve_langfuse_ids(match, path):
+    """Don't scrub Langfuse session/trace IDs."""
+    # Check if this is a Langfuse-related attribute
+    langfuse_attributes = ["session_id", "trace_id", "user_id", "langfuse"]
+
+    if any(attr in path for attr in langfuse_attributes):
+        return match.group()  # Return the original value unchanged
+
+    return None  # Use default scrubbing for everything else
+
+logfire.configure(
+    send_to_logfire=False,  # If sending to Langfuse instead
+    scrubbing_callback=preserve_langfuse_ids,
+)
+```
+
+### Datadog / Honeycomb / Jaeger / Zipkin / Grafana Tempo
+
+이들은 표준 OTEL 설정을 사용합니다. 필요에 따라 [격리된 TracerProvider](/docs/observability/sdk/advanced-features#isolated-tracer-provider) 또는 [스팬 필터링](/docs/observability/sdk/advanced-features#filtering-by-instrumentation-scope)을 사용하세요.
+
+### AWS Bedrock AgentCore (ADOT) [#aws-bedrock-agentcore-adot]
+
+[AWS Bedrock AgentCore](/integrations/frameworks/amazon-agentcore)에 배포하면, 런타임이 자동으로 ADOT(AWS Distro for OpenTelemetry)를 주입합니다. 이로 인해 **OTEL이 직접 설정하는 것이 아니라 배포 환경에 의해 강제되는** 상황이 발생합니다.
+
+**흔한 증상:**
+
+- (LangChain의 `CallbackHandler`와 같은) 표준 Langfuse SDK 콜백이 로컬에서는 작동하지만 AgentCore에 배포하면 트레이스가 생성되지 않습니다
+- ADOT가 런타임 수준에서 텔레메트리를 관리하며, SDK의 HTTP 호출을 가로채거나 우회할 수 있습니다
+- 헬스 체크(`/ping`)를 포함한 모든 HTTP 트래픽이 계측되어 원치 않는 스팬으로 나타납니다
+
+**해결 방법**
+
+Langfuse SDK 콜백에 의존하는 대신, ADOT를 비활성화하고 Langfuse로 트레이스를 전송하도록 직접 OTEL 익스포터를 설정하세요. AgentCore 에이전트를 실행할 때 다음 환경 변수를 전달하세요:
+
+```bash
+# 1. Disable AgentCore's built-in ADOT tracing
+DISABLE_ADOT_OBSERVABILITY=true
+
+# 2. Configure your own OTEL exporter to Langfuse
+OTEL_EXPORTER_OTLP_ENDPOINT="https://cloud.langfuse.com/api/public/otel"
+OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic $(echo -n 'pk-xxx:sk-xxx' | base64),x-langfuse-ingestion-version=4"
+```
+
+다른 리전을 사용하는 경우, 엔드포인트 호스트를 다음과 같이 바꾸세요: `https://us.cloud.langfuse.com/api/public/otel` (미국), `https://jp.cloud.langfuse.com/api/public/otel` (일본), 또는 `https://hipaa.cloud.langfuse.com/api/public/otel` (HIPAA).
+
+이는 AgentCore에서 어떤 프레임워크(LangChain, LlamaIndex, Strands 등)를 사용하든 동일하게 적용됩니다.
+
+<Callout type="info">
+코드 예시가 포함된 전체 통합 가이드는 전용 [Amazon Bedrock AgentCore 통합 페이지](/integrations/frameworks/amazon-agentcore)를 참고하세요.
+</Callout>
+
+### 격리된 TracerProvider와 함께 사용하는 Vercel AI SDK [#vercel-ai-sdk-isolated-provider]
+
+[Vercel AI SDK](/integrations/frameworks/vercel-ai-sdk)와 함께 [격리된 TracerProvider](/docs/observability/sdk/advanced-features#isolated-tracer-provider)를 사용하는 경우, SDK가 `setLangfuseTracerProvider()`로 설정한 격리된 provider를 자동으로 인식하지 못할 수 있습니다. 이는 Vercel AI SDK가 기본적으로 전역으로 등록된 provider를 찾기 때문입니다.
+
+Vercel AI SDK의 `experimental_telemetry` 옵션에 tracer를 명시적으로 전달해야 합니다:
+
+```typescript
+import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
+import { LangfuseSpanProcessor } from "@langfuse/otel";
+import { setLangfuseTracerProvider } from "@langfuse/tracing";
+import { generateText } from "ai";
+import { openai } from "@ai-sdk/openai";
+
+// Create an isolated TracerProvider for Langfuse
+const langfuseTracerProvider = new NodeTracerProvider({
+  spanProcessors: [new LangfuseSpanProcessor()],
+});
+
+// Register the isolated TracerProvider
+setLangfuseTracerProvider(langfuseTracerProvider);
+
+// Explicitly pass the tracer to the Vercel AI SDK
+const { text } = await generateText({
+  model: openai("gpt-5.1"),
+  prompt: "Hello, world!",
+  experimental_telemetry: {
+    isEnabled: true,
+    tracer: langfuseTracerProvider.getTracer("ai"), // Use the isolated provider's tracer
+  },
+});
+```
+
+이렇게 하면 Vercel AI SDK가 전역으로 등록된 provider 대신 격리된 Langfuse TracerProvider를 사용하게 되어, Langfuse 트레이싱이 다른 관측성 도구와 공존할 수 있습니다.

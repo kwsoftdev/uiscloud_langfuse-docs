@@ -1,0 +1,23 @@
+{
+  "title": "기능",
+  "pages": [
+    "---필수---",
+    "link-to-traces",
+    "prompt-version-control",
+    "playground",
+    "---고급---",
+    "variables",
+    "composability",
+    "message-placeholders",
+    "config",
+    "[프롬프트 실험 ↗](/docs/evaluation/dataset-runs/run-via-ui)",
+    "caching",
+    "mcp-server",
+    "webhooks-slack-integrations",
+    "github-integration",
+    "n8n-node",
+    "guaranteed-availability",
+    "a-b-testing",
+    "folders"
+  ]
+}

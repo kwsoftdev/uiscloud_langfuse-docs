@@ -1,0 +1,19 @@
+{
+  "title": "핸드북",
+  "pages": [
+    "---핸드북---",
+    "index",
+    "chapters",
+    "---Langfuse에서 일하기---",
+    "how-we-work",
+    "how-we-hire",
+    "perks-and-pay",
+    "tools-and-processes",
+    "---리소스---",
+    "product-engineering",
+    "sales-and-cs",
+    "support",
+    "devrel",
+    "operations"
+  ]
+}

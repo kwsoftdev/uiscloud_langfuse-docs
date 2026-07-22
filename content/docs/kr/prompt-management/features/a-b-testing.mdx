@@ -1,0 +1,134 @@
+---
+title: A/B 테스트
+sidebarTitle: A/B 테스트
+description: Langfuse의 오픈소스 프롬프트 관리 기능을 사용하여 LLM 프롬프트를 체계적으로 테스트하고 개선하세요.
+sourceRevision: 9c0d419484845ffbd56805fd068677856e5d764c
+translationStatus: machine
+---
+
+# LLM 프롬프트의 A/B 테스트
+
+[Langfuse 프롬프트 관리](/docs/prompts/get-started)를 사용하면 프롬프트의 서로 다른 버전에 레이블(예: `prod-a` 및 `prod-b`)을 지정하여 A/B 테스트를 진행할 수 있습니다. 애플리케이션은 이러한 버전 사이를 무작위로 전환할 수 있으며, Langfuse는 각 버전에 대한 응답 지연 시간, 비용, 토큰 사용량, 평가 메트릭 등의 성능 지표를 추적합니다.
+
+<Callout type="info">
+
+**언제 A/B 테스트를 사용해야 할까요?**
+
+A/B 테스트는 데이터셋으로 테스트하면서 배운 내용에 더해, 실제 상황에서 서로 다른 프롬프트 버전이 어떻게 작동하는지 확인하는 데 도움이 됩니다. 다음과 같은 경우에 특히 효과적입니다.
+
+- 애플리케이션에 성공 여부를 측정할 수 있는 좋은 방법이 있고, 다양한 종류의 사용자 입력을 처리하며, 어느 정도의 성능 기복을 감당할 수 있는 경우. 이는 실수가 큰 문제가 되지 않는 컨슈머 앱에서 주로 잘 작동합니다.
+- 테스트 데이터로 이미 충분히 테스트를 마쳤고, 전체 사용자에게 배포하기 전에 소규모 사용자 그룹을 대상으로 변경 사항을 시험해보고 싶은 경우(카나리 배포라고도 합니다).
+
+</Callout>
+
+## 구현
+
+<Steps>
+
+### 프롬프트 버전에 레이블 지정
+
+프롬프트 버전(예: `prod-a` 및 `prod-b`)에 레이블을 지정하여 테스트할 서로 다른 변형을 구분합니다.
+
+### 프롬프트 가져오기 및 A/B 테스트 실행
+
+<LangTabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab>
+
+```python
+from langfuse import get_client
+import random
+from langfuse.openai import openai
+
+# 초기화를 위해 환경 변수가 필요합니다
+from langfuse import get_client
+langfuse = get_client()
+
+# 프롬프트 버전 가져오기
+prompt_a = langfuse.get_prompt("my-prompt-name", label="prod-a")
+prompt_b = langfuse.get_prompt("my-prompt-name", label="prod-b")
+
+# 버전 무작위 선택
+selected_prompt = random.choice([prompt_a, prompt_b])
+
+# LLM 호출에 사용
+response = openai.chat.completions.create(
+    model="gpt-3.5-turbo",
+    messages=[{"role": "user", "content": selected_prompt.compile(variable="value")}],
+    # 분석을 위해 프롬프트를 generation에 연결
+    langfuse_prompt=selected_prompt
+)
+result_text = response.choices[0].message.content
+```
+
+</Tab>
+<Tab>
+
+```js
+import { LangfuseClient } from "@langfuse/client";
+import { observeOpenAI } from "@langfuse/openai";
+
+import OpenAI from "openai";
+
+// 초기화를 위해 환경 변수가 필요합니다
+const langfuse = new LangfuseClient();
+
+// OpenAI 클라이언트 생성 및 래핑
+const openai = observeOpenAI(new OpenAI());
+
+// 프롬프트 버전 가져오기
+const promptA = await langfuse.prompt.get("my-prompt-name", {
+  label: "prod-a",
+});
+const promptB = await langfuse.prompt.get("my-prompt-name", {
+  label: "prod-b",
+});
+
+// 버전 무작위 선택
+const selectedPrompt = Math.random() < 0.5 ? promptA : promptB;
+
+// LLM 호출에 사용
+const completion = await openai.chat.completions.create({
+  model: "gpt-3.5-turbo",
+  messages: [
+    {
+      role: "user",
+      content: selectedPrompt.compile({ variable: "value" }),
+    },
+  ],
+  // 분석을 위해 프롬프트를 generation에 연결
+  langfusePrompt: selectedPrompt,
+});
+const resultText = completion.choices[0].message.content;
+```
+
+</Tab>
+</LangTabs>
+
+<Callout type="info">
+
+프롬프트를 가져오고 사용하는 방법에 대한 추가 예시는 [프롬프트 관리 문서](/docs/prompts/get-started)를 참고하세요.
+
+</Callout>
+
+### 결과 분석
+
+Langfuse UI에서 각 프롬프트 버전의 메트릭을 비교합니다.
+
+<Video
+  src="https://static.langfuse.com/docs-videos/prompt-metrics.mp4"
+  aspectRatio={1696 / 1080}
+  gifStyle
+/>
+
+**비교에 사용할 수 있는 주요 메트릭:**
+
+- 응답 지연 시간 및 토큰 사용량
+- 요청당 비용
+- 품질 평가 점수
+- 사용자가 정의한 커스텀 메트릭
+
+</Steps>
+
+## 관련 리소스
+
+- 프롬프트 선택뿐만 아니라 애플리케이션 전체 동작을 데이터셋으로 벤치마킹하려면 [실험](/docs/evaluation/core-concepts#experiments)을 사용하세요.

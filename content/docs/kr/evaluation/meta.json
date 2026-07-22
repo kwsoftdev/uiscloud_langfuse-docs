@@ -1,0 +1,12 @@
+{
+  "title": "평가",
+  "pages": [
+    "overview",
+    "core-concepts",
+    "scores",
+    "evaluation-methods",
+    "experiments",
+    "external:[가이드](/guides#evaluation-tutorials)",
+    "troubleshooting-and-faq"
+  ]
+}

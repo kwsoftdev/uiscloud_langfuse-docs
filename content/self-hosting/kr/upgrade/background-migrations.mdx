@@ -1,0 +1,73 @@
+---
+title: 백그라운드 마이그레이션 (셀프 호스팅)
+description: Langfuse는 애플리케이션을 업그레이드할 때 스토리지 구성 요소 내에서 장시간 실행되는 변경 작업을 수행하기 위해 백그라운드 마이그레이션을 사용합니다.
+label: "Version: v3"
+sidebarTitle: "백그라운드 마이그레이션"
+sourceRevision: 9c0d419484845ffbd56805fd068677856e5d764c
+translationStatus: machine
+---
+
+# 백그라운드 마이그레이션
+
+Langfuse는 애플리케이션을 [업그레이드](/self-hosting/upgrade)할 때 스토리지 구성 요소 내에서 장시간 실행되는 변경 작업을 수행하기 위해 백그라운드 마이그레이션을 사용합니다.
+여기에는 새 컬럼의 추가 및 백필, 스토리지 간 데이터 마이그레이션 등이 포함될 수 있습니다.
+백그라운드 마이그레이션은 워커 컨테이너 시작 시 실행되며, 완료되거나 실패할 때까지 백그라운드에서 계속 실행됩니다.
+
+백그라운드 마이그레이션과 별도로, 빠른 마이그레이션(fast migration)은 웹 컨테이너 시작 시 데이터베이스에 직접 적용됩니다.
+
+## 모니터링
+
+Langfuse UI 내에서 백그라운드 마이그레이션의 진행 상황을 모니터링할 수 있습니다.
+Langfuse 버전 태그를 클릭하고 "Background Migrations"를 선택합니다.
+지금까지 실행된 모든 마이그레이션과 그 상태를 확인할 수 있습니다.
+워커 컨테이너 로그를 통해서도 백그라운드 마이그레이션의 진행 상황을 모니터링할 수 있습니다.
+
+마이그레이션이 실행 중이거나 실패한 경우, 사용자가 백그라운드 마이그레이션 개요 화면으로 이동할 수 있도록 UI 내에 상태 표시기를 보여줍니다.
+
+## 배포 중단
+
+현재 Langfuse는 마이너 릴리스 간에 배포 중단(deployment stop)을 요구하지 않습니다.
+다만, 다음 업데이트를 시도하기 전에 모든 마이그레이션이 성공적으로 완료되었는지 확인할 수 있도록 각 업데이트 이후 백그라운드 마이그레이션의 진행 상황을 모니터링할 것을 권장합니다.
+배포 중단이 필요해지는 경우에는 변경 로그(changelog) 내에서 안내해 드릴 예정입니다.
+
+## 설정
+
+백그라운드 마이그레이션은 기본적으로 활성화되어 있으며, `LANGFUSE_ENABLE_BACKGROUND_MIGRATIONS=false`로 설정하여 비활성화할 수 있습니다. 이 경우 UI와 API가 데이터의 현재 상태를 올바르게 반영하지 않는 불일치 상태로 애플리케이션이 남을 수 있으므로 권장하지 않습니다.
+
+## 문제 해결
+
+### Failed to convert rust String into napi string
+
+traces, observations 또는 scores 백그라운드 마이그레이션에서 위 메시지가 표시되는 경우, 일반적으로 행(row) 내에 큰 블롭(blob) 데이터가 있기 때문입니다.
+이 오류는 postgres 데이터베이스 클라이언트가 Node.js에서 파싱하기 전에 모든 데이터를 하나의 문자열로 연결(concatenate)하려고 시도하기 때문에 발생합니다.
+이 문자열이 Node.js의 최대 문자열 크기를 초과하면 오류가 발생합니다.
+
+한 번에 로드하는 행 수를 줄여서 이 문제를 우회할 수 있습니다.
+이를 위해 `background_migrations` 테이블을 편집하여 마이그레이션의 batchSize를 조정합니다.
+조정하려는 마이그레이션의 `args` 컬럼에 `{ "batchSize": 2500 }`을 추가합니다.
+이후 UI를 통해 마이그레이션을 재시작합니다.
+
+### 단일 날짜에서 멈춘 마이그레이션 (Migrations Stuck on Single Date)
+
+다음과 같이 동일한 날짜를 참조하는 로그 라인이 반복적으로 나타나는 경우:
+
+```
+langfuse-worker-1    | 2025-06-03T08:38:21.918Z info      [Background Migration] Acquired lock for background migration 20241024_1730_migrate_traces_from_pg_to_ch
+langfuse-worker-1    | 2025-06-03T08:38:21.949Z info      Migrating traces from postgres to clickhouse with {}
+langfuse-worker-1    | 2025-06-03T08:38:22.429Z info      Got 1000 records from Postgres in 475ms
+langfuse-worker-1    | 2025-06-03T08:38:22.914Z info      Inserted 1000 traces into Clickhouse in 485ms
+langfuse-worker-1    | 2025-06-03T08:38:22.919Z info      Processed batch in 965ms. Oldest record in batch: 2025-06-03T08:34:15.231Z
+langfuse-worker-1    | 2025-06-03T08:38:23.391Z info      Got 1000 records from Postgres in 472ms
+langfuse-worker-1    | 2025-06-03T08:38:23.811Z info      Inserted 1000 traces into Clickhouse in 420ms
+langfuse-worker-1    | 2025-06-03T08:38:23.815Z info      Processed batch in 896ms. Oldest record in batch: 2025-06-03T08:34:15.231Z
+langfuse-worker-1    | 2025-06-03T08:38:24.256Z info      Got 1000 records from Postgres in 441ms
+langfuse-worker-1    | 2025-06-03T08:38:24.638Z info      Inserted 1000 traces into Clickhouse in 382ms
+```
+
+다음 두 가지 이유 중 하나일 수 있습니다:
+
+- 정확히 동일한 시각에 생성된 이벤트가 많은 경우.
+- 인스턴스가 2024-05-03 이전에 생성되었고 그 이후로 업데이트가 거의 이루어지지 않은 경우.
+
+두 경우 모두 위에서 설명한 대로 `batchSize`를 조정해 볼 수 있습니다.
+문제가 해결되지 않으면, 마이그레이션 스크립트(langfuse 저장소의 `/worker/src/backgroundMigrations/` 참고)를 커스터마이즈하여 커서로 `created_at` 대신 `timestamp` 또는 `start_time`을 사용하도록 변경할 수 있습니다.

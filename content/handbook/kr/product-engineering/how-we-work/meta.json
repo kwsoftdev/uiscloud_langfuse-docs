@@ -1,0 +1,11 @@
+{
+  "title": "업무 방식",
+  "pages": [
+    "roadmapping",
+    "how-we-ship",
+    "onboarding",
+    "code-review",
+    "product-ops",
+    "on-call"
+  ]
+}

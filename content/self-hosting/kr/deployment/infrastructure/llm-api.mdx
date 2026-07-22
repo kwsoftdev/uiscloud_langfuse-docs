@@ -1,0 +1,30 @@
+---
+title: LLM API / 게이트웨이 (셀프 호스팅)
+sidebarTitle: LLM API / 게이트웨이
+description: 원한다면 부가 기능을 위해 Langfuse가 외부 LLM API 또는 게이트웨이를 사용하도록 구성할 수 있습니다. Langfuse 트레이싱은 클라이언트 측에서 트레이스를 캡처하므로 LLM API에 대한 접근이 필요하지 않습니다.
+label: "Version: v3"
+sourceRevision: 9c0d419484845ffbd56805fd068677856e5d764c
+translationStatus: machine
+---
+
+# LLM API / 게이트웨이
+
+원한다면 부가 기능을 위해 Langfuse가 외부 LLM API 또는 게이트웨이를 사용하도록 구성할 수 있습니다. Langfuse 트레이싱은 클라이언트 측에서 트레이스를 캡처하므로 LLM API에 대한 접근이 필요하지 않습니다.
+
+## 지원되는 LLM API
+
+Langfuse는 다음을 지원합니다:
+
+- OpenAI
+- Azure OpenAI
+- Anthropic
+- Google Vertex
+- Amazon Bedrock
+
+OpenAI API를 통해 다른 많은 LLM 서비스와 프록시도 사용할 수 있습니다.
+
+## LLM API로 구동되는 기능
+
+- [플레이그라운드](/docs/playground)
+- [LLM-as-a-Judge 평가](/docs/scores/model-based-evals)
+- [프롬프트 실험](/docs/datasets/prompt-experiments)

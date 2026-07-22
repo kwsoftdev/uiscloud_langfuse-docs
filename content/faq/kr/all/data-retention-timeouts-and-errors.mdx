@@ -1,0 +1,15 @@
+---
+title: 데이터 보존 작업에서 타임아웃이 발생하는 이유는 무엇인가요?
+tags: [self-hosting]
+sourceRevision: ecc69b1d83e5a0e352ad0c067e6483ce87e579d5
+translationStatus: machine
+---
+
+# 데이터 보존 작업에서 타임아웃이 발생하는 이유는 무엇인가요?
+
+데이터 보존 작업은 해당 이벤트가 만료될 때 S3/블롭 스토리지에서 이벤트 데이터를 제거하기 위해 `blob_storage_file_log` 테이블을 사용합니다.
+이는 잠재적으로 오래 실행될 수 있는 쿼리이며 타임아웃이 발생할 수 있습니다.
+
+블롭 스토리지 버킷에 수명 주기 정책(lifecycle policy)을 사용하고 있고 `blob_storage_file_log` 테이블에 [TTL이 설정](https://clickhouse.com/docs/guides/developer/ttl)되어 있다면
+이 처리 단계를 건너뛸 수 있습니다.
+`LANGFUSE_ENABLE_BLOB_STORAGE_FILE_LOG=false`를 설정하여 이 기능을 비활성화할 수 있습니다.

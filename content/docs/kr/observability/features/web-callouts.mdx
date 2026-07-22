@@ -1,0 +1,81 @@
+---
+title: 웹 콜아웃
+description: Langfuse에서 트레이스, 관찰(observation), 세션으로부터 HTTP 콜아웃을 트리거합니다.
+sidebarTitle: 웹 콜아웃
+sourceRevision: d560d6e26212fa60ca3bbbe76a80fb402dab595a
+translationStatus: machine
+---
+
+# 웹 콜아웃
+
+웹 콜아웃(Web Callouts)을 사용하면 프로젝트 멤버가 Langfuse UI의 트레이스, 관찰(observation), 세션에서 구성된 백엔드 HTTP 요청을 트리거할 수 있습니다. 이를 통해 디버깅 워크플로우를 내부 도구, 지원 시스템, 인시던트 워크플로우, 또는 커스텀 조사 서비스와 연결할 수 있습니다.
+
+[프롬프트 웹훅](/docs/prompt-management/features/webhooks-slack-integrations)과 달리, 웹 콜아웃은 UI에서 수동으로 트리거됩니다. 사용자가 액션을 클릭하면 Langfuse가 백엔드에서 동기적으로 요청을 전송합니다.
+
+<Callout type="info">
+  웹 콜아웃은 식별자만 전송합니다: 트레이스/관찰/세션 ID와 프로젝트 ID. 워크플로우에 추가 데이터가 필요한 경우 자체 백엔드에서 Langfuse API를 통해 가져오세요.
+</Callout>
+
+## 웹 콜아웃 구성하기
+
+**Project Settings** > **Integrations** > **Web Callouts**로 이동하여 콜아웃 엔드포인트를 생성합니다. 새 콜아웃을 구성하려면 Admin/Owner(`integrations:CRUD`) 권한이 필요합니다.
+콜아웃은 프로젝트별로 구성되며, 프로젝트의 **모든** 사용자가 호출할 수 있습니다.
+
+다음을 구성합니다:
+
+- **Name:** 액션 메뉴에 표시되는 이름입니다. 예: `Add to Support Tool`.
+- **URL:** `POST` 요청을 받는 HTTP 또는 HTTPS 엔드포인트입니다. 커스텀 포트도 지원됩니다.
+- **Success toast message:** 엔드포인트가 성공 응답을 반환한 후 표시되는 메시지입니다.
+- **Enabled:** 비활성화된 콜아웃은 액션 메뉴에서 숨겨집니다.
+- **Request headers:** 선택적인 정적 헤더입니다. 예: `Authorization: Bearer <token>`.
+
+## 웹 콜아웃 트리거하기
+
+설정 후, 프로젝트 읽기 권한이 있는 사용자는 다음 위치에서 콜아웃을 트리거할 수 있습니다:
+
+- 트레이스 상세 화면의 액션 메뉴.
+- 관찰 상세 화면의 액션 메뉴.
+- 세션 상세 화면 헤더.
+
+사용자가 액션을 클릭하면 Langfuse는 즉시 요청을 전송합니다. UI는 엔드포인트가 2xx 응답을 반환한 경우에만 성공 토스트를 표시합니다.
+요청은 5초 후 타임아웃됩니다. 호출은 재시도되지 않으며 속도가 제한됩니다.
+
+## 요청 페이로드
+
+Langfuse는 다음 구조의 JSON `POST` 요청을 전송합니다:
+
+```json filename="web-callout-payload.json"
+{
+  "version": 1,
+  "items": [
+    {
+      "projectId": "project-id",
+      "traceId": "trace-id",
+      "observationId": null,
+      "sessionId": "session-id"
+    }
+  ]
+}
+```
+
+참고: `projectId`를 제외한 모든 ID 필드는 null이 될 수 있습니다.
+Langfuse는 요청을 전송하기 전에 트레이스, 관찰, 세션이 해당 프로젝트에 속하는지 검증합니다.
+
+## 엔드포인트 요구 사항
+
+엔드포인트는 다음을 충족해야 합니다:
+
+- `Content-Type: application/json`으로 `POST` 요청을 수신해야 합니다.
+- 5초 이내에 HTTP 2xx 상태를 반환해야 합니다.
+
+Langfuse는 2xx가 아닌 응답, 네트워크 오류, 잘못된 URL, 타임아웃을 실패한 콜아웃으로 처리하고 오류 토스트를 표시합니다.
+
+웹 콜아웃은 재시도되지 않으며, Langfuse는 전송 로그를 보관하지 않습니다.
+
+## 인증 및 헤더
+
+인증을 위해 정적 요청 헤더를 구성할 수 있습니다. 예: `Authorization` 또는 `X-API-Key`.
+헤더 값은 저장 시 암호화되며 Langfuse 백엔드에서 전송됩니다. 기존 헤더를 이름 변경 없이 편집할 때 값을 비워두면 저장된 암호화 값이 유지됩니다.
+
+Langfuse는 `Content-Type: application/json`과 `User-Agent: Langfuse/1.0`을 자동으로 설정합니다.
+다음 헤더 이름은 구성할 수 없습니다: `content-length`, `content-type`, `cookie`, `host`.

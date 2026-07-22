@@ -1,0 +1,109 @@
+---
+title: 애플리케이션 컨테이너 (셀프 호스팅)
+sidebarTitle: 애플리케이션 컨테이너
+description: Langfuse는 Docker를 사용하여 애플리케이션을 컨테이너화합니다. 애플리케이션은 두 개의 컨테이너(Langfuse Web과 Langfuse Worker)로 분리되어 있습니다.
+label: "Version: v3"
+sourceRevision: 9c0d419484845ffbd56805fd068677856e5d764c
+translationStatus: machine
+---
+
+# 애플리케이션 컨테이너
+
+<Callout type="info">
+
+이 문서는 애플리케이션 컨테이너 구성에 대해 자세히 다룹니다. 시작하려면 [배포 가이드](/self-hosting#deployment-options) 중 하나를 따라주세요.
+
+</Callout>
+
+Langfuse는 Docker를 사용하여 애플리케이션을 컨테이너화합니다. 애플리케이션은 두 개의 컨테이너로 분리되어 있습니다:
+
+- **Langfuse Web**: Langfuse 콘솔과 API를 제공하는 웹 서버입니다.
+- **Langfuse Worker**: 이메일 발송이나 이벤트 처리와 같은 백그라운드 작업을 처리하는 워커입니다.
+
+## 권장 사이징
+
+프로덕션 환경에서는 모든 컨테이너에 최소 2 CPU와 4GB RAM을 사용하는 것을 권장합니다.
+고가용성을 위해 Langfuse Web 컨테이너는 최소 두 개의 인스턴스를 두어야 합니다.
+자동 확장을 사용하는 경우, 각 컨테이너의 CPU 사용률이 50%를 초과할 때 인스턴스를 추가하는 것을 권장합니다.
+
+## Node.js 메모리 설정
+
+Langfuse 컨테이너의 Node.js 애플리케이션이 효율적으로 동작하려면 적절한 메모리 제한을 설정해야 합니다. 기본적으로 Node.js는 최대 힙 크기를 1.7GiB로 사용하는데, 이는 실제 컨테이너에 할당된 메모리보다 적을 수 있습니다. 예를 들어 컨테이너에 4GiB의 메모리가 할당되어 있지만 Node.js가 1.7GiB로 제한되어 있다면 메모리 문제가 발생할 수 있습니다.
+
+메모리 제한을 적절히 설정하려면 Langfuse Web과 Worker 컨테이너 양쪽에서 `NODE_OPTIONS` 환경 변수를 통해 `max-old-space-size`를 설정하세요:
+
+```bash filename=".env"
+NODE_OPTIONS=--max-old-space-size=${var.memory}
+```
+
+## 소스에서 컨테이너 빌드하기 [#build-from-source]
+
+미리 빌드된 Docker 이미지를 사용하는 것을 권장하지만, 소스에서 직접 이미지를 빌드할 수도 있습니다.
+
+```bash
+# 저장소 클론
+git clone https://github.com/langfuse/langfuse.git
+cd langfuse
+
+# 프로덕션 브랜치로 체크아웃
+# main 브랜치에는 아직 릴리스되지 않아 불안정할 수 있는 변경 사항이 포함되어 있습니다
+git checkout production
+
+# web 이미지 빌드
+docker build -t langfuse/langfuse -f ./web/Dockerfile .
+
+# worker 이미지 빌드
+docker build -t langfuse/langfuse-worker -f ./worker/Dockerfile .
+```
+
+## Langfuse Web 실행하기
+
+환경 변수에 대한 자세한 내용은 [구성](/self-hosting/configuration) 문서를 참고하세요.
+
+```bash
+docker run --name langfuse-web \
+  -e DATABASE_URL=postgresql://hello \
+  -e NEXTAUTH_URL=http://localhost:3000 \
+  -e NEXTAUTH_SECRET=mysecret \
+  -e SALT=mysalt \
+  -e ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000 \ # generate via: openssl rand -hex 32
+  -e CLICKHOUSE_URL=http://clickhouse:8123 \
+  -e CLICKHOUSE_USER=clickhouse \
+  -e CLICKHOUSE_PASSWORD=clickhouse \
+  -e CLICKHOUSE_MIGRATION_URL=clickhouse://clickhouse:9000 \
+  -e REDIS_HOST=localhost \
+  -e REDIS_PORT=6379 \
+  -e REDIS_AUTH=redis \
+  -e LANGFUSE_S3_EVENT_UPLOAD_BUCKET=my-bucket \
+  -e LANGFUSE_S3_EVENT_UPLOAD_REGION=us-east-1 \
+  -e LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE \
+  -e LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY=bPxRfiCYEXAMPLEKEY \
+  -p 3000:3000 \
+  -a STDOUT \
+langfuse/langfuse:3
+```
+
+## Langfuse Worker 실행하기
+
+환경 변수에 대한 자세한 내용은 [구성](/self-hosting/configuration) 문서를 참고하세요.
+
+```bash
+docker run --name langfuse-worker \
+  -e DATABASE_URL=postgresql://hello \
+  -e NEXTAUTH_URL=http://localhost:3000 \
+  -e SALT=mysalt \
+  -e ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000 \ # generate via: openssl rand -hex 32
+  -e CLICKHOUSE_URL=http://clickhouse:8123 \
+  -e CLICKHOUSE_USER=clickhouse \
+  -e CLICKHOUSE_PASSWORD=clickhouse \
+  -e REDIS_HOST=localhost \
+  -e REDIS_PORT=6379 \
+  -e REDIS_AUTH=redis \
+  -e LANGFUSE_S3_EVENT_UPLOAD_BUCKET=my-bucket \
+  -e LANGFUSE_S3_EVENT_UPLOAD_REGION=us-east-1 \
+  -e LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE \
+  -e LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY=bPxRfiCYEXAMPLEKEY \
+  -p 3030:3030 \
+  -a STDOUT \
+langfuse/langfuse-worker:3
+```

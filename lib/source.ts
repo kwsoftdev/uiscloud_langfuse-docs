@@ -2,21 +2,29 @@ import "server-only";
 import { loader } from "fumadocs-core/source";
 import {
   docs,
+  docsKr,
   selfHosting,
+  selfHostingKr,
   blog,
   changelog,
   guides,
+  guidesKr,
   faq,
+  faqKr,
   integrations,
   security,
+  securityKr,
   library,
   customers,
   handbook,
+  handbookKr,
   marketing,
   academy,
   academyJa,
+  academyKr,
   workshop,
   resources,
+  resourcesKr,
 } from "fumadocs-mdx:collections/server";
 import { CONTENT_DIR_TO_URL_PREFIX } from "./content-dir-map.js";
 
@@ -87,10 +95,25 @@ export const source = loader({
   },
 });
 
+export const docsKrSource = loader({
+  baseUrl: "/docs/kr",
+  source: docsKr.toFumadocsSource(),
+  pageTree: { idPrefix: "docs-kr", transformers: [shortTitleTransformer] },
+});
+
 export const selfHostingSource = loader({
   baseUrl: baseUrl("self-hosting"),
   source: selfHosting.toFumadocsSource(),
   pageTree: { idPrefix: "self-hosting", transformers: [shortTitleTransformer] },
+});
+
+export const selfHostingKrSource = loader({
+  baseUrl: "/self-hosting/kr",
+  source: selfHostingKr.toFumadocsSource(),
+  pageTree: {
+    idPrefix: "self-hosting-kr",
+    transformers: [shortTitleTransformer],
+  },
 });
 
 export const blogSource = loader({
@@ -109,10 +132,25 @@ export const guidesSource = loader({
   pageTree: { idPrefix: "guides", transformers: [shortTitleTransformer] },
 });
 
+// Korean translation pilot — sub-collection of `guides`, same rationale as
+// `academyJaSource` above: baseUrl is a literal nested path so URLs sit under
+// /guides/kr/ instead of requiring a /<locale> prefix.
+export const guidesKrSource = loader({
+  baseUrl: "/guides/kr",
+  source: guidesKr.toFumadocsSource(),
+  pageTree: { idPrefix: "guides-kr", transformers: [shortTitleTransformer] },
+});
+
 export const faqSource = loader({
   baseUrl: baseUrl("faq"),
   source: faq.toFumadocsSource(),
   pageTree: { transformers: [shortTitleTransformer] },
+});
+
+export const faqKrSource = loader({
+  baseUrl: "/faq/kr",
+  source: faqKr.toFumadocsSource(),
+  pageTree: { idPrefix: "faq-kr", transformers: [shortTitleTransformer] },
 });
 
 export const integrationsSource = loader({
@@ -125,6 +163,12 @@ export const securitySource = loader({
   baseUrl: baseUrl("security"),
   source: security.toFumadocsSource(),
   pageTree: { transformers: [shortTitleTransformer] },
+});
+
+export const securityKrSource = loader({
+  baseUrl: "/security/kr",
+  source: securityKr.toFumadocsSource(),
+  pageTree: { idPrefix: "security-kr", transformers: [shortTitleTransformer] },
 });
 
 export const librarySource = loader({
@@ -142,6 +186,12 @@ export const handbookSource = loader({
   baseUrl: baseUrl("handbook"),
   source: handbook.toFumadocsSource(),
   pageTree: { transformers: [shortTitleTransformer] },
+});
+
+export const handbookKrSource = loader({
+  baseUrl: "/handbook/kr",
+  source: handbookKr.toFumadocsSource(),
+  pageTree: { idPrefix: "handbook-kr", transformers: [shortTitleTransformer] },
 });
 
 export const academySource = loader({
@@ -162,6 +212,12 @@ export const academyJaSource = loader({
   pageTree: { idPrefix: "academy-ja", transformers: [shortTitleTransformer] },
 });
 
+export const academyKrSource = loader({
+  baseUrl: "/academy/kr",
+  source: academyKr.toFumadocsSource(),
+  pageTree: { idPrefix: "academy-kr", transformers: [shortTitleTransformer] },
+});
+
 export const workshopSource = loader({
   baseUrl: baseUrl("workshop"),
   source: workshop.toFumadocsSource(),
@@ -172,6 +228,15 @@ export const resourcesSource = loader({
   baseUrl: baseUrl("resources"),
   source: resources.toFumadocsSource(),
   pageTree: { idPrefix: "resources", transformers: [shortTitleTransformer] },
+});
+
+export const resourcesKrSource = loader({
+  baseUrl: "/resources/kr",
+  source: resourcesKr.toFumadocsSource(),
+  pageTree: {
+    idPrefix: "resources-kr",
+    transformers: [shortTitleTransformer],
+  },
 });
 
 export const marketingSource = loader({

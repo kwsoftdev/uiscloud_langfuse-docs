@@ -1,0 +1,102 @@
+---
+title: 고객이 Langfuse를 선택하는 이유는 무엇인가요?
+description: Langfuse를 만든 이유와 다른 AI 엔지니어링 플랫폼과의 차별점을 알아보세요.
+sourceRevision: f4e5e1edb9fa4c33680b0a37ca039a86a341cde0
+translationStatus: machine
+---
+
+# 고객이 Langfuse를 선택하는 이유는 무엇인가요?
+
+고객이 Langfuse를 선택하는 이유는 다음과 같습니다...
+
+- 가장 많이 사용되는 오픈소스 AI 엔지니어링 플랫폼 [(블로그 게시물)](/blog/2024-11-most-used-oss-llmops)
+- [100개 이상의 통합](/integrations)을 지원하는 모델 및 프레임워크 독립적인 플랫폼
+- 프로덕션 및 스케일을 위해 구축됨
+- 복잡한 에이전트와 다단계 워크플로우를 위해 설계됨
+- AI 엔지니어링을 위한 완전한 툴박스 제공
+- 점진적으로 도입 가능하며, 하나의 기능부터 시작해 시간이 지남에 따라 전체 플랫폼으로 확장 가능
+- API 우선 설계로 모든 기능을 API를 통해 커스텀 통합에 활용 가능
+- 상호운용성을 위해 [OpenTelemetry](/integrations/native/opentelemetry) 기반으로 구축됨
+- [셀프 호스팅](/self-hosting)이 용이함
+
+import { CredibilitySentence } from "@/components/CredibilitySentence";
+import { EnterpriseLogos } from "@/components/EnterpriseLogos";
+
+<CredibilitySentence style="list" />
+
+Langfuse를 신뢰하는 기업들:
+
+<EnterpriseLogos />
+
+## 오픈소스
+
+- Langfuse는 [오픈소스](/handbook/chapters/open-source)입니다.
+- Langfuse Cloud를 구동하는 확장 가능한 관측성 백엔드를 포함하여, 확장성 제한 없이 [셀프 호스팅](/self-hosting)할 수 있습니다.
+- 트레이싱, 평가, 프롬프트 관리, 실험, 주석, 플레이그라운드 등 모든 제품 기능은 사용량 제한 없이 MIT 라이선스로 제공됩니다.
+- [로드맵에 포함된 항목](/docs/roadmap)과 [운영 방식](/handbook)을 투명하게 공개합니다.
+- 훌륭한 LLM 애플리케이션을 구축하기 위한 모범 사례가 빠르게 발전하고 있기 때문에, [GitHub 커뮤니티](https://github.com/orgs/langfuse/discussions)와 함께 반복적으로 개선해 나갑니다. 여러분의 피드백과 아이디어를 공유해 주세요.
+- 셀프 호스팅은 데이터를 여러분의 인프라 내에 유지하며, Cloud는 운영 부담을 덜어줍니다. OSS, Enterprise 셀프 호스팅, Langfuse Cloud 간에는 언제든지 전환할 수 있으며, 복잡한 기능 플래그나 벤더 종속도 없습니다.
+
+## OpenTelemetry 기반의 광범위한 통합
+
+- [Python](/docs/observability/sdk/python/overview) 및 [JavaScript/TypeScript](/docs/observability/sdk/typescript/overview)용 네이티브 SDK
+- 인기 있는 프레임워크, 모델 제공업체, 도구와의 [100개 이상의 통합](/integrations)
+- 프레임워크 지원: [LangChain](/integrations/frameworks/langchain), [LlamaIndex](/integrations/frameworks/llamaindex), [OpenAI Agents](/integrations/frameworks/openai-agents), [Vercel AI SDK](/integrations/frameworks/vercel-ai-sdk), [CrewAI](/integrations/frameworks/crewai) 등 다수
+- 모델 제공업체: [OpenAI](/integrations/model-providers/openai-py), [Anthropic](/integrations/model-providers/anthropic), [Google Gemini](/integrations/model-providers/google-gemini), [Amazon Bedrock](/integrations/model-providers/amazon-bedrock) 등
+- LLM 게이트웨이: [LiteLLM](/integrations/gateways/litellm), [OpenRouter](/integrations/gateways/openrouter), [Portkey](/integrations/gateways/portkey)
+- 최대한의 상호운용성을 위한 네이티브 [OpenTelemetry](/integrations/native/opentelemetry) 지원
+
+## 개발자 우선
+
+- Langfuse는 개발자를 위해 만들어졌습니다.
+- 뛰어난 개발자 경험을 갖춘 기술 제품을 만들어가고 있습니다.
+- Langfuse는 강력하면서도 간단하여, 그 위에 커스텀 로직을 구축할 수 있습니다.
+- 모든 데이터는 [공개 API](/docs/api-and-data-platform/features/public-api)와 [SDK](/docs/api-and-data-platform/features/query-via-sdk)를 통해 접근할 수 있습니다.
+- AI 네이티브 워크플로우 및 통합을 위한 [MCP 서버](/docs/api-and-data-platform/features/mcp-server).
+
+## 신뢰할 수 있는 파트너
+
+- Langfuse API 및 통합에 대한 모든 변경 사항은 [시맨틱 버저닝](https://semver.org)을 따릅니다. 하위 호환성을 보장하기 위해 공개 인터페이스를 테스트하며, CI에서 가장 일반적인 사용 사례에 대한 엔드투엔드 통합 테스트를 실행합니다.
+- Lightspeed Ventures, General Catalyst, Y Combinator 및 엔젤 투자자들로부터 [400만 달러 규모의 시드 라운드](/blog/announcing-our-seed-round)를 유치했습니다.
+- [Langfuse는 Thoughtworks Tech Radar에 두 차례 추천 플랫폼으로 선정](https://www.thoughtworks.com/en-us/radar/platforms/langfuse)되었습니다.
+- 강력한 채택률과 커뮤니티 성장세를 보이고 있습니다 ([지표 보기](#public-metrics)).
+- 팀에 대해 [더 알아보기](/about).
+
+## 복잡한 사용 사례를 위한 설계
+
+- Langfuse는 특히 에이전트와 다단계 워크플로우를 위해 복잡하고 중첩된 LLM 호출을 염두에 두고 설계했습니다.
+- [에이전트 그래프](/docs/observability/features/agent-graphs)는 복잡한 에이전트 워크플로우를 시각적으로 표현하여 다단계 추론 과정을 이해하고 디버깅하는 데 도움을 줍니다.
+- Langfuse를 사용하면 [트레이스](/docs/observability/overview)를 통해 애플리케이션을 계층적으로 표현할 수 있습니다. 트레이스가 LLM 엔지니어링의 핵심 추상화인 이유가 궁금하신가요? 이 [웨비나](/guides/videos/webinar-observability-llm-systems)에서 자세히 알아보세요.
+- 텍스트, 이미지, 오디오 등 다양한 모달리티를 트레이싱하기 위한 [멀티모달 지원](/docs/observability/features/multi-modality).
+- Model Context Protocol 서버 상호작용을 위한 [MCP 트레이싱](/docs/observability/features/mcp-tracing).
+- [메타데이터](/docs/observability/features/metadata), [태그](/docs/observability/features/tags), [세션](/docs/observability/features/sessions)을 통해 Input/Output을 넘어 애플리케이션의 모든 컨텍스트를 포함합니다.
+
+## 포괄적인 플랫폼
+
+견고한 LLM 애플리케이션을 구축하는 데 필요한 핵심 개발 플랫폼을 만들어가고 있습니다. Langfuse는 네 가지 통합된 축을 제공합니다:
+
+- **[관측성](/docs/observability/overview)**: [에이전트 그래프](/docs/observability/features/agent-graphs), [세션](/docs/observability/features/sessions), [토큰 및 비용 추적](/docs/observability/features/token-and-cost-tracking), [멀티모달리티](/docs/observability/features/multi-modality)를 포함한 LLM 애플리케이션을 위한 포괄적인 트레이싱.
+- **[프롬프트 관리](/docs/prompt-management/overview)**: 버전 관리, [LLM 플레이그라운드](/docs/prompt-management/features/playground), [A/B 테스트](/docs/prompt-management/features/a-b-testing), [GitHub 통합](/docs/prompt-management/features/github-integration), 협업 워크플로우.
+- **[평가](/docs/evaluation/overview)**: 체계적인 테스트를 위한 [LLM-as-a-Judge](/docs/evaluation/evaluation-methods/llm-as-a-judge), [사람이 직접 수행하는 주석](/docs/evaluation/evaluation-methods/annotation), [실험](/docs/evaluation/core-concepts#experiments), [데이터셋](/docs/evaluation/experiments/datasets).
+- **[메트릭 및 데이터 플랫폼](/docs/metrics/overview)**: [커스텀 대시보드](/docs/metrics/features/custom-dashboards), [메트릭 API](/docs/metrics/features/metrics-api), 다양한 [데이터 내보내기 옵션](/docs/api-and-data-platform/overview).
+
+## 스케일을 위한 설계
+
+import EnterpriseCloudScale from "@/components-mdx/enterprise-cloud-scale.mdx";
+
+<EnterpriseCloudScale />
+
+## 보안 및 컴플라이언스
+
+- 보안과 컴플라이언스를 중요하게 생각합니다.
+- **인증**: Langfuse Cloud는 [SOC 2 Type II](/security/soc2) 및 [ISO 27001](/security/iso27001) 인증을 획득했습니다.
+- **개인정보 보호**: [GDPR](/security/gdpr)을 준수하며 [DPA](/dpa)를 제공합니다. 자격을 갖춘 고객을 위해 전용 클라우드 리전과 서명된 Business Associate Agreement(BAA)를 통해 [HIPAA](/security/hipaa)를 준수합니다.
+- **데이터 리전**: Langfuse Cloud에서 미국, EU 또는 HIPAA 대응 데이터 리전 중 선택하거나, 원하는 곳에 [셀프 호스팅](/self-hosting)할 수 있습니다.
+- **데이터 제어**: [데이터 마스킹](/docs/observability/features/masking), [데이터 보존](/docs/administration/data-retention), [데이터 삭제](/docs/administration/data-deletion) 기능.
+- 자세한 내용은 [보안 및 개인정보 보호 센터](/security)를 참고하세요.
+
+## 공개 지표 [#public-metrics]
+
+import PublicMetricsDashboard from "@/components-mdx/public-metrics-dashboard.mdx";
+
+<PublicMetricsDashboard />

@@ -1,0 +1,155 @@
+---
+title: Langfuse는 왜 오픈 소스인가요?
+description: Langfuse는 가장 개방적이고 투명한 LLM 툴킷이 되기 위해 노력합니다. 오픈 소스가 우리에게 왜 중요한지 알아보세요.
+sourceRevision: 6c549009e68e4ffd3798b1593d50afeadc4dffc5
+translationStatus: machine
+---
+
+# Langfuse는 왜 오픈 소스인가요?
+
+우리는 다음과 같은 여러 이유로 오픈 소스와 커뮤니티 협업의 힘을 믿습니다:
+
+- **투명성과 신뢰**: 개발자는 자신의 데이터를 처리하는 모든 코드 라인을 검사하고, 보안 관행을 감사하며, 벤더 종속을 피할 수 있습니다.
+- **커뮤니티 협업**: 오픈 소스 커뮤니티는 빠르게 움직이며 LangChain, LiteLLM, OpenTelemetry, 그리고 여러분이 내일 만들 다음 라이브러리와의 [통합](/integrations)을 가속화합니다. [GitHub Discussions](/ideas)에서 커뮤니티에 참여하여 [로드맵](/docs/roadmap)을 함께 만들어보세요.
+- **더 빠른 혁신**: 공동 소유권 덕분에 버그가 더 빨리 수정되고 기능이 더 빨리 출시됩니다.
+- **주권**: 노트북에서 완전히 폐쇄된(air-gapped) 클러스터에 이르기까지, 인위적인 사용량 제한 없이 어디서나 Langfuse를 실행할 수 있습니다. 여러분의 인프라에서 직접 [셀프 호스팅](/self-hosting)하세요.
+- **확장성**: 모든 데이터는 완전히 테스트된 공개 [API](/docs/api)를 통해 접근할 수 있습니다. Langfuse를 감싸거나 확장하거나, 이를 중심으로 여러분만의 워크플로와 AI 플랫폼을 구축할 수 있습니다.
+
+## 라이선스 개요
+
+Langfuse는 오픈으로 개발됩니다. 우리는 오픈 소스와 지속 가능한 상업화가 공존할 수 있다고 믿으며, 이 전략을 통해 스타트업과 엔터프라이즈 전반에서 채택되는 지속적이고 커뮤니티 주도의 혁신 자금을 마련합니다.
+
+궁금한 점이 있으신가요? [GitHub Discussions](/gh-support)를 통해 메인테이너에게 문의해 주세요.
+
+<Callout>
+
+트레이싱, 평가, 프롬프트 관리, 실험, 주석, 플레이그라운드 등 모든 제품 기능은 사용량 제한 없이 MIT 라이선스로 제공됩니다. SCIM, 감사 로깅, 데이터 보존 정책과 같은 엔터프라이즈 모듈은 Langfuse를 셀프 호스팅할 때 상업용 라이선스가 필요합니다.
+
+</Callout>
+
+셀프 호스팅은 데이터를 여러분의 인프라 내에 유지하며, Cloud는 운영 부담을 덜어줍니다. 모든 배포가 동일한 코드베이스와 스키마로 실행되기 때문에 **OSS, 엔터프라이즈 셀프 호스트, Langfuse Cloud 사이를 언제든지 전환할 수 있습니다**. 라이선스 키를 추가하거나 제거하거나 Langfuse Cloud 엔드포인트로 전환하면 됩니다. 풀어야 할 기능 플래그도 없고, 벤더 종속도 없으며, 다운타임도 없습니다.
+
+|                                                  | OSS 셀프 호스트 | 엔터프라이즈 셀프 호스트 | Langfuse Cloud |
+| ------------------------------------------------ | --------------- | ------------------------ | -------------- |
+| 모든 제품 기능                                   | ✅              | ✅                       | ✅             |
+| [엔터프라이즈 애드온](/self-hosting/license-key) | -               | ✅                       | ✅             |
+| 완전 관리형 서비스                               | -               | -                        | ✅             |
+
+### Langfuse OSS
+
+Langfuse의 OSS는 모든 제품 기능을 포함하며 사용량 제한이 없습니다. 포크하고, 확장하고, 상업용 제품에 포함해서 배포해도 됩니다. 모든 핵심 API와 백엔드 로직은 기본적으로 수평 확장이 가능하므로, 동일한 배포가 코드 변경이나 기능 제한 없이 단일 노드 Docker Compose에서 다중 노드 Kubernetes 클러스터로 성장할 수 있습니다. 이는 Langfuse Cloud를 구동하는 것과 동일한 아키텍처입니다.
+
+### 상업용 확장 기능
+
+Enterprise Edition(EE) 모듈은 `/ee` 디렉터리에 명확히 표시되어 있습니다. 이 모듈들은 소스 코드 형태로 제공되지만 실행하려면 [라이선스 키](/self-hosting/license-key)가 필요합니다. 이는 선택 사항이며, 핵심 기능은 이 모듈들 없이도 100% 작동합니다.
+
+## 아키텍처 일관성과 확장성
+
+Langfuse 배포 스택은 OSS, 엔터프라이즈 셀프 호스트, Langfuse Cloud 모두에서 완전히 동일합니다. Langfuse를 로컬에서 실행하고 프로덕션 규모로 배포하는 방법은 [셀프 호스팅 가이드](/self-hosting)를 참고하세요.
+
+<Details>
+<Summary>아키텍처</Summary>
+
+import { Details, Summary } from "@/components/Details";
+import ArchitectureDiagram from "@/components-mdx/architecture-diagram-v3.mdx";
+
+<ArchitectureDiagram />
+
+import ArchitectureDescription from "@/components-mdx/architecture-description-v3.mdx";
+
+<ArchitectureDescription />
+
+</Details>
+
+## 자주 묻는 질문 [#enterprise-edition-ee-faq]
+
+<Details>
+<Summary>Langfuse는 정말 오픈 소스인가요?</Summary>
+
+네. `/ee` 폴더 외의 모든 것은 OSI 승인 라이선스인 MIT 라이선스로 제공됩니다. 여러분은 사용, 연구, 수정, 배포라는 네 가지 자유를 모두 누릴 수 있습니다.
+
+</Details>
+
+<Details>
+<Summary>실수로 EE 기능을 사용하게 되지는 않나요?</Summary>
+
+아니요. EE 패키지는 격리되어 있으며 라이선스 키 확인을 통해 게이팅됩니다. 라이선스 키 없이 핵심 이미지를 실행하면 EE 코드는 실행되지 않습니다.
+
+</Details>
+
+<Details>
+<Summary>어떤 셀프 호스트 라이선스 옵션이 있나요?</Summary>
+
+모든 제품 기능은 MIT 라이선스로 자유롭게 이용할 수 있습니다.
+
+상업용 엔터프라이즈 라이선스는 SCIM, 확장된 감사 로깅, 데이터 보존 정책과 같은 고급 보안 기능에만 필요합니다([가격 페이지](/pricing-self-host) 참고). 언제든지 배포에 [라이선스 키](/self-hosting/license-key)를 추가하여 이러한 기능을 활성화할 수 있습니다.
+
+</Details>
+
+<Details>
+<Summary>Langfuse는 오픈 소스 구성 요소만 사용하나요?</Summary>
+
+네. 전체 스택이 오픈 소스이며 셀프 호스팅이 가능합니다. 각 저장소의 구성 파일에서 전체 목록을 확인할 수 있습니다:
+
+- Langfuse 서버: 여러 [`package.json` 파일](https://github.com/search?q=repo%3Alangfuse%2Flangfuse%20package.json&type=code)로 구성된 모노레포
+- Langfuse Python SDK: 메인 [`pyproject.toml`](https://github.com/langfuse/langfuse-python/blob/main/pyproject.toml)
+- Langfuse JS SDK: 여러 [`package.json` 파일](https://github.com/search?q=repo%3Alangfuse%2Flangfuse-js%20package.json&type=code)로 구성된 모노레포
+
+핵심 Langfuse 서버가 가장 활발하게 개발되고 있는 만큼, 모든 변경 사항에 대해 [자동화된 라이선스 검사](https://github.com/langfuse/langfuse/actions/workflows/licensecheck.yml)를 실행하여 허용적이지 않은 라이선스를 가진 의존성이 추가되지 않도록 합니다. 문제를 발견하시면 알려주세요.
+
+</Details>
+
+<Details>
+<Summary>릴리스 주기는 어떻게 되며 최신 상태를 어떻게 유지하나요?</Summary>
+
+우리는 **일주일에 여러 번 GitHub Release**를 발행하며(`vX.Y.Z` 태그), [changelog](https://github.com/langfuse/langfuse/releases)에 상세한 노트를 게시합니다. Langfuse Cloud는 항상 최신 버전으로 실행되며, 셀프 호스트 사용자는 동일한 Docker 이미지 태그를 가져와 최신 상태를 유지하거나 원하는 일정에 맞춰 업그레이드할 수 있습니다([문서](/self-hosting/upgrade)).
+
+</Details>
+
+<Details>
+<Summary>OSS 빌드가 외부로 정보를 전송하나요? 텔레메트리를 비활성화할 수 있나요?</Summary>
+
+기본적으로 Langfuse OSS는 제품 개선을 위해 **집계된 사용량 텔레메트리**(개인 데이터 제외)를 전송합니다. **트레이스, 프롬프트, 고객 데이터는 여러분의 클러스터를 벗어나지 않습니다.** `TELEMETRY_ENABLED=false`로 이를 비활성화할 수 있습니다(자세한 내용은 [텔레메트리 문서](/self-hosting/security/telemetry) 참고).
+
+</Details>
+
+<Details>
+<Summary>Langfuse를 완전히 오프라인/폐쇄망 환경에서 실행할 수 있나요?</Summary>
+
+네. 초기 이미지 풀 이후, Langfuse는 작동을 위해 **어떠한 아웃바운드 네트워크 호출도 필요로 하지 않습니다.** 규제가 엄격한 환경의 팀들은 폐쇄된(air-gapped) Kubernetes 클러스터 내부에서 이를 실행합니다. 위와 같이 텔레메트리를 비활성화하고 Docker 레지스트리를 로컬에 미러링하기만 하면 됩니다.
+
+</Details>
+
+<Details>
+<Summary>어떻게 기여할 수 있나요?</Summary>
+
+GitHub를 통해 Langfuse에 기여하는 가장 좋은 방법은 다음과 같습니다:
+
+1. [Ideas](/ideas)에 아이디어를 제출하고 투표하세요.
+2. [Issues](/issues)를 생성하고 댓글을 남기세요.
+3. 풀 리퀘스트를 생성하세요. 시작하려면 [Contributing.md](https://github.com/langfuse/langfuse/blob/main/CONTRIBUTING.md)를 참고하세요.
+
+</Details>
+
+<Details>
+<Summary>코드를 직접 보고 싶어요!</Summary>
+
+모든 저장소는 [GitHub](https://github.com/langfuse)에 있습니다:
+
+- Langfuse 서버(UI 및 API): [`langfuse/langfuse`](https://github.com/langfuse/langfuse)
+- Langfuse Python SDK 및 통합: [`langfuse/langfuse-python`](https://github.com/langfuse/langfuse-python)
+- JS SDK 및 통합: [`langfuse/langfuse-js`](https://github.com/langfuse/langfuse-js)
+- 문서: [`langfuse/langfuse-docs`](https://github.com/langfuse/langfuse-docs)
+
+</Details>
+
+<Details>
+<Summary>Langfuse가 얼마나 널리 사용되는지 알 수 있는 공개 지표가 있나요?</Summary>
+
+네, [이 블로그 게시글](/blog/2024-11-most-used-oss-llmops)과 아래 대시보드에 몇 가지 통계를 정리해 두었습니다.
+
+import PublicMetricsDashboard from "@/components-mdx/public-metrics-dashboard.mdx";
+
+<PublicMetricsDashboard />
+
+</Details>

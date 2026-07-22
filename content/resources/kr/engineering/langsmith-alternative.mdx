@@ -1,0 +1,160 @@
+---
+title: LangSmith 대안? LLM 관측성을 위한 Langfuse vs. LangSmith
+description: Langfuse는 오픈소스 LangSmith 대안입니다. 2026년 7월 기준 오픈소스, 셀프 호스팅, 스토리지 아키텍처, 평가, 알림, 가격 비교입니다.
+tags: [comparison, integration]
+sourceRevision: 7f4e2116d8ce1685ab0bf899d0556a5554565d20
+translationStatus: machine
+---
+
+# Langfuse vs. LangSmith
+
+이 가이드는 엔지니어링 팀이 적합한 LLM 관측성 플랫폼을 선택할 수 있도록 **[Langfuse](/)** 와 **[LangSmith](https://www.langchain.com/langsmith)** 의 주요 차이점을 설명합니다. LangSmith 관련 사실은 모두 2026년 7월에 공개된 LangChain 소스를 기준으로 검증했습니다.
+
+**요약:**
+
+- 오픈소스(MIT), 데이터 주권(개방형 스토리지 스택 기반의 완전한 셀프 호스팅), OpenTelemetry 기반의 프레임워크 독립적 접근 방식, 투명한 단위 기반 가격 정책을 중시한다면 **Langfuse를 선택하세요**.
+- 관측성, 평가, 에이전트 배포 인프라를 하나의 폐쇄형 플랫폼에서 관리형 SaaS로 제공받고 싶은 올인원 LangChain/LangGraph 조직이라면 **LangSmith를 선택하세요**.
+
+## 오픈소스와 배포 방식
+
+Langfuse는 오픈소스(MIT)이며 셀프 호스팅이 1급 배포 방식으로 지원됩니다. LangSmith는 독점 폐쇄형 소스 플랫폼입니다. 클라이언트 SDK는 오픈소스이지만 백엔드, UI, 스토리지 계층은 그렇지 않으며, 셀프 호스팅은 Enterprise 전용 애드온입니다.
+
+| Feature              | Langfuse                                                                                                                                                                            | LangSmith                                                                                                              |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| **Model**            | **[Open Source](https://github.com/langfuse/langfuse)** (MIT License)                                                                                                               | **Proprietary SaaS**: platform closed source; [client SDKs](https://github.com/langchain-ai/langsmith-sdk) open source |
+| **GitHub Stars**     | [![Langfuse GitHub stars](https://img.shields.io/github/stars/langfuse/langfuse?style=for-the-badge&label=%20&labelColor=black&color=orange)](https://github.com/langfuse/langfuse) | N/A (platform not on GitHub)                                                                                           |
+| **Self-Hosting**     | **First-class**: full feature parity with Cloud, from Docker Compose to Kubernetes/Helm.                                                                                            | **Enterprise only**: add-on requiring a sales contract; not available on Developer or Plus plans.                      |
+| **Data Sovereignty** | **High**: can run fully air-gapped in your own VPC without vendor contact.                                                                                                          | **Medium**: hybrid/self-hosted deployment for Enterprise; SaaS defaults to LangChain's cloud.                          |
+
+## 확장성 및 스토리지 아키텍처 [#storage-architecture]
+
+두 플랫폼 모두 대용량 트레이스 데이터를 위해 구축되었으며, 에이전트 트레이스가 대용량 페이로드를 가진 수천 개의 스팬으로 늘어나면서 스토리지 계층을 재설계했습니다. 그러나 선택한 방향은 서로 달랐습니다. LangChain은 독자적인 데이터베이스를 구축했고, Langfuse는 오픈소스 데이터베이스 위에서 데이터 모델을 발전시켰습니다.
+
+2026년 5월, LangChain은 Rust와 Apache DataFusion, Vortex 파일 포맷 위에 구축된 목적 특화 트레이스 데이터베이스인 [SmithDB](https://www.langchain.com/blog/introducing-smithdb)를 발표했습니다. 트레이스 데이터는 오브젝트 스토리지에 저장되며 인제스트와 쿼리 서비스는 상태를 갖지 않습니다(stateless). LangChain에 따르면 SmithDB는 LangSmith의 US Cloud 인제스트와 트레이싱 쿼리를 처리하며 핵심 기능을 최대 15배 빠르게 만듭니다. 2026년 5월 발표 시점 기준, 셀프 호스팅용 SmithDB는 얼리 액세스 단계였기 때문에 셀프 호스팅 배포는 아직 클라우드와 동일한 스토리지 엔진을 사용하지 않습니다.
+
+Langfuse는 오픈소스 컬럼형 데이터베이스(Apache 2.0)인 [ClickHouse](https://clickhouse.com/)에 트레이스를 저장합니다. Langfuse는 [ClickHouse의 일부](/blog/joining-clickhouse)이며 해당 데이터베이스의 코어 팀과 직접 협업합니다. 새로운 엔진을 만드는 대신 Langfuse는 데이터 모델을 재설계했습니다. 2026년 3월부터 모든 LLM 호출, 도구 실행, 에이전트 단계는 단일하고 넓은(wide) 불변 observations 테이블에 한 번만 기록되며, 이를 통해 조인과 읽기 시점 중복 제거가 사라졌습니다. 엔지니어링 세부 내용과 벤치마크는 [Simplifying Langfuse for Scale](/blog/2026-03-10-simplify-langfuse-for-scale)에 공개되어 있습니다.
+
+- **1.** 대용량 데이터에 대한 초기 테이블 로드 시간이 초 단위에서 수십 밀리초 단위로 줄었고, 대규모 프로젝트의 대시보드 로딩 시간은 긴 기간을 조회할 때 최소 10배 개선되었습니다.
+- **2.** 이 재설계는 전년 대비 19배의 처리 데이터 증가와 페타바이트 규모의 과거 트레이스 마이그레이션을 감당했으며, 이는 ClickHouse 엔지니어들과 협력해 진행했고 ClickHouse 자체에 업스트림으로 기여한 수정 사항도 포함되어 있습니다.
+- **3.** observation의 입력과 출력 전반에 걸친 토큰 기반 전문 검색(full-text search)이 ClickHouse에서 직접 실행됩니다.
+- **4.** 컴퓨팅과 스토리지가 분리되어 있습니다. Langfuse의 웹 및 워커 컨테이너는 상태를 갖지 않으며, ClickHouse는 SmithDB가 언급하는 것과 동일한 아키텍처 특성인 [컴퓨팅과 스토리지를 분리하는 오브젝트 스토리지 기반 배포](https://clickhouse.com/docs/guides/separation-storage-compute)를 지원합니다.
+
+독점적인 목적 특화 스토어는 폐쇄형 SaaS에게는 합리적인 엔지니어링 선택입니다. 하지만 플랫폼을 직접 운영할 때는 차이가 드러납니다. Langfuse의 스토리지 계층은 널리 배포되어 있는 데이터베이스로, 직접 운영하고 점검하고 SQL로 조회할 수 있으며, 이에 대한 운영 전문 인력을 구하기도 쉽고, 동일한 엔진이 오늘날 Langfuse Cloud와 셀프 호스팅 배포 모두를 지원합니다.
+
+| Feature                      | Langfuse                                                                                                           | LangSmith                                                                   |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| **Storage engine**           | **ClickHouse**: open source (Apache 2.0), operable and queryable by you.                                           | **SmithDB**: proprietary (Rust, DataFusion, Vortex), operated by LangChain. |
+| **Cloud/self-hosted parity** | Same engine and data model in Cloud and self-hosted.                                                               | SmithDB on US Cloud; self-hosted early access as of May 2026.               |
+| **Full-text search**         | [Yes](/docs/observability/features/full-text-search), on ClickHouse.                                               | Yes, via SmithDB.                                                           |
+| **Ingestion**                | Async queue (Redis) with stateless workers; ~60% of Cloud observations arrived via OpenTelemetry as of March 2026. | Stateless ingestion services over object storage.                           |
+
+## 통합 및 프레임워크 지원 범위
+
+이제 두 플랫폼 모두 OpenTelemetry 트레이스를 수신하며 LangChain 이외의 애플리케이션도 계측할 수 있습니다. 차이는 정도의 문제입니다. Langfuse 자체 SDK는 OpenTelemetry 위에 구축된 반면, LangSmith의 가장 깊이 있고 설정이 필요 없는 통합은 여전히 LangChain과 LangGraph이며, 여기에 네이티브 SDK와 함께 OTel 인제스트가 더해지는 방식입니다.
+
+| Feature        | Langfuse                                                                                                                         | LangSmith                                                                                                                                                  |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **SDKs**       | [Python SDK v4 and JS/TS SDK v5](/docs/observability/sdk/overview), both built on OpenTelemetry; other languages via plain OTel. | Python and JS/TS SDKs; [OTel ingestion](https://docs.langchain.com/langsmith/trace-with-opentelemetry) supported (OTLP endpoint, OpenLLMetry conventions). |
+| **Frameworks** | Integrations with 100+ frameworks and model providers (OpenAI, Anthropic, Vercel AI SDK, LangChain, LlamaIndex, LiteLLM, etc.).  | Deepest support for LangChain/LangGraph (env-var setup); other frameworks via SDK wrappers and OTel.                                                       |
+| **Lock-in**    | Instrumentation is standard OTel; spans can be exported to any OTel-compatible backend.                                          | Native SDK is LangSmith-specific; OTel path reduces lock-in for ingestion.                                                                                 |
+
+## 평가 및 실험
+
+두 플랫폼 모두 오프라인 및 온라인 평가를 지원합니다. Langfuse는 플랫폼 내에서 LLM-as-a-judge와 결정론적(deterministic) 코드 평가기를 실행하고 CI/CD 파이프라인을 실험 결과로 게이팅하며, LangSmith는 자체 평가 기능을 데이터셋 도구와 결합하고, 2026년 5월부터는 자동 실패 클러스터링을 위한 LangSmith Engine을 제공합니다.
+
+| Feature              | Langfuse                                                                                                                                                                            | LangSmith                                                                                  |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| **LLM-as-a-judge**   | [Managed judges](/docs/evaluation/evaluation-methods/llm-as-a-judge) on observations, traces, and experiments; numeric, categorical, and boolean scores.                            | Managed and custom judges on runs and datasets.                                            |
+| **Code evaluators**  | [Deterministic Python/TypeScript evaluators](/docs/evaluation/evaluation-methods/code-evaluators) run in-platform, including self-hosted; structured access to recorded tool calls. | Inline Python custom code evaluators run in-platform on sampled runs (no internet access). |
+| **Experiments**      | Versioned dataset experiments with a [CI/CD GitHub Action](/docs/evaluation/experiments/experiments-ci-cd) that fails PRs on score regressions.                                     | Dataset experiments with comparison views; CI via SDK scripting.                           |
+| **Agent evaluation** | Tool-call fields exposed directly to evaluators (check names, arguments, order).                                                                                                    | Trajectory and tool-use evals; LangSmith Engine clusters production failures into issues.  |
+
+## 모니터링 및 알림 [#monitoring-alerting]
+
+2026년 7월 기준, 두 플랫폼 모두 프로덕션 메트릭에 대한 임계값 기반 알림을 제공합니다.
+
+Langfuse [Monitors](/docs/metrics/features/monitors)는 observation 및 score에 대한 메트릭(예: 트레이스당 평균 비용, p95 지연 시간, 평가 점수 등)을 관찰하고, 경고와 알림 임계값을 분리해서 지원하며, 데이터 없음(no-data) 처리 방식도 지원하고, 알림을 Slack, 웹훅, GitHub Actions 워크플로우로 라우팅합니다. Monitors는 Langfuse Cloud에서 사용할 수 있습니다.
+
+LangSmith [Alerts](https://docs.langchain.com/langsmith/alerts)는 5분 또는 15분 집계 구간 동안의 오류율, 실행 지연 시간, 피드백 점수, 비용을 기준으로 트리거되며 PagerDuty, Dynatrace, 또는 임의의 웹훅으로 라우팅됩니다. Alerts는 프로젝트 단위로 설정합니다.
+
+| Feature          | Langfuse Monitors                                              | LangSmith Alerts                                     |
+| ---------------- | -------------------------------------------------------------- | ---------------------------------------------------- |
+| **Metrics**      | Any observation or score metric with filters and aggregations. | Error rate, latency, feedback score, cost.           |
+| **Thresholds**   | Alert plus optional warning severity; no-data handling modes.  | Threshold over a 5- or 15-minute aggregation window. |
+| **Destinations** | Slack, webhooks, GitHub Actions.                               | PagerDuty, Dynatrace, webhooks.                      |
+| **Scope**        | Langfuse Cloud; configured per project.                        | Configured per project.                              |
+
+## 가격
+
+두 플랫폼의 경제적 모델은 다릅니다. Langfuse는 수집된 데이터의 양(단위)에 따라 요금을 부과하는 반면, LangSmith는 좌석(seat)당 요금에 루트 실행(트레이스)당 요금을 더해서 부과하며, 보관 기간은 트레이스 요금에 반영됩니다. 아래 수치는 2026년 7월 기준입니다.
+
+| Feature         | Langfuse                                                                                                      | LangSmith                                                                                               |
+| --------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| **Model**       | **[Unit-based](/docs/administration/billable-units)**: 1 unit = 1 trace, observation, or score. No seat fees. | **Seat + trace-based**: per-seat subscription plus per-trace charges.                                   |
+| **Free tier**   | 50,000 units/month (Hobby plan, 2 users).                                                                     | 5,000 base traces/month (Developer plan, 1 seat, 14-day retention).                                     |
+| **Paid plans**  | [Core $29/mo, Pro $199/mo, Enterprise](/pricing); 100k units included, then $8/100k units (volume discounts). | [Plus $39/seat/mo](https://www.langchain.com/pricing) with 10k base traces included; Enterprise custom. |
+| **Usage rate**  | $8 per 100k units after included volume, independent of retention plan.                                       | $2.50 per 1k base traces (14-day retention); $5.00 per 1k extended traces (400-day retention).          |
+| **Self-hosted** | Free (MIT, all core features); Enterprise Edition license optional.                                           | Enterprise contract required.                                                                           |
+
+## 개방형 플랫폼과 확장성
+
+Langfuse는 API-first이므로 팀은 관측성 데이터를 온전히 자신의 것으로 다룰 수 있습니다. LangSmith는 자체 관리형 플랫폼 내에서 트레이스와 데이터셋에 대한 API를 제공합니다.
+
+| Feature         | Langfuse                                                                                                                           | LangSmith                                                |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| **API access**  | **API-first**: full CRUD for traces, observations, scores, prompts, and platform features; v2 high-scale query APIs.               | **Read/write**: API to query traces and manage datasets. |
+| **Data export** | **[Blob storage export](/docs/api-and-data-platform/features/export-to-blob-storage)**: automated dumps to S3/GCS (JSONL/Parquet). | **Bulk export**: available on paid plans.                |
+
+## 엔터프라이즈 보안
+
+두 플랫폼 모두 주요 인증을 보유한 엔터프라이즈급 플랫폼입니다. Langfuse는 SOC 2 Type II에 더해 ISO 27001을 취득했으며, 오픈소스 셀프 호스팅을 통해 완전히 에어갭(air-gapped)된 컴플라이언스 경로를 제공합니다.
+
+| Feature            | Langfuse                                                                                                                   | LangSmith                                                                       |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| **Certifications** | [SOC 2 Type II, ISO 27001](/security), GDPR; dedicated HIPAA-ready region.                                                 | [SOC 2 Type II, GDPR, HIPAA](https://docs.langchain.com/langsmith/regions-faq). |
+| **Data regions**   | EU, US, and Japan cloud regions plus a separate HIPAA region; any region via self-hosting.                                 | US and EU cloud regions; other regions via Enterprise self-hosting.             |
+| **Adoption**       | Trusted by **19 of Fortune 50** and 63 of Fortune 500.                                                                     | Wide adoption among LangChain enterprise users.                                 |
+| **Governance**     | [SSO](/docs/administration/authentication-and-sso), [RBAC](/docs/administration/rbac) available in Teams/Enterprise plans. | SSO, RBAC available in Enterprise plans.                                        |
+
+## 주요 기능
+
+**Langfuse:**
+
+- **[Agent graph views](/docs/observability/features/agent-graphs)** 는 트레이스를 단계별 그래프로 렌더링하며, 집계된 개요 모드와 멀티 에이전트 디버깅을 위한 실제 실행 흐름을 그대로 보여주는 확장 모드를 제공합니다.
+- **[Prompt management](/docs/prompt-management/overview)** 는 특정 프레임워크의 문법에 종속되지 않은 버전 관리, 배포 라벨, 플레이그라운드를 제공합니다.
+- **[Evaluations](/docs/evaluation/overview)** 는 LLM-as-a-judge, 플랫폼 내 코드 평가기, 사람에 의한 주석(annotation)을 결합하며, CI/CD에서 실험 게이트를 지원합니다.
+- **[ClickHouse 네이티브 분석](/blog/2026-03-10-simplify-langfuse-for-scale)** 은 셀프 호스팅 시 데이터에 대한 제약 없는 원시 SQL 접근을 제공합니다.
+
+**LangSmith:**
+
+- **[LangSmith Deployment](https://www.langchain.com/langsmith/deployment)** 는 LangGraph 에이전트를 관리형의 내구성 있는(durable) API로 실행하며, 2026년 5월부터는 Managed Deep Agents로 이를 보완합니다.
+- **제로 설정 트레이싱**은 환경 변수만으로 LangChain 애플리케이션을 계측합니다.
+- **2026년 Interrupt 신규 기능**에는 LangSmith Engine(제안된 수정 사항과 함께 자동 실패 클러스터링), Context Hub(버전 관리되는 에이전트 지침), LLM Gateway가 포함됩니다.
+
+## 무엇을 선택해야 할까
+
+완전한 기능 동등성을 갖춘 셀프 호스팅이 필요하거나, LangChain에 국한되지 않은 혼합 스택을 OpenTelemetry 기반으로 운영하거나, 관측성 데이터를 직접 조회할 수 있는 개방형 데이터베이스에 두고 싶거나, 좌석 요금 없는 사용량 기반 가격을 선호한다면 **Langfuse**를 선택하세요.
+
+팀이 주로 LangChain과 LangGraph로 개발하고, 환경 변수만으로 트레이싱을 활성화하고 싶으며, 관측성과 에이전트 배포 인프라를 하나의 관리형 벤더에서 제공받는 것을 중시하고, 셀프 호스팅은 Enterprise 계약으로 한정되어도 괜찮다면 **LangSmith**를 선택하세요.
+
+## 자주 묻는 질문 [#faq]
+
+### LangSmith는 무료인가요? [#is-langsmith-free]
+
+LangSmith는 좌석 1개, 월 5,000개의 기본 트레이스, 14일 보관을 제공하는 무료 Developer 플랜이 있습니다(2026년 7월 기준). 이를 초과하면 기본 트레이스는 1,000개당 $2.50, 400일 보관되는 확장 트레이스는 1,000개당 $5.00이며, Plus 플랜은 좌석당 월 $39입니다. 시작은 무료지만 무료 소프트웨어는 아닙니다. 플랫폼은 독점 소스이며 셀프 호스팅에는 Enterprise 계약이 필요합니다. Langfuse의 무료 티어는 월 50,000 유닛을 포함하며, MIT 라이선스 오픈소스 버전은 기능 제한 없이 무료로 셀프 호스팅할 수 있습니다.
+
+### LangSmith는 오픈소스인가요? [#is-langsmith-open-source]
+
+아니요. LangSmith 플랫폼(백엔드, UI, SmithDB를 포함한 스토리지 계층)은 폐쇄형 소스입니다. LangChain과 LangGraph 프레임워크, 그리고 LangSmith 클라이언트 SDK는 MIT 라이선스의 오픈소스이며, 이 부분이 흔히 혼동을 일으킵니다. Langfuse는 처음부터 끝까지 오픈소스입니다. 전체 플랫폼이 MIT 라이선스이며 [셀프 호스팅](/self-hosting)이 가능합니다.
+
+### LangSmith는 LangChain이 있어야 하나요? [#does-langsmith-require-langchain]
+
+아니요. LangSmith는 자체 SDK를 통해 LangChain 없이 구축된 애플리케이션도 트레이싱하며, OTLP 엔드포인트를 통한 OpenTelemetry 트레이스도 수신합니다(2026년 7월 기준). 다만 가장 마찰이 적은 경로는 여전히 LangChain/LangGraph이며, 이 경우 환경 변수만으로 트레이싱이 활성화됩니다. Langfuse도 마찬가지로 프레임워크에 독립적이며, OpenTelemetry 위에 구축된 SDK와 100개 이상의 프레임워크 및 모델 제공업체와의 통합을 지원합니다.
+
+### SmithDB란 무엇인가요? [#what-is-smithdb]
+
+SmithDB는 2026년 5월에 발표된 LangSmith의 독점 트레이스 데이터베이스로, Rust와 Apache DataFusion, Vortex 파일 포맷 위에 구축되었으며 트레이스 데이터는 오브젝트 스토리지에 저장됩니다. LangChain에 따르면 이는 LangSmith의 핵심 기능을 최대 15배 빠르게 만듭니다. 발표 시점에는 셀프 호스팅 지원이 얼리 액세스 단계였습니다. Langfuse는 observation을 중심으로 한 불변 데이터 모델을 갖춘 오픈소스 ClickHouse 위에서 이러한 확장성 특성을 달성하므로, 클라우드와 셀프 호스팅 배포가 동일한 엔진에서 동작합니다.
+
+<Callout type="info">
+  This comparison is out of date? Please [raise a pull request](https://github.com/langfuse/langfuse-docs/tree/main/content/resources/engineering) with up-to-date information.
+</Callout>

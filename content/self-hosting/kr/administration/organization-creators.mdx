@@ -1,0 +1,24 @@
+---
+title: 조직 생성자 허용 목록 (셀프 호스팅)
+description: 셀프 호스팅된 Langfuse 배포에서 특정 사용자 집합으로 조직 생성을 제한하는 방법을 알아보세요.
+label: "Version: v3"
+sidebarTitle: "Organization Creators (EE)"
+sourceRevision: 3ae8ee6d78d14712b476ede271bf8761f4efe1a5
+translationStatus: machine
+---
+
+# 조직 생성자 허용 목록
+
+<Callout type="info">
+
+이 기능은 Enterprise Edition에서만 사용할 수 있습니다. 활성화하려면 [라이선스 키](/self-hosting/license-key)를 추가하세요.
+
+</Callout>
+
+기본적으로 Langfuse 인스턴스에 액세스할 수 있는 모든 사용자는 새 조직을 생성할 수 있습니다.
+
+조직 생성을 특정 사용자 집합으로 제한하려면 `LANGFUSE_ALLOWED_ORGANIZATION_CREATORS` 환경 변수를 사용할 수 있습니다. 일부 조직에서는 특정 사용자 집합이 새 조직을 생성한 다음, [RBAC](/docs/rbac)를 통해 단일 조직 또는 프로젝트에 대한 액세스를 프로비저닝합니다.
+
+```bash filename=".env"
+LANGFUSE_ALLOWED_ORGANIZATION_CREATORS=user1@langfuse.com,user2@langfuse.com
+```

@@ -1,0 +1,19 @@
+---
+title: 셀프 호스팅 Langfuse에서 발생하는 JavaScript heap out of memory 오류
+tags: [self-hosting]
+sourceRevision: 9c0d419484845ffbd56805fd068677856e5d764c
+translationStatus: machine
+---
+
+# 셀프 호스팅 Langfuse에서 발생하는 JavaScript heap out of memory 오류
+
+애플리케이션에서 JavaScript heap out of memory 오류가 발생한다면, 이는 애플리케이션이 실제 사용 가능한 메모리보다 적은 메모리를 사용 가능한 것으로 인식하고 있음을 나타냅니다.
+예를 들어 컨테이너에 2GiB의 메모리가 할당되어 있지만, Node.js 애플리케이션은 기본값인 max-old-space-size 1.7GiB를 사용하는 경우가 이에 해당합니다.
+이 경우 다음과 같은 오류 메시지가 나타납니다.
+
+> FATAL ERROR: Ineffective mark-compacts near heap limit Allocation failed - JavaScript heap out of memory
+
+이 문제를 해결하려면 Langfuse Web 및 Langfuse Worker 컨테이너에 `NODE_OPTIONS=--max-old-space-size=${var.memory}`를 설정하는 것을 권장합니다.
+`var.memory` 값으로는 사용 가능한 메모리를 MiB 단위로 지정합니다. 예를 들어 4GiB의 메모리라면 4096을 사용합니다.
+이 값은 컨테이너의 메모리 제한(limit)과 같거나 그보다 커야 합니다.
+이렇게 하면 애플리케이션이 갑자기 종료되는 대신, 메모리 제한을 초과했을 때 컨테이너 오케스트레이터가 파드를 정상적으로(gracefully) 종료할 수 있습니다.

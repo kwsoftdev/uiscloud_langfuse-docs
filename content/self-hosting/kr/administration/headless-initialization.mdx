@@ -1,0 +1,53 @@
+---
+title: 헤드리스 초기화 (셀프 호스팅)
+description: 환경 변수를 통해 Langfuse 리소스를 자동으로 초기화하는 방법을 알아봅니다.
+label: "Version: v3"
+sidebarTitle: "헤드리스 초기화"
+sourceRevision: 9c0d419484845ffbd56805fd068677856e5d764c
+translationStatus: machine
+---
+
+# 헤드리스 초기화
+
+기본적으로 API를 사용하기 전에 Langfuse UI를 통해 사용자 계정, 조직, 프로젝트를 생성해야 합니다. API 키는 UI의 프로젝트 설정에서 확인할 수 있습니다.
+
+이러한 리소스를 자동으로 초기화하려면, 다음 `LANGFUSE_INIT_*` 환경 변수를 선택적으로 사용할 수 있습니다. 이 변수들이 설정되면 Langfuse는 시작 시 해당 리소스가 아직 존재하지 않는 경우 자동으로 생성합니다. 이를 통해 인프라 as 코드(infrastructure-as-code) 및 자동화된 배포 파이프라인과 쉽게 통합할 수 있습니다.
+
+<Callout type="info">
+
+프로비저닝 프로세스를 더 프로그래밍 방식으로 제어하려면 [Instance Management API](/self-hosting/administration/instance-management-api)를 사용할 수도 있습니다.
+
+</Callout>
+
+## 리소스 종속성
+
+여러 리소스는 서로 종속 관계를 가집니다.
+
+예를 들어 프로젝트와 API 키를 초기화하지 않고도 조직과 사용자를 초기화할 수 있지만, 조직을 초기화하지 않고 프로젝트나 사용자를 초기화할 수는 없습니다.
+
+```
+Organization
+├── Project      (part of organization)
+│   └── API Keys (set for project)
+└── User         (owner of organization)
+```
+
+## 환경 변수
+
+| 환경 변수                          | 설명                                                                                          | 리소스 생성에 필요 여부 | 예시               |
+| ---------------------------------- | --------------------------------------------------------------------------------------------- | ----------------------- | ------------------ |
+| `LANGFUSE_INIT_ORG_ID`             | 조직의 고유 식별자                                                                            | 예                      | `my-org`           |
+| `LANGFUSE_INIT_ORG_NAME`           | 조직 이름                                                                                     | 아니오                  | `My Org`           |
+| `LANGFUSE_INIT_PROJECT_ID`         | 프로젝트의 고유 식별자                                                                        | 예                      | `my-project`       |
+| `LANGFUSE_INIT_PROJECT_NAME`       | 프로젝트 이름                                                                                 | 아니오                  | `My Project`       |
+| `LANGFUSE_INIT_PROJECT_RETENTION`  | 프로젝트의 [데이터 보존](/docs/data-retention) 기간(일). 데이터를 영구 보존하려면 비워 두세요 | 아니오                  | `30`               |
+| `LANGFUSE_INIT_PROJECT_PUBLIC_KEY` | 프로젝트의 공개 API 키                                                                        | 예                      | `lf_pk_1234567890` |
+| `LANGFUSE_INIT_PROJECT_SECRET_KEY` | 프로젝트의 비밀 API 키                                                                        | 예                      | `lf_sk_1234567890` |
+| `LANGFUSE_INIT_USER_EMAIL`         | 초기 사용자의 이메일 주소                                                                     | 예                      | `user@example.com` |
+| `LANGFUSE_INIT_USER_NAME`          | 초기 사용자의 이름                                                                            | 아니오                  | `John Doe`         |
+| `LANGFUSE_INIT_USER_PASSWORD`      | 초기 사용자의 비밀번호                                                                        | 예                      | `password123`      |
+
+## 문제 해결
+
+- Docker Compose에서 `LANGFUSE_INIT_*`를 사용하는 경우, 값을 큰따옴표로 감싸지 마세요 ([GitHub issue](https://github.com/langfuse/langfuse/issues/3398)).
+- 리소스는 서로 종속 관계를 가집니다(위 설명 참고). 예를 들어 프로젝트를 초기화하려면 먼저 조직을 생성해야 합니다.

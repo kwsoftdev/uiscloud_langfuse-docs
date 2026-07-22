@@ -3,11 +3,20 @@
 import { Link } from "@/components/ui/link";
 import { ChevronDown } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
+import { usePathname } from "next/navigation";
 import { HoverCorners } from "@/components/ui/corner-box";
 import { cn } from "@/lib/utils";
-import { productLinks, resourcesLinks, simpleLinks } from "@/lib/nav-links";
+import {
+  productLinks,
+  productLinksKo,
+  resourcesLinks,
+  resourcesLinksKo,
+  simpleLinks,
+  simpleLinksKo,
+} from "@/lib/nav-links";
 import type { NavPanelLink } from "@/lib/nav-links";
 import type { SectionNavData } from "@/lib/nav-tree";
+import { isKoreanPath } from "@/lib/i18n/koPaths";
 
 // ── Nav trigger style ─────────────────────────────────────────────────────────
 
@@ -278,6 +287,8 @@ export function NavLinks({
 }: {
   sectionNavData: SectionNavData[];
 }) {
+  const pathname = usePathname();
+  const ko = isKoreanPath(pathname);
   const [openId, setOpenId] = useState<MegaMenuId | null>(null);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -307,8 +318,8 @@ export function NavLinks({
       >
         <NavDropdown
           id="product"
-          label="Product"
-          links={productLinks}
+          label={ko ? "제품" : "Product"}
+          links={ko ? productLinksKo : productLinks}
           featured={productFeatured}
           openId={openId}
           setOpenId={setOpenId}
@@ -317,8 +328,8 @@ export function NavLinks({
         />
         <NavDropdown
           id="resources"
-          label="Resources"
-          links={resourcesLinks}
+          label={ko ? "리소스" : "Resources"}
+          links={ko ? resourcesLinksKo : resourcesLinks}
           featured={resourcesFeatured}
           openId={openId}
           setOpenId={setOpenId}
@@ -327,7 +338,7 @@ export function NavLinks({
         />
       </div>
 
-      {simpleLinks.map((link) => (
+      {(ko ? simpleLinksKo : simpleLinks).map((link) => (
         <Link
           key={link.name}
           href={link.href}

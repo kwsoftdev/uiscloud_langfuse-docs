@@ -33,6 +33,17 @@ const baseFrontmatterSchema = frontmatterSchema.extend({
   // Optional per-page OG image override (site-relative path, e.g. /images/foo.jpg).
   // When set, used instead of the generated /api/og card.
   ogImage: z.string().nullish(),
+  // --- Localization tracking (only meaningful on translated pages, e.g.
+  // content/<section>/kr/**) — see lib/i18n/. Left unset on English source
+  // pages.
+  // Git SHA of the English source file this translation was produced from,
+  // used by translation-drift tooling to flag pages that fell behind.
+  sourceRevision: z.string().nullish(),
+  // "current" (kept in sync), "stale" (source changed since sourceRevision),
+  // or "machine" (unreviewed machine translation).
+  translationStatus: z.enum(["current", "stale", "machine"]).nullish(),
+  // Optional human translator/agency credit, rendered on the page.
+  translator: z.string().nullish(),
 });
 
 // Extended schema for blog pages — adds date, tag, author, ogImage fields
@@ -85,6 +96,12 @@ const sidebarFrontmatterSchema = baseFrontmatterSchema.extend({
 
 export const docs = defineDocs({
   dir: "content/docs",
+  docs: { schema: sidebarFrontmatterSchema, files: ["**/*.mdx", "!kr/**"] },
+  meta: { files: ["**/*.json", "!kr/**"] },
+});
+
+export const docsKr = defineDocs({
+  dir: "content/docs/kr",
   docs: { schema: sidebarFrontmatterSchema },
 });
 
@@ -96,7 +113,14 @@ export const selfHosting = defineDocs({
   dir: "content/self-hosting",
   docs: {
     schema: selfHostingFrontmatterSchema,
+    files: ["**/*.mdx", "!kr/**"],
   },
+  meta: { files: ["**/*.json", "!kr/**"] },
+});
+
+export const selfHostingKr = defineDocs({
+  dir: "content/self-hosting/kr",
+  docs: { schema: selfHostingFrontmatterSchema },
 });
 
 export const blog = defineDocs({
@@ -121,7 +145,16 @@ export const guides = defineDocs({
   dir: "content/guides",
   docs: {
     schema: guidesFrontmatterSchema,
+    files: ["**/*.mdx", "!kr/**"],
   },
+  meta: { files: ["**/*.json", "!kr/**"] },
+});
+
+// Korean translation pilot for the Guides section — a sub-collection of
+// `guides` (not a top-level content dir), same pattern as `academyJa` below.
+export const guidesKr = defineDocs({
+  dir: "content/guides/kr",
+  docs: { schema: guidesFrontmatterSchema },
 });
 
 const faqFrontmatterSchema = sidebarFrontmatterSchema.extend({
@@ -132,7 +165,14 @@ export const faq = defineDocs({
   dir: "content/faq",
   docs: {
     schema: faqFrontmatterSchema,
+    files: ["**/*.mdx", "!kr/**"],
   },
+  meta: { files: ["**/*.json", "!kr/**"] },
+});
+
+export const faqKr = defineDocs({
+  dir: "content/faq/kr",
+  docs: { schema: faqFrontmatterSchema },
 });
 
 const integrationsFrontmatterSchema = sidebarFrontmatterSchema.extend({
@@ -149,6 +189,12 @@ export const integrations = defineDocs({
 
 export const security = defineDocs({
   dir: "content/security",
+  docs: { schema: sidebarFrontmatterSchema, files: ["**/*.mdx", "!kr/**"] },
+  meta: { files: ["**/*.json", "!kr/**"] },
+});
+
+export const securityKr = defineDocs({
+  dir: "content/security/kr",
   docs: { schema: sidebarFrontmatterSchema },
 });
 
@@ -166,6 +212,12 @@ export const customers = defineDocs({
 
 export const handbook = defineDocs({
   dir: "content/handbook",
+  docs: { schema: sidebarFrontmatterSchema, files: ["**/*.mdx", "!kr/**"] },
+  meta: { files: ["**/*.json", "!kr/**"] },
+});
+
+export const handbookKr = defineDocs({
+  dir: "content/handbook/kr",
   docs: { schema: sidebarFrontmatterSchema },
 });
 
@@ -177,13 +229,18 @@ export const academy = defineDocs({
   dir: "content/academy",
   docs: {
     schema: sidebarFrontmatterSchema,
-    files: ["**/*.mdx", "!japan/**"],
+    files: ["**/*.mdx", "!japan/**", "!kr/**"],
   },
-  meta: { files: ["**/*.json", "!japan/**"] },
+  meta: { files: ["**/*.json", "!japan/**", "!kr/**"] },
 });
 
 export const academyJa = defineDocs({
   dir: "content/academy/japan",
+  docs: { schema: sidebarFrontmatterSchema },
+});
+
+export const academyKr = defineDocs({
+  dir: "content/academy/kr",
   docs: { schema: sidebarFrontmatterSchema },
 });
 
@@ -203,7 +260,14 @@ export const resources = defineDocs({
   dir: "content/resources",
   docs: {
     schema: resourcesFrontmatterSchema,
+    files: ["**/*.mdx", "!kr/**"],
   },
+  meta: { files: ["**/*.json", "!kr/**"] },
+});
+
+export const resourcesKr = defineDocs({
+  dir: "content/resources/kr",
+  docs: { schema: resourcesFrontmatterSchema },
 });
 
 export const marketing = defineDocs({

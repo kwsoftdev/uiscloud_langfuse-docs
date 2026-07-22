@@ -1,0 +1,28 @@
+---
+title: 서버리스 함수(AWS Lambda, Vercel, Cloudflare Workers 등)에서 Langfuse 트레이싱을 사용하는 방법
+tags: [observability]
+sourceRevision: 9c0d419484845ffbd56805fd068677856e5d764c
+translationStatus: machine
+---
+
+# 서버리스 함수(AWS Lambda, Vercel, Cloudflare Workers 등)에서 Langfuse 트레이싱을 사용하는 방법
+
+Langfuse 트레이싱은 애플리케이션에 지연 시간을 추가하지 않도록 백그라운드에서 실행되도록 최적화되어 있습니다. 이로 인해 AWS Lambda, Vercel Functions, Google Cloud Functions 등과 같은 서버리스 환경에서 트레이싱할 때 몇 가지 어려움이 발생할 수 있습니다.
+
+Langfuse 클라이언트의 동작 방식은 [여기](/docs/tracing)에 설명되어 있습니다.
+
+## 이 문제의 근본 원인은 무엇인가요?
+
+이 문제의 근본 원인은 서버리스 함수가 일반적으로 수명이 짧고 실행이 끝나면 종료된다는 점입니다. 즉, 백그라운드에서 실행되는 Langfuse 에이전트가 작업을 완료하기 전에 함수가 종료될 수 있습니다. 이로 인해 이벤트가 Langfuse로 전송되지 않을 수 있습니다.
+
+## 함수 종료 전에 이벤트가 전송되도록 `flush` 사용하기
+
+이 문제를 해결하려면 함수가 종료되기 전에 이벤트를 수동으로 flush하면 됩니다. 이는 Langfuse 클라이언트의 `flush` 메서드를 호출하여 수행할 수 있습니다. flush 메서드는 모든 Langfuse SDK 및 통합에서 지원됩니다.
+
+## 대안: waitUntil
+
+Vercel과 Cloudflare Workers는 [`waitUntil`](https://developer.mozilla.org/en-US/docs/Web/API/ExtendableEvent/waitUntil) 메서드를 지원하며, 이를 통해 함수가 종료되기 전에 프로미스(`flush`)가 해결(resolve)될 때까지 기다릴 수 있습니다. 이를 통해 함수에서 값을 반환하면서도 이벤트가 Langfuse로 전송되도록 보장할 수 있습니다.
+
+## 대안: flushAt
+
+또는 이벤트를 개별적으로 flush하도록 Langfuse를 구성할 수도 있습니다. 이는 `flushAt` 옵션을 특정 이벤트 개수로 설정하여 수행할 수 있습니다.

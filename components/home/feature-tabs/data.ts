@@ -17,6 +17,47 @@ import EvalsPng from "components/home/feature-tabs/img/evals-ui.png";
 import PlaygroundPng from "components/home/feature-tabs/img/playground-ui.png";
 import AnnotationPng from "components/home/feature-tabs/img/annotation-ui.png";
 
+/**
+ * Korean text overrides for featureTabsData, keyed by feature id. Merged over
+ * the English data by consumers (see FeatureTabsSection) when ko — images,
+ * hrefs, icons, and code snippets are shared, not translated.
+ */
+export const featureTabsKoText: Record<
+  string,
+  { title: string; subtitle: string; body: string }
+> = {
+  observability: {
+    title: "트레이스를 깊이 있게 들여다보세요",
+    subtitle: "모든 LLM 호출을 비용과 지연 시간과 함께 트레이싱합니다.",
+    body: "LLM 애플리케이션/에이전트의 전체 트레이스를 기록하세요. 트레이스로 실패를 파악하고 평가용 데이터셋을 구축할 수 있습니다. OpenTelemetry 기반이며 널리 쓰이는 모든 LLM/에이전트 라이브러리를 지원합니다.",
+  },
+  metrics: {
+    title: "모델 비용과 지연 시간을 추적하세요",
+    subtitle: "비용, 지연 시간, 품질을 추적합니다.",
+    body: "포괄적인 메트릭 대시보드와 API로 LLM 애플리케이션의 성능을 모니터링하세요. 모델·사용자·기간별로 비용, 지연 시간, 토큰 사용량, 품질 점수를 추적할 수 있습니다.",
+  },
+  "prompt-management": {
+    title: "프롬프트를 개선하세요",
+    subtitle: "낮은 지연 시간으로 프롬프트를 버전 관리하고 배포하세요.",
+    body: "프롬프트를 협업하며 버전 관리하고, 여러 환경에 즉시 배포/롤백하세요. 템플릿, 변수, A/B 테스트를 지원합니다. 클라이언트 사이드에 캐싱되어 지연 시간과 가용성에 영향이 없습니다.",
+  },
+  evaluation: {
+    title: "모델 출력을 자동으로 평가하세요",
+    subtitle: "피드백을 수집하고 평가를 실행하세요.",
+    body: "UI(프롬프트/모델 실험)와 SDK(엔드투엔드 애플리케이션 실험)를 통해 온라인/오프라인 평가를 실행하세요. 트레이스로부터 데이터셋을 만들어 평가를 지속적으로 개선하고, 결과는 UI에서 확인하세요.",
+  },
+  annotations: {
+    title: "사람의 리뷰를 통해 협업하세요",
+    subtitle: "수동 피드백과 수정 사항을 추가하세요.",
+    body: "수동 주석(annotation)을 만들어 LLM 출력에 대한 피드백, 수정, 개선 사항을 기록하세요. 주석을 활용해 고품질 데이터셋을 구축하고 자동 평가의 기준선을 설정할 수 있습니다.",
+  },
+  playground: {
+    title: "구조화된 실험으로 반복 개선하세요",
+    subtitle: "프롬프트와 모델을 인터랙티브하게 테스트하세요.",
+    body: "인터랙티브한 플레이그라운드에서 다양한 프롬프트, 모델, 파라미터를 실험해보세요. 출력을 비교하고, 프롬프트를 반복 개선하고, 성공적인 설정을 프롬프트 관리에 저장하세요.",
+  },
+};
+
 export const mobileFeatureTabsData: Pick<FeatureTabData, "image"> = {
   image: {
     light: observabilityMobilePng,

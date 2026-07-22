@@ -9,6 +9,8 @@ import {
 } from "@/components/MainContentWrapper";
 import { NotebookBanner } from "@/components/NotebookBanner";
 import { COOKBOOK_ROUTE_MAPPING } from "@/lib/cookbook_route_mapping";
+import { getStrings } from "@/lib/i18n/strings";
+import { LocaleSwitcher, type LocaleLink } from "@/components/LocaleSwitcher";
 import type { ReactNode } from "react";
 
 type Props = {
@@ -24,6 +26,12 @@ type Props = {
    * Used by self-hosting pages.
    */
   versionLabel?: string | null;
+  /**
+   * Links to this page's counterpart in other locales (e.g. the English
+   * original from a /guides/kr page, or vice versa). Rendered next to the
+   * copy button; omitted entirely when there's nothing to link to.
+   */
+  localeLinks?: LocaleLink[];
 };
 
 /**
@@ -37,6 +45,7 @@ export function DocBodyChrome({
   lang,
   withProse = true,
   versionLabel,
+  localeLinks,
 }: Props) {
   const pathname = usePathname();
   const isEnterprisePage = pathname === "/enterprise";
@@ -44,6 +53,7 @@ export function DocBodyChrome({
   const cookbook = withProse
     ? COOKBOOK_ROUTE_MAPPING.find((c) => c.path === pathname)
     : undefined;
+  const strings = getStrings(lang);
 
   if (!withProse) {
     return <div className="flex-1">{children}</div>;
@@ -64,7 +74,13 @@ export function DocBodyChrome({
               {versionLabel}
             </span>
           )}
-          <CopyMarkdownButton key={pathname} />
+          {localeLinks && localeLinks.length > 0 && (
+            <LocaleSwitcher
+              current={(lang as any) ?? "en"}
+              links={localeLinks}
+            />
+          )}
+          <CopyMarkdownButton key={pathname} lang={lang} />
         </div>
         {cookbook && (
           <NotebookBanner src={cookbook.ipynbPath} className="mb-4" />
@@ -74,9 +90,7 @@ export function DocBodyChrome({
           <>
             <hr className="mt-12 mb-0 border-t border-line-structure" />
             <div className="flex flex-col gap-2 py-6" id="docs-feedback">
-              <span className="text-sm font-medium">
-                Was this page helpful?
-              </span>
+              <span className="text-sm font-medium">{strings.pageHelpful}</span>
               <div className="flex items-center justify-between gap-2">
                 <DocsFeedback key={pathname} showLabel={false} />
                 <DocsSupport />

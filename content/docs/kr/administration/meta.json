@@ -1,0 +1,20 @@
+{
+  "title": "관리",
+  "pages": [
+    "---인증---",
+    "authentication-and-sso",
+    "rbac",
+    "scim-and-org-api",
+    "---보안---",
+    "audit-logs",
+    "data-deletion",
+    "data-retention",
+    "external:[보안 문서 ↗](/security)",
+    "---설정---",
+    "llm-connection",
+    "spend-alerts",
+    "---기타---",
+    "billable-units",
+    "troubleshooting-and-faq"
+  ]
+}

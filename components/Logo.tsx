@@ -11,12 +11,9 @@ const ContextMenu = dynamic(() => import("./LogoContextMenu"), {
 
 export function Logo({
   wrapInLink = true,
-  showAffiliation = false,
 }: {
   /** When false, render only the image block (use when already inside a link, e.g. NavbarLogo). */
   wrapInLink?: boolean;
-  /** When true, show the "by ClickHouse" affiliation link next to the logo. */
-  showAffiliation?: boolean;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const images = (
@@ -54,18 +51,6 @@ export function Logo({
     </div>
   );
 
-  const byClickHouse = (
-    <a
-      href="https://clickhouse.com"
-      target="_blank"
-      // Explicitly omit `noreferrer` to pass on referrer to ClickHouse
-      rel="noopener"
-      className="text-[10px] sm:text-[11px] leading-none text-text-tertiary/60 hover:text-text-tertiary transition-colors whitespace-nowrap"
-    >
-      by ClickHouse
-    </a>
-  );
-
   return (
     <>
       <div className="flex items-center gap-1.5 sm:gap-2">
@@ -91,7 +76,6 @@ export function Logo({
             {images}
           </div>
         )}
-        {showAffiliation && byClickHouse}
       </div>
       {menuOpen && <ContextMenu open={menuOpen} setOpen={setMenuOpen} />}
     </>

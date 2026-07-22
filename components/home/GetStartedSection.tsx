@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import { Copy, Check } from "lucide-react";
 import Image from "next/image";
 import { DynamicCodeBlock } from "fumadocs-ui/components/dynamic-codeblock";
@@ -11,6 +12,7 @@ import { HomeSection } from "@/components/home/HomeSection";
 import { CornerBox, HoverCorners } from "@/components/ui/corner-box";
 import { TextHighlight } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { isKoreanPath } from "@/lib/i18n/koPaths";
 
 const AGENT_PROMPTS = [
   {
@@ -25,6 +27,24 @@ const AGENT_PROMPTS = [
   },
   {
     label: "Prompt Management:",
+    prompt:
+      "Install the Langfuse Agent Skill from github.com/langfuse/skills and use it to migrate the prompts in this codebase to Langfuse.",
+  },
+];
+
+const AGENT_PROMPTS_KO = [
+  {
+    label: "트레이싱:",
+    prompt:
+      "Install the Langfuse Agent Skill from github.com/langfuse/skills and use it to add tracing to this application with Langfuse following best practices.",
+  },
+  {
+    label: "평가:",
+    prompt:
+      "Install the Langfuse Agent Skill from github.com/langfuse/skills and use it to set up evals for this application with Langfuse. Guide me through choosing the right evaluation approach methods.",
+  },
+  {
+    label: "프롬프트 관리:",
     prompt:
       "Install the Langfuse Agent Skill from github.com/langfuse/skills and use it to migrate the prompts in this codebase to Langfuse.",
   },
@@ -83,7 +103,15 @@ const AGENTS = [
   },
 ];
 
-function PromptRow({ label, prompt }: { label: string; prompt: string }) {
+function PromptRow({
+  label,
+  prompt,
+  ko,
+}: {
+  label: string;
+  prompt: string;
+  ko: boolean;
+}) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
@@ -115,7 +143,9 @@ function PromptRow({ label, prompt }: { label: string; prompt: string }) {
         size="s"
         className="text-text-tertiary flex-1 text-left min-w-0 w-full"
       >
-        <span className="text-text-secondary font-medium">Prompt:</span>{" "}
+        <span className="text-text-secondary font-medium">
+          {ko ? "프롬프트:" : "Prompt:"}
+        </span>{" "}
         {prompt}
       </Text>
       <span className="hidden sm:flex shrink-0 text-text-tertiary items-center gap-1">
@@ -125,7 +155,8 @@ function PromptRow({ label, prompt }: { label: string; prompt: string }) {
   );
 }
 
-function AgentTab() {
+function AgentTab({ ko }: { ko: boolean }) {
+  const prompts = ko ? AGENT_PROMPTS_KO : AGENT_PROMPTS;
   return (
     <div className="flex flex-col">
       <div className="flex flex-wrap items-center gap-2 sm:gap-4 px-4 pt-1 border-b border-line-structure min-h-9">
@@ -144,32 +175,37 @@ function AgentTab() {
           ))}
         </div>
         <span className="inline-flex items-center whitespace-nowrap pb-2 pt-1.5 text-xs font-[430] text-text-tertiary">
-          or any other agent
+          {ko ? "또는 다른 에이전트" : "or any other agent"}
         </span>
       </div>
 
       <div className="flex flex-col divide-y divide-line-structure">
-        {AGENT_PROMPTS.map((item) => (
-          <PromptRow key={item.label} label={item.label} prompt={item.prompt} />
+        {prompts.map((item) => (
+          <PromptRow
+            key={item.label}
+            label={item.label}
+            prompt={item.prompt}
+            ko={ko}
+          />
         ))}
       </div>
       <div className="px-4 py-3 border-t border-line-structure">
-        <NeedHelpFooter />
+        <NeedHelpFooter ko={ko} />
       </div>
     </div>
   );
 }
 
-function NeedHelpFooter() {
+function NeedHelpFooter({ ko }: { ko: boolean }) {
   return (
     <Text size="s" className="text-left">
-      Need help? —{" "}
+      {ko ? "도움이 필요하신가요? — " : "Need help? — "}
       <a href="/talk-to-us" className={linkClassName}>
-        Talk to Sales
+        {ko ? "영업팀에 문의" : "Talk to Sales"}
       </a>
       <span className="mx-1.5 text-text-tertiary">·</span>
       <a href="/support" className={linkClassName}>
-        Reach out to Support
+        {ko ? "지원팀에 문의" : "Reach out to Support"}
       </a>
     </Text>
   );
@@ -181,7 +217,13 @@ const QUICKSTART_LINKS = [
   { label: "Evals", href: "/docs/evaluation/overview" },
 ];
 
-function ManualTab() {
+const QUICKSTART_LINKS_KO = [
+  { label: "관측성", href: "/docs/kr/observability/get-started" },
+  { label: "프롬프트 관리", href: "/docs/kr/prompt-management/get-started" },
+  { label: "평가", href: "/docs/kr/evaluation/overview" },
+];
+
+function ManualTab({ ko }: { ko: boolean }) {
   const [lang, setLang] = useState<LangId>("python");
   const snippet = MANUAL_SNIPPETS[lang];
 
@@ -228,8 +270,8 @@ function ManualTab() {
         />
 
         <Text size="s" className="text-left pt-1">
-          Quick start guides —{" "}
-          {QUICKSTART_LINKS.map((link, i) => (
+          {ko ? "빠른 시작 가이드 — " : "Quick start guides — "}
+          {(ko ? QUICKSTART_LINKS_KO : QUICKSTART_LINKS).map((link, i) => (
             <span key={link.href}>
               {i > 0 && <span className="mx-1.5 text-text-tertiary">·</span>}
               <a href={link.href} className={linkClassName}>
@@ -238,7 +280,7 @@ function ManualTab() {
             </span>
           ))}
         </Text>
-        <NeedHelpFooter />
+        <NeedHelpFooter ko={ko} />
       </div>
     </div>
   );
@@ -247,47 +289,69 @@ function ManualTab() {
 type TabId = "agent" | "manual";
 
 export function GetStartedSection() {
+  const ko = isKoreanPath(usePathname());
   const [activeTab, setActiveTab] = useState<TabId>("agent");
 
-  const tabs: { id: TabId; label: string }[] = [
-    { id: "agent", label: "Install via Coding Agent" },
-    { id: "manual", label: "Manual Install" },
-  ];
+  const tabs: { id: TabId; label: string }[] = ko
+    ? [
+        { id: "agent", label: "코딩 에이전트로 설치" },
+        { id: "manual", label: "수동 설치" },
+      ]
+    : [
+        { id: "agent", label: "Install via Coding Agent" },
+        { id: "manual", label: "Manual Install" },
+      ];
+
+  const freeTierNotice = ko ? (
+    <>
+      시작하기 <span className="text-text-tertiary mx-1">—</span>{" "}
+      <span className="text-text-tertiary">
+        무료 요금제: <span className="text-primary">월 5만 건 observation</span>
+        . 신용카드 불필요.
+      </span>
+    </>
+  ) : (
+    <>
+      Get Started <span className="text-text-tertiary mx-1">—</span>{" "}
+      <span className="text-text-tertiary">
+        Free tier: <span className="text-primary">50k observations/month</span>.
+        No credit card required.
+      </span>
+    </>
+  );
 
   return (
     <HomeSection id="get-started" className="pt-[120px]">
       <div className="flex flex-col gap-2.5">
-        <Text className="text-left hidden md:block">
-          Get Started <span className="text-text-tertiary mx-1">—</span>{" "}
-          <span className="text-text-tertiary">
-            Free tier:{" "}
-            <span className="text-primary">50k observations/month</span>. No
-            credit card required.
-          </span>
-        </Text>
+        <Text className="text-left hidden md:block">{freeTierNotice}</Text>
 
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 md:gap-6">
           <Heading className="text-primary text-left" size="large">
-            <TextHighlight
-              highlightClassName="mix-blend-multiply"
-              className="max-md:pr-1.5 xl:pr-3"
-            >
-              Start improving
-            </TextHighlight>
-            <TextHighlight highlightClassName="mix-blend-multiply">
-              your agents
-            </TextHighlight>
-            <br />
-            in under 5 minutes.
+            {ko ? (
+              <>
+                <TextHighlight highlightClassName="mix-blend-multiply">
+                  에이전트 개선을
+                </TextHighlight>
+                <br />
+                5분 안에 시작하세요.
+              </>
+            ) : (
+              <>
+                <TextHighlight
+                  highlightClassName="mix-blend-multiply"
+                  className="max-md:pr-1.5 xl:pr-3"
+                >
+                  Start improving
+                </TextHighlight>
+                <TextHighlight highlightClassName="mix-blend-multiply">
+                  your agents
+                </TextHighlight>
+                <br />
+                in under 5 minutes.
+              </>
+            )}
           </Heading>
-          <Text className="text-left md:hidden">
-            Get Started <span className="text-text-tertiary mx-1">—</span>{" "}
-            <span className="text-text-tertiary">
-              Free tier:{" "}
-              <span className="text-primary">50k observations/month</span>. No
-              credit card required.
-            </span>
-          </Text>
+          <Text className="text-left md:hidden">{freeTierNotice}</Text>
           <div className="flex md:flex-col gap-0 items-start shrink-0 w-full sm:w-[150px] mt-2">
             <Button
               variant="primary"
@@ -296,16 +360,16 @@ export function GetStartedSection() {
               href="/cloud"
               wrapperClassName="md:flex-none md:w-full"
             >
-              Start free
+              {ko ? "무료로 시작하기" : "Start free"}
             </Button>
             <Button
               variant="secondary"
               size="default"
               shortcutKey="d"
-              href="/docs"
+              href={ko ? "/docs/kr" : "/docs"}
               wrapperClassName="md:flex-none md:w-full"
             >
-              Documentation
+              {ko ? "문서 보기" : "Documentation"}
             </Button>
           </div>
         </div>
@@ -343,7 +407,11 @@ export function GetStartedSection() {
 
           {/* Content box */}
           <CornerBox className="flex-1 min-w-0 w-full">
-            {activeTab === "agent" ? <AgentTab /> : <ManualTab />}
+            {activeTab === "agent" ? (
+              <AgentTab ko={ko} />
+            ) : (
+              <ManualTab ko={ko} />
+            )}
           </CornerBox>
         </div>
       </div>

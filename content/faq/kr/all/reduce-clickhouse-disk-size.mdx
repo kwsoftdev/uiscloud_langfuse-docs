@@ -1,0 +1,31 @@
+---
+title: 셀프 호스팅 Langfuse에서 ClickHouse 디스크 사용량을 줄이려면 어떻게 해야 하나요?
+tags: [self-hosting]
+sourceRevision: 25b9538405ed63bf39d7779a4a3178b994f9f01c
+translationStatus: machine
+---
+
+# 셀프 호스팅 Langfuse에서 ClickHouse 디스크 사용량을 줄이려면 어떻게 해야 하나요?
+
+셀프 호스팅 Langfuse에서는 디스크 사용량이 Langfuse 자체 테이블보다 ClickHouse의 내장 시스템 로그 테이블에 의해 좌우되는 경우가 많습니다. 다음 두 가지 방법이 있으며, 권장하는 순서대로 나열하면 다음과 같습니다.
+
+1. **Langfuse가 소유한 데이터** — 오래된 트레이스, observation, 점수 및 이와 연결된 블롭 스토리지 페이로드를 삭제하도록 [데이터 보관 정책](/docs/administration/data-retention)을 구성합니다. 이는 애플리케이션 데이터를 정리하는 주요 방법입니다.
+2. **ClickHouse 시스템 로그 테이블** — 기본적으로 ClickHouse는 TTL 없이 `trace_log`, `text_log`, `opentelemetry_span_log`, `asynchronous_metric_log`, `metric_log`, `latency_log`에 데이터를 기록하며, 쿼리 프로파일러도 계속 실행합니다. Langfuse는 이 테이블들을 읽지 않으므로, 사용하지 않는 테이블을 비활성화하거나 적극적인 TTL을 설정할 수 있습니다. 구체적인 `config.d` 스니펫은 스케일링 문서의 [ClickHouse 시스템 로그 테이블](/self-hosting/configuration/scaling#clickhouse-system-log-tables) 섹션을 참고하세요.
+
+ClickHouse 내에서 다음 쿼리를 사용하면 가장 큰 테이블을 확인할 수 있습니다.
+
+```sql
+SELECT table, formatReadableSize(size) as size, rows FROM (
+    SELECT
+        table,
+        database,
+        sum(bytes) AS size,
+        sum(rows) AS rows
+    FROM system.parts
+    WHERE active
+    GROUP BY table, database
+    ORDER BY size DESC
+)
+```
+
+관련 자료: [langfuse/langfuse#13123](https://github.com/langfuse/langfuse/issues/13123), [langfuse-terraform-aws#26](https://github.com/langfuse/langfuse-terraform-aws/pull/26).

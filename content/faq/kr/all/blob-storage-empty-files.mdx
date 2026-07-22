@@ -1,0 +1,17 @@
+---
+title: 블롭 스토리지 내보내기에 빈 파일이 보이는 이유는 무엇인가요?
+description: Langfuse 블롭 스토리지 내보내기에서 빈 파일이 나타나는 것은 예상된 정상 동작입니다 — 이 문서에서는 그 이유와 다운스트림 파이프라인에서 이를 처리하는 방법을 설명합니다.
+tags: [platform, integration]
+sourceRevision: f5e1e3c7d95d6403084a1342433d27400a22a85e
+translationStatus: machine
+---
+
+import BlobStorageEmptyFiles from "@/components-mdx/blob-storage-empty-files.mdx";
+
+# 블롭 스토리지 내보내기에 빈 파일이 보이는 이유는 무엇인가요?
+
+[블롭 스토리지 통합](/docs/api-and-data-platform/features/export-to-blob-storage)은 실행마다 하나의 시간 윈도우에 해당하는 데이터를 내보내며, 테이블별로 파일을 작성합니다(예: `observations_v2/` 및 `scores/`). 버킷에서 빈 파일을 발견했다면 이는 예상된 동작입니다 — 그 이유와 처리 방법을 설명합니다.
+
+<BlobStorageEmptyFiles />
+
+전체 파일 레이아웃과 필드 참조 정보는 [내보내기 필드 참조](/docs/api-and-data-platform/features/blob-storage-export-fields)를 확인하세요.

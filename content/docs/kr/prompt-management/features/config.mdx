@@ -1,0 +1,299 @@
+---
+title: Config
+sidebarTitle: Config
+description: Langfuse의 프롬프트 config는 각 프롬프트에 첨부되는 선택적 JSON 객체로, 모델 파라미터(모델 이름, temperature 등), function/tool 파라미터, JSON 스키마와 같은 구조화된 데이터를 저장합니다.
+sourceRevision: ecc69b1d83e5a0e352ad0c067e6483ce87e579d5
+translationStatus: machine
+---
+
+# 프롬프트 Config
+
+Langfuse의 프롬프트 `config`는 각 프롬프트에 첨부되는 **선택적인 임의의 JSON 객체**로, LLM 호출을 실행하는 코드에서 사용할 수 있습니다. 일반적인 사용 사례는 다음과 같습니다.
+
+- [모델 파라미터 저장](#using-the-config) (`model`, `temperature`, `max_tokens`)
+- [구조화된 출력 스키마 저장](#structured-outputs) (`response_format`)
+- [function/tool 정의 저장](#function-calling) (`tools`, `tool_choice`)
+
+config는 **프롬프트와 함께 버전 관리**되기 때문에 모든 파라미터를 한곳에서 관리할 수 있습니다. 이를 통해 애플리케이션 코드를 건드리지 않고도 모델을 전환하거나, 스키마를 업데이트하거나, 동작을 조정할 수 있습니다.
+
+<Frame fullWidth>
+  ![Prompt config](/images/docs/prompt-management-config.png)
+</Frame>
+
+## Config 설정하기
+
+Config 설정은 Langfuse 프롬프트 UI와 SDK 양쪽에서 모두 가능합니다.
+
+<Tabs items={["UI", "Python SDK", "JS/TS SDK"]}>
+<Tab>
+
+프롬프트에 config를 추가하거나 편집하려면 다음을 따르세요.
+
+1. Langfuse UI에서 **Prompt Management**로 이동합니다
+2. 프롬프트를 선택하거나 새로 만듭니다
+3. 프롬프트 편집기에서 **Config** 필드(JSON 편집기)를 찾습니다
+4. 유효한 JSON 객체로 config를 입력합니다
+5. 프롬프트를 저장합니다 — 이제 config는 이 프롬프트 버전과 함께 버전 관리됩니다
+
+<Video
+  src="https://static.langfuse.com/docs-videos/2025-12-16-prompt-config.mp4"
+  aspectRatio={16 / 9}
+  gifStyle
+/>
+
+</Tab>
+<Tab>
+
+프롬프트를 생성하거나 업데이트할 때 `config` 파라미터를 전달합니다.
+
+```python
+from langfuse import get_client
+
+langfuse = get_client()
+
+# 모델과 temperature를 포함한 예시 config
+config = {
+    "model": "gpt-4o",
+    "temperature": 0
+}
+
+langfuse.create_prompt(
+  name="invoice-extractor",
+  type="chat",
+  prompt=[
+    {
+      "role": "system",
+      "content": "Extract structured data from invoices."
+      }
+  ],
+  config=config
+)
+
+```
+
+</Tab>
+<Tab>
+
+프롬프트를 생성하거나 업데이트할 때 `config` 파라미터를 전달합니다.
+
+```typescript
+import { LangfuseClient } from "@langfuse/client";
+
+const langfuse = new LangfuseClient();
+
+// 모델과 temperature를 포함한 예시 config
+const config = {
+  model: "gpt-4o",
+  temperature: 0
+}
+
+await langfuse.prompt.create({
+  name: "invoice-extractor",
+  type: "chat",
+  prompt: [
+    { role: "system", content: "Extract structured data from invoices." }
+  ],
+  config: config
+});
+```
+
+</Tab>
+</Tabs>
+
+[Playground](/docs/prompt-management/features/playground)에서 config와 함께 프롬프트를 바로 테스트할 수 있습니다.
+
+## Config 사용하기 [#using-the-config]
+
+아래 예시는 프롬프트 config에서 AI 모델과 temperature를 가져옵니다.
+
+프롬프트를 가져온 후, `config` 속성을 통해 config에 접근하여 값을 LLM 호출에 전달합니다.
+
+<Tabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab>
+
+이 예시는 트레이싱을 위해 [Langfuse OpenAI 통합](/docs/integrations/openai/python/get-started)을 사용하지만, 이는 선택 사항입니다.
+LLM을 호출하는 방법은 무엇이든 사용할 수 있습니다(예: OpenAI SDK를 직접 사용하거나, 다른 제공업체를 사용하는 등).
+
+```python
+from langfuse import get_client
+
+# 이 예시를 위해 Langfuse OpenAI 클라이언트를 초기화합니다.
+from langfuse.openai import OpenAI
+client = OpenAI()
+
+langfuse = get_client()
+
+# 프롬프트 가져오기
+prompt = langfuse.get_prompt("invoice-extractor")
+
+# config 값에 접근
+cfg = prompt.config
+model = cfg.get("model")
+temperature = cfg.get("temperature")
+
+# LLM 호출에 사용
+client.chat.completions.create(
+  model=model,
+  temperature=temperature,
+  messages=prompt.prompt
+)
+```
+
+</Tab>
+<Tab>
+
+이 예시는 트레이싱을 위해 [Langfuse OpenAI 통합](/docs/integrations/openai/js/get-started)을 사용하지만, 이는 선택 사항입니다.
+LLM을 호출하는 방법은 무엇이든 사용할 수 있으며(예: OpenAI SDK를 직접 사용하거나, 다른 제공업체를 사용하는 등), 여전히 config를 사용할 수 있습니다.
+
+```typescript
+import { LangfuseClient } from "@langfuse/client";
+
+// 이 예시를 위해 OpenAI 클라이언트를 초기화합니다.
+import OpenAI from "openai";
+import { observeOpenAI } from "@langfuse/openai";
+const client = observeOpenAI(new OpenAI());
+
+const langfuse = new LangfuseClient();
+
+// 프롬프트 가져오기
+const prompt = await langfuse.prompt.get("invoice-extractor");
+
+// config 값에 접근
+const cfg = prompt.config;
+const model = cfg.model;
+const temperature = cfg.temperature;
+
+// LLM 호출에 사용
+client.chat.completions.create({
+  model,
+  temperature,
+  messages: prompt.prompt
+});
+```
+
+</Tab>
+</Tabs>
+
+## 사용 사례 예시
+
+### 구조화된 출력 [#structured-outputs]
+
+LLM이 특정 JSON 형식으로 데이터를 반환하도록 해야 할 때는 프롬프트 config에 스키마를 저장하세요. 이렇게 하면 스키마가 프롬프트와 함께 버전 관리되며 코드 변경 없이 업데이트할 수 있습니다.
+
+<Callout type="info">
+**모범 사례:** 스키마를 강제하려면 `type: "json_schema"`와 `strict: true`를 사용해 `response_format`을 설정하세요. 이렇게 하면 모델의 출력이 예상한 구조와 정확히 일치하도록 보장됩니다. Pydantic 모델을 사용하는 경우 `type_to_response_format_param`으로 변환하세요 — 자세한 내용은 [OpenAI Structured Outputs 가이드](/docs/integrations/openai/python/structured-outputs)를 참고하세요.
+</Callout>
+
+```python
+from langfuse import get_client
+from langfuse.openai import OpenAI
+
+langfuse = get_client()
+client = OpenAI()
+
+# response_format을 포함한 config로 프롬프트 가져오기
+prompt = langfuse.get_prompt("invoice-extractor")
+system_message = prompt.compile()
+
+# config에서 파라미터 추출
+cfg = prompt.config
+
+# 예시 config:
+# {
+#   "response_format": {
+#     "type": "json_schema",
+#     "json_schema": {
+#       "name": "invoice_schema",
+#       "schema": {
+#         "type": "object",
+#         "properties": {
+#           "invoice_number": { "type": "string" },
+#           "total": { "type": "number" }
+#         },
+#         "required": ["invoice_number", "total"],
+#         "additionalProperties": false
+#       },
+#       "strict": true
+#     }
+#   }
+# }
+
+response_format = cfg.get("response_format")
+
+res = client.chat.completions.create(
+  model="gpt-4o",
+  messages=[
+    {"role": "system", "content": system_message},
+    {"role": "user", "content": "Extract invoice number and total from: ..."},
+  ],
+  response_format=response_format,
+  langfuse_prompt=prompt,  # 이 generation을 Langfuse의 프롬프트 버전에 연결합니다
+)
+
+# 응답은 스키마와 일치하도록 보장됩니다
+content = res.choices[0].message.content
+```
+
+### Function Calling [#function-calling]
+
+에이전트 및 tool을 사용하는 애플리케이션의 경우, function 정의를 프롬프트 config에 저장하세요. 이를 통해 프롬프트와 함께 사용 가능한 tool을 버전 관리하고 업데이트할 수 있습니다.
+
+<Callout type="info">
+**모범 사례:** `tools`(JSON 스키마 파라미터를 가진 function 정의)와 `tool_choice`를 config에 저장하세요. 이렇게 하면 function 시그니처가 버전 관리되며 코드 배포 없이 tool을 추가, 수정, 제거할 수 있습니다.
+</Callout>
+
+```python
+from langfuse import get_client
+from langfuse.openai import OpenAI
+
+langfuse = get_client()
+client = OpenAI()
+
+# tools를 포함한 config로 프롬프트 가져오기
+prompt = langfuse.get_prompt("weather-agent")
+system_message = prompt.compile()
+
+# config에서 파라미터 추출
+cfg = prompt.config
+
+# 예시 config:
+# {
+#   "tools": [
+#     {
+#       "type": "function",
+#       "function": {
+#         "name": "get_current_weather",
+#         "description": "Get the current weather in a given location",
+#         "parameters": {
+#           "type": "object",
+#           "properties": {
+#             "location": { "type": "string", "description": "City and country" },
+#             "unit": { "type": "string", "enum": ["celsius", "fahrenheit"] }
+#           },
+#           "required": ["location"],
+#           "additionalProperties": false
+#         }
+#       }
+#     }
+#   ],
+#   "tool_choice": { "type": "auto" }
+# }
+
+tools = cfg.get("tools", [])
+tool_choice = cfg.get("tool_choice")
+
+res = client.chat.completions.create(
+  model="gpt-4o",
+  messages=[
+    {"role": "system", "content": system_message},
+    {"role": "user", "content": "What's the weather in Berlin?"},
+  ],
+  tools=tools,
+  tool_choice=tool_choice,
+  langfuse_prompt=prompt,  # 이 generation을 Langfuse의 프롬프트 버전에 연결합니다
+)
+```
+
+<Callout type="info">
+완전한 엔드투엔드 예시는 [OpenAI Functions 쿡북](/guides/cookbook/prompt_management_openai_functions)과 [Structured Outputs 쿡북](/guides/cookbook/integration_openai_structured_output)을 참고하세요.
+</Callout>

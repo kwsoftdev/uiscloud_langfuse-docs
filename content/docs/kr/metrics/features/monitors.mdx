@@ -1,0 +1,189 @@
+---
+title: 모니터 및 알림
+sidebarTitle: 모니터 및 알림
+description: LLM 애플리케이션 메트릭에 임계값 기반 알림을 설정하고, 임계값을 초과했을 때 자동화를 통해 알림을 전달합니다.
+sourceRevision: 4ab65f10a0600c2697d64660d714919353c54a15
+translationStatus: machine
+---
+
+# 모니터 및 알림
+
+<AvailabilityBanner
+  availability={{
+    hobby: "full",
+    core: "full",
+    pro: "full",
+    enterprise: "full",
+    selfHosted: "v4",
+  }}
+/>
+
+<Callout type="info">
+  Langfuse Cloud에서 조직당 모니터 개수는 요금제에 따라 달라집니다: **2개**(Hobby), **20개**(Core), **50개**(Pro), **100개**(Enterprise).
+</Callout>
+
+모니터를 사용하면 비용 및 품질 문제가 사용자에게 영향을 미치기 전에 미리 감지할 수 있습니다.
+
+Slack으로 알림을 받거나, GitHub Actions를 트리거하거나, 직접 웹훅을 호출할 수 있습니다.
+
+<Frame fullWidth>
+  <img src="/images/docs/monitors-list.png" alt="Monitors list showing severity, name, and tags for each monitor" />
+</Frame>
+
+## 모니터 생성하기 [#monitor-setup]
+
+프로젝트에서 [**Monitors**](https://cloud.langfuse.com/project/~/monitors)로 이동한 다음 **New Monitor**를 클릭합니다.
+
+<Steps>
+
+### 메트릭 구성
+
+모니터가 측정할 데이터를 선택합니다.
+
+| 필드            | 설명                                                                                |
+| --------------- | ----------------------------------------------------------------------------------- |
+| **Data source** | `Observations`, `Scores (numeric)`, `Scores (categorical)`, 또는 `Scores (boolean)` |
+| **Metric**      | 집계 + 측정값 — 예: `avg latency`, `count`, `p95 cost`                              |
+| **Filters**     | 데이터셋 범위를 좁힙니다(모델 이름, 태그, 사용자 ID, 환경, Boolean 값 등)           |
+
+Boolean 점수의 경우, 평균값은 `true`인 점수의 비율입니다. 정책 검사 통과율이나 감지된 환각(hallucination) 비율과 같은 지표에 대한 알림을 설정할 때 사용합니다.
+
+### 알림 조건 설정
+
+메트릭 값이 어떤 범위 내에 있어야 하는지 선택합니다.
+
+| 필드                  | 설명                                                                                          |
+| --------------------- | --------------------------------------------------------------------------------------------- |
+| **Operator**          | `>`, `≥`, `<`, `≤`, `=`, `≠` — 알림 조건의 방향                                               |
+| **Alert threshold**   | 필수입니다. 이 값을 초과하면 심각도가 **ALERT**로 설정됩니다.                                 |
+| **Warning threshold** | 선택 사항입니다. (알림 임계값보다 먼저) 이 값을 초과하면 심각도가 **WARNING**으로 설정됩니다. |
+| **Window**            | 각 평가가 참조하는 기간(예: `1 hour`, `1 day`, `1 week`)                                      |
+
+### 고급 설정 구성(선택 사항)
+
+데이터가 없거나 모니터가 장시간 미해결 상태에 머무를 때의 예외 상황에 대한 특별 처리를 선택합니다.
+
+**No-data handling** — 쿼리에서 데이터가 반환되지 않을 때의 동작:
+
+| 모드                                | 동작                                                                    |
+| ----------------------------------- | ----------------------------------------------------------------------- |
+| **Treat missing data as 0**(기본값) | null을 `0`으로 처리하고 임계값과 비교합니다                             |
+| **Keep the previous severity**      | 이전 심각도를 유지하며 알림을 보내지 않습니다                           |
+| **Show severity NO_DATA**           | `NO_DATA` 심각도를 기록하며 알림을 보내지 않습니다                      |
+| **Notify after sustained NO_DATA**  | `NO_DATA` 심각도를 기록하고, 설정 가능한 지연 시간 이후 알림을 보냅니다 |
+
+**Renotify** — 심각도가 높은 상태로 유지되는 동안 재알림 여부:
+
+| 모드              | 동작                                                              |
+| ----------------- | ----------------------------------------------------------------- |
+| `Off`(기본값)     | 심각도가 전환될 때마다 한 번씩 알림이 발생합니다                  |
+| `Every N minutes` | 심각도가 지속되는 동안 N분마다 다시 알림이 발생합니다(1~10,080분) |
+
+### 알림 채널 선택 [#notification-channel]
+
+**Automations** 패널에서 하나 이상의 자동화를 선택합니다. 알림이 발생하면 Langfuse는 선택된 각 자동화로 이벤트를 게시하고, 자동화는 설정된 액션(Slack 메시지, 웹훅 등)을 실행합니다.
+
+여기에 자동화를 연결하기 전에 액션을 설정하는 방법은 [Automations](#automations)를 참고하세요.
+
+### 이름 지정 및 저장
+
+모니터에 설명이 담긴 이름(최대 200자)과 선택적으로 태그를 지정한 다음 **Save**를 클릭합니다. 모니터는 즉시 **ACTIVE** 상태가 되며 첫 평가가 예약됩니다.
+
+</Steps>
+
+## 알림 상태 [#alert-states]
+
+각 모니터는 평가가 이루어질 때마다 갱신되는 **심각도(severity)**를 가집니다.
+
+| 심각도    | 의미                                                                                                                         |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `UNKNOWN` | 초기 상태 — 아직 평가되지 않음                                                                                               |
+| `OK`      | 메트릭이 정상 범위 내에 있음                                                                                                 |
+| `WARNING` | 메트릭이 경고 임계값을 초과함                                                                                                |
+| `ALERT`   | 메트릭이 알림 임계값을 초과함                                                                                                |
+| `NO_DATA` | 쿼리에서 데이터가 반환되지 않았고, no-data 모드가 **Show severity NO_DATA** 또는 **Notify after sustained NO_DATA**로 설정됨 |
+| `PAUSED`  | 모니터가 일시 중지된 상태이며, 평가가 실행되지 않음                                                                          |
+
+**알림이 발생하는 경우:**
+
+- 알림(`UNKNOWN | OK → WARNING | ALERT`): 항상 알림이 발생합니다.
+- 복구(`WARNING | ALERT → OK`): 항상 알림이 발생합니다.
+- 데이터 없음(`NO_DATA ↔ WARNING | ALERT | OK | UNKNOWN`): no-data 모드가 **Notify after sustained `NO_DATA`**일 때만 알림이 발생합니다.
+- 지속되는 심각도(`WARNING → WARNING`, `ALERT → ALERT`): **Renotify**가 활성화된 경우에만 알림이 발생합니다.
+
+## 일시 중지 및 재개 [#pause]
+
+모니터 목록 또는 상세 페이지에서 행 작업 메뉴를 사용해 모니터를 **Pause**(일시 중지) 또는 **Resume**(재개)할 수 있습니다. 일시 중지된 모니터는 모든 평가를 건너뛰며, 심각도는 `PAUSED`로 고정됩니다. 재개하면 다시 `ACTIVE` 상태가 되며 다음 평가가 예약됩니다.
+
+## 자동화 [#automations]
+
+자동화는 모니터 알림을 외부 시스템으로 전달합니다. 각 자동화는 **트리거**(모니터 심각도 변경)와 **액션**(외부 시스템으로 전송되는 알림)을 짝지어 구성합니다.
+
+세 가지 알림 채널을 사용할 수 있습니다:
+
+| 액션               | 동작                                                                   |
+| ------------------ | ---------------------------------------------------------------------- |
+| **Slack**          | Slack 채널에 서식이 지정된 알림 메시지를 게시합니다                    |
+| **Webhook**        | HMAC로 서명된 JSON 페이로드와 함께 엔드포인트로 HTTP POST를 전송합니다 |
+| **GitHub Actions** | GitHub 저장소에서 `workflow_dispatch` 이벤트를 발생시킵니다            |
+
+다른 채널이 추가되기를 원하신다면 [GitHub discussions](#gh-discussion)에 의견을 남겨 주세요.
+
+### 모니터 자동화 생성하기 [#automation-setup]
+
+1. [**Automations**](https://cloud.langfuse.com/project/~/automations)로 이동한 다음 **Create Automation**을 클릭합니다.
+2. 이벤트 소스로 **Monitor**를 선택합니다.
+3. 액션 유형(**Slack**, **Webhook**, 또는 **GitHub Actions**)을 선택합니다.
+4. 액션을 구성합니다: Slack 채널, 웹훅 엔드포인트 URL, 또는 GitHub 저장소 dispatch URL, 이벤트 유형, 개인 액세스 토큰을 입력합니다.
+5. 자동화에 이름을 지정하고 **Save**를 클릭합니다. 이제 모니터를 생성하거나 편집할 때 [**Automations** 패널](#notification-channel)에 표시됩니다.
+
+### 모니터를 자동화에 연결하기
+
+1. [새 모니터 자동화를 생성](#automation-setup)하거나 기존 자동화를 편집합니다.
+2. [새 모니터를 생성](#monitor-setup)하거나 기존 모니터를 편집합니다.
+3. 모니터 편집기의 **notifications section**에 있는 [**Automations** 패널](#notification-channel)에서 자동화를 선택합니다.
+4. **Save**를 클릭하여 선택한 자동화에 모니터를 연결합니다.
+
+모니터는 심각도가 전환될 때마다 연결된 모든 자동화를 실행합니다(자세한 내용은 [알림 상태](#alert-states) 참고).
+
+<Callout type="warn">
+  **5회 연속 전송 실패** 이후, Langfuse는 해당 자동화의 트리거를 자동으로 비활성화합니다.
+  엔드포인트가 복구되면 Automations 페이지에서 다시 활성화하세요.
+</Callout>
+
+### 웹훅 페이로드 [#automations-webhook-payload]
+
+엔드포인트는 서명된 JSON 본문을 수신합니다:
+
+```json filename="monitor-alert-payload.json"
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "timestamp": "2024-07-10T10:30:00Z",
+  "type": "monitor-alert",
+  "apiVersion": "v1",
+  "payload": {
+    "monitorId": "monitor_abc123",
+    "projectId": "proj_xyz789",
+    "permalink": "https://cloud.langfuse.com/project/proj_xyz789/monitors/monitor_abc123",
+    "message": {
+      "title": "avg latency crossed alert threshold",
+      "body": "avg latency is 1234 ms (threshold: 1000 ms) over the last 1 hour"
+    },
+    "severity": "ALERT",
+    "timestamp": "2024-07-10T10:30:00Z",
+    "fromTimestamp": "2024-07-10T09:30:00Z",
+    "toTimestamp": "2024-07-10T10:30:00Z",
+    "view": "observations",
+    "filters": [],
+    "window": "1h"
+  }
+}
+```
+
+서명 검증 방식은 프롬프트 웹훅과 동일하게 동작합니다 — HMAC 검증 코드는 [Webhooks](/docs/prompt-management/features/webhooks-slack-integrations)를 참고하세요.
+
+## GitHub Discussions [#gh-discussion]
+
+import { GhDiscussionsPreview } from "@/components/gh-discussions/GhDiscussionsPreview";
+
+<GhDiscussionsPreview labels={["feat-monitors"]} />

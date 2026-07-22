@@ -1,0 +1,248 @@
+---
+title: 환경
+description: 환경을 설정하여 트레이스, 관측(observation), 점수를 조직하세요.
+sidebarTitle: 환경
+sourceRevision: dfca55f698615475291f342e672b94973b699339
+translationStatus: machine
+---
+
+# 환경
+
+환경(Environment)을 사용하면 프로덕션, 스테이징, 개발 등 서로 다른 컨텍스트에서 발생한 트레이스, 관측, 점수를 조직할 수 있습니다. 이를 통해 다음이 가능합니다:
+
+- 동일한 프로젝트를 사용하면서 개발 데이터와 프로덕션 데이터를 분리
+- 환경별로 데이터를 필터링하고 분석
+- 여러 환경에서 데이터셋과 프롬프트를 재사용
+
+`LANGFUSE_TRACING_ENVIRONMENT` 환경 변수를 설정하거나(권장), 클라이언트 초기화 시 `environment` 매개변수를 사용하여 환경을 설정할 수 있습니다.
+둘 다 지정된 경우 초기화 매개변수가 우선합니다.
+아무것도 지정하지 않으면 기본 환경은 `default`입니다.
+
+Python SDK에서는 `propagate_attributes(environment="...")`를 사용하여 특정 트레이스 범위에 대한 환경을 설정할 수도 있습니다. 이는 하나의 공유 LLM 프록시가 개발, 스테이징, QA, 프로덕션의 요청을 처리하는 경우처럼, 환경이 서비스 프로세스 자체가 아니라 들어오는 요청에 속할 때 유용합니다. 서비스 경계를 넘어 환경을 전파하려면 `as_baggage=True`를 사용하세요.
+
+## 데이터 모델
+
+`environment` 속성은 Langfuse의 모든 이벤트에서 사용할 수 있습니다:
+
+- 트레이스
+- 관측(스팬, 이벤트, 생성)
+- 점수
+- 세션
+
+자세한 내용은 [데이터 모델](/docs/observability/data-model)을 참고하세요.
+
+환경 값은 다음 정규식 패턴을 따르는 문자열이어야 하며, 최대 40자까지 허용됩니다: `^(?!langfuse)[a-z0-9-_]+$`
+
+이는 다음을 의미합니다:
+
+- "langfuse"로 시작할 수 없음
+- 소문자, 숫자, 하이픈, 밑줄만 포함할 수 있음
+
+## 사용법
+
+<LangTabs items={["Python SDK", "JS/TS SDK", "OpenTelemetry", "OpenAI (Python)", "OpenAI (JS/TS)", "Langchain (Python)", "Langchain (JS/TS)", "Vercel AI SDK (JS/TS)"]}>
+<Tab title="Python SDK">
+
+```python
+from langfuse import get_client, observe, propagate_attributes
+import os
+
+# 환경 변수를 설정합니다
+# 또는 .env 파일에 설정하고 dotenv로 불러올 수도 있습니다
+os.environ["LANGFUSE_TRACING_ENVIRONMENT"] = "production"
+
+# 클라이언트를 가져옵니다 (환경 변수를 사용합니다)
+langfuse = get_client()
+
+# 이제 모든 작업이 "production" 환경과 연결됩니다
+with langfuse.start_as_current_observation(as_type="span", name="my-operation") as span:
+    # 여기에 코드를 작성하세요
+    pass
+
+@observe
+def main():
+    return "Hello"
+
+main()
+
+# 요청 범위의 환경이 필요한 경우 환경을 명시적으로 전파합니다.
+# 이는 최상위 필드인 langfuse.environment에 매핑됩니다.
+with langfuse.start_as_current_observation(as_type="span", name="proxy-request"):
+    with propagate_attributes(environment="staging"):
+        # 여기서 생성된 모든 하위 관측은 staging과 연결됩니다.
+        pass
+```
+
+</Tab>
+<Tab>
+
+환경 변수를 통해 Langfuse 환경을 설정합니다:
+
+```bash
+export LANGFUSE_TRACING_ENVIRONMENT=production
+```
+
+</Tab>
+<Tab>
+
+[OpenTelemetry](/docs/opentelemetry/get-started)를 사용하는 경우 다음 속성 중 하나를 사용하여 환경을 설정할 수 있습니다:
+
+- `langfuse.environment`
+- `deployment.environment.name`
+- `deployment.environment`
+
+전역적으로 환경 속성을 설정하려면 리소스 속성을 사용할 수 있습니다: `os.environ["OTEL_RESOURCE_ATTRIBUTES"] = "langfuse.environment=staging"`.
+
+또는 스팬 단위로 환경을 설정할 수도 있습니다:
+
+```python
+from opentelemetry import trace
+from opentelemetry.trace import Status, StatusCode
+
+tracer = trace.get_tracer(__name__)
+
+with tracer.start_as_current_observation("my-operation") as span:
+    # Langfuse 전용 속성을 사용하여 환경을 설정합니다
+    span.set_attribute("langfuse.environment", "staging")
+
+    # 또는 OpenTelemetry 관례를 사용합니다
+    span.set_attribute("deployment.environment.name", "staging")
+```
+
+</Tab>
+<Tab>
+
+<Callout type="info">
+
+**Python SDK**를 사용하는 경우, 클라이언트 초기화 시 지정한 환경은 사용 중인 Langfuse 관리 통합(integration)과 관계없이 모든 이벤트 입력과 출력에 적용됩니다.
+
+자세한 내용은 Python SDK 탭을 참고하세요.
+
+</Callout>
+
+[OpenAI SDK 통합](/integrations/model-providers/openai-py)을 사용하는 경우
+
+```python
+from langfuse import Langfuse
+from langfuse.openai import openai
+
+# 환경 변수를 설정하거나 Langfuse 클라이언트를 구성합니다
+os.environ["LANGFUSE_TRACING_ENVIRONMENT"] = "production"
+
+langfuse = Langfuse(environment="production")
+
+# 통합은 내부적으로 인스턴스화된 클라이언트를 사용합니다
+completion = openai.chat.completions.create(
+  model="gpt-3.5-turbo",
+  messages=[
+    {"role": "system", "content": "You are a calculator."},
+    {"role": "user", "content": "1 + 1 = "}],
+)
+```
+
+</Tab>
+<Tab>
+
+```bash filename=".env"
+LANGFUSE_TRACING_ENVIRONMENT=production
+```
+
+```ts
+import OpenAI from "openai";
+import { observeOpenAI } from "@langfuse/openai";
+
+const openai = observeOpenAI(new OpenAI());
+```
+
+자세한 내용은 [OpenAI 통합 (JS/TS)](/integrations/model-providers/openai-js)를 참고하세요.
+
+</Tab>
+
+<Tab>
+
+<Callout type="info">
+
+**Python SDK**를 사용하는 경우, 클라이언트 초기화 시 지정한 환경은 사용 중인 Langfuse 관리 통합(integration)과 관계없이 모든 이벤트 입력과 출력에 적용됩니다.
+
+자세한 내용은 Python SDK 탭을 참고하세요.
+
+</Callout>
+
+```python
+from langfuse.langchain import CallbackHandler
+
+# 클라이언트를 초기화하기 전에 환경 변수를 통해 환경을 설정합니다
+os.environ["LANGFUSE_TRACING_ENVIRONMENT"] = "production"
+handler = CallbackHandler()
+```
+
+</Tab>
+
+<Tab>
+
+환경은 `LangfuseSpanProcessor`에서 설정되거나(또는 `LANGFUSE_TRACING_ENVIRONMENT` 환경 변수를 통해 설정됩니다) — `CallbackHandler`가 생성한 LangChain 스팬은 자동으로 이를 통해 흐릅니다:
+
+```ts
+import { NodeSDK } from "@opentelemetry/sdk-node";
+import { LangfuseSpanProcessor } from "@langfuse/otel";
+import { CallbackHandler } from "@langfuse/langchain";
+
+const sdk = new NodeSDK({
+  spanProcessors: [
+    new LangfuseSpanProcessor({
+      environment: "production",
+    }),
+  ],
+});
+sdk.start();
+
+const handler = new CallbackHandler();
+```
+
+자세한 내용은 [Langchain 통합 (JS/TS)](/integrations/frameworks/langchain)을 참고하세요.
+
+</Tab>
+
+<Tab>
+
+[Vercel AI SDK 통합](/integrations/frameworks/vercel-ai-sdk)을 사용하는 경우
+
+```ts filename="instrumentation.ts" {/environment: "production"/}
+import { registerOTel } from "@vercel/otel";
+import { LangfuseSpanProcessor } from "@langfuse/otel";
+
+export function register() {
+  registerOTel({
+    serviceName: "langfuse-vercel-ai-nextjs-example",
+    spanProcessors: [new LangfuseSpanProcessor({ environment: "production" })],
+  });
+}
+```
+
+</Tab>
+
+</LangTabs>
+
+## 필터링
+
+Langfuse UI에서는 내비게이션 바에 있는 환경 필터를 사용하여 이벤트를 환경별로 필터링할 수 있습니다. 이 필터는 Langfuse의 모든 화면에 적용됩니다.
+
+API에서 환경별로 필터링하는 방법은 [API 레퍼런스](/docs/api)를 참고하세요.
+
+## 환경 관리
+
+환경은 특정 `environment` 값으로 데이터가 처음 수집될 때 생성되며 영구적으로 유지됩니다. 현재 UI를 통해 삭제하거나 이름을 변경할 수 없습니다.
+
+여러 프로젝트와 단계에서 여러 환경을 구조화, 분리, 활용하는 방법에 대한 가이드는 FAQ의 [서로 다른 환경 관리하기](/faq/all/managing-different-environments)를 참고하세요.
+
+## 모범 사례
+
+1. **일관된 환경 이름**: 필터링과 분석을 쉽게 하려면 애플리케이션 전반에서 일관된 환경 이름을 사용하세요.
+2. **환경별 분석**: 환경을 사용하여 서로 다른 배포 단계 간 메트릭을 분석하고 비교하세요.
+3. **테스트**: 프로덕션 데이터가 오염되지 않도록 테스트에는 별도의 환경을 사용하세요.
+
+## GitHub 토론
+
+import { GhDiscussionsPreview } from "@/components/gh-discussions/GhDiscussionsPreview";
+
+<GhDiscussionsPreview labels={["feat-tracing-environments"]} />

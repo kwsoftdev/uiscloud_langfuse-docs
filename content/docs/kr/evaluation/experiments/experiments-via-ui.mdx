@@ -1,0 +1,250 @@
+---
+title: UI를 통한 실험
+description: 데이터셋을 기반으로 다양한 프롬프트 버전과 모델을 실험하고, Langfuse UI에서 직접 결과를 나란히 비교해 보세요.
+sourceRevision: 96099390bd0c51569e5b81e2efd3e70ecbb23b89
+translationStatus: machine
+---
+
+# UI를 통한 실험 (Prompt Experiments)
+
+Langfuse UI에서 UI를 통한 실험(Prompt Experiments라고도 함)을 실행하여 [프롬프트 관리](/docs/prompt-management)의 다양한 프롬프트 버전이나 언어 모델을 테스트하고 결과를 나란히 비교할 수 있습니다.
+
+선택적으로 [LLM-as-a-Judge 평가기](/docs/evaluation/evaluation-methods/llm-as-a-judge) 또는 [코드 평가기](/docs/evaluation/evaluation-methods/code-evaluators)를 사용하여 예상 출력을 기준으로 응답을 자동으로 채점함으로써, 결과를 집계 수준에서 더 자세히 분석할 수 있습니다.
+
+<Video
+  src="https://static.langfuse.com/docs-videos/prompt-experiments.mp4"
+  aspectRatio={16 / 9}
+  title="Introduction to Experiments via UI (Prompt Experiments)"
+/>
+
+## Prompt Experiments를 사용해야 하는 이유
+
+- 다양한 프롬프트 버전이나 모델을 빠르게 테스트할 수 있습니다
+- 데이터셋을 사용하여 다양한 프롬프트 버전과 모델을 테스트하는 방식으로 프롬프트 테스트를 체계화할 수 있습니다
+- Prompt Experiments를 통해 프롬프트를 빠르게 반복 개선할 수 있습니다
+- 선택적으로 LLM-as-a-Judge나 코드 평가기를 사용하여 데이터셋의 예상 출력을 기준으로 응답을 채점할 수 있습니다
+- 프롬프트를 변경할 때 테스트를 실행하여 회귀(regression)를 방지할 수 있습니다
+
+실험은 항상 실험 실행 시점의 최신 데이터셋 버전을 기준으로 실행됩니다. 특정 데이터셋 버전에서 실험을 실행하는 기능은 곧 추가될 예정입니다.
+
+## 사전 요구 사항
+
+<Steps>
+
+### 사용 가능한 프롬프트 만들기
+
+테스트하고 평가하고자 하는 프롬프트를 생성합니다. [프롬프트를 만드는 방법은?](/docs/prompt-management/get-started)
+
+<Callout type="info">
+  **프롬프트를 사용할 수 있는 조건:** 프롬프트에 있는 변수가 실험에 사용할
+  데이터셋의 데이터셋 항목 키와 일치해야 합니다. 아래 예시를 참고하세요.
+</Callout>
+
+<Details>
+<Summary>예시: 프롬프트 변수와 데이터셋 항목 키 매핑</Summary>
+<div className="grid md:grid-cols-1 gap-4">
+<div>
+
+<br />
+**프롬프트:**
+
+```bash You are a Langfuse expert. Answer based on:
+{{ documentation }}
+
+Question: {{question}}
+
+```
+
+</div>
+<div>
+
+<br />
+**데이터셋 항목:**
+
+```json
+{
+  "documentation": "Langfuse is an AI Engineering Platform",
+  "question": "What is Langfuse?"
+}
+```
+
+</div>
+</div>
+
+이 예시에서:
+
+- 프롬프트 변수 `{{documentation}}`은 JSON 키 `"documentation"`에 매핑됩니다
+- 프롬프트 변수 `{{question}}`은 JSON 키 `"question"`에 매핑됩니다
+- 실험이 정상적으로 실행되려면 두 키 모두 데이터셋 항목의 입력 JSON에 존재해야 합니다
+
+</Details>
+
+<Details>
+<Summary>예시: 채팅 메시지 플레이스홀더 매핑</Summary>
+
+변수 외에도 채팅 메시지 프롬프트의 플레이스홀더를 데이터셋 항목 키에 매핑할 수 있습니다.
+이는 데이터셋 항목에 예를 들어 사용할 채팅 메시지 기록이 포함되어 있는 경우에 유용합니다.
+채팅 프롬프트에는 이름이 지정된 플레이스홀더가 포함되어야 합니다. 플레이스홀더 내부의 변수는 해석되지 않습니다.
+
+**채팅 프롬프트:**
+플레이스홀더 이름: `message_history`
+
+**데이터셋 항목:**
+
+```json
+{
+  "message_history": [
+    {
+      "role": "user",
+      "content": "What is Langfuse?"
+    },
+    {
+      "role": "assistant",
+      "content": "Langfuse is a tool for tracking and analyzing the performance of language models."
+    }
+  ],
+  "question": "What is Langfuse?"
+}
+```
+
+이 예시에서:
+
+- 채팅 프롬프트 플레이스홀더 `message_history`는 JSON 키 `"message_history"`에 매핑됩니다.
+- 프롬프트 변수 `{{question}}`은 플레이스홀더 메시지 내부가 아닌 변수로서 JSON 키 `"question"`에 매핑됩니다.
+- 실험이 정상적으로 실행되려면 두 키 모두 데이터셋 항목의 입력 JSON에 존재해야 합니다
+
+</Details>
+
+### 사용 가능한 데이터셋 만들기
+
+프롬프트 실험에 사용할 입력값과 예상 출력값이 포함된 데이터셋을 생성합니다. [데이터셋을 만드는 방법은?](/docs/evaluation/dataset-runs/datasets)
+
+<Callout type="info">
+  **데이터셋을 사용할 수 있는 조건:** [1] 데이터셋 항목이 입력값으로 JSON
+  객체를 가지고 있고, [2] 이 객체의 JSON 키가 사용할 프롬프트의 프롬프트
+  변수와 일치해야 합니다. 아래 예시를 참고하세요.
+</Callout>
+
+ <Details>
+<Summary>예시: 프롬프트 변수와 데이터셋 항목 키 매핑</Summary>
+<div className="grid md:grid-cols-1 gap-4">
+<div>
+
+<br />
+**프롬프트:**
+
+```bash You are a Langfuse expert. Answer based on:
+{{ documentation }}
+
+Question: {{question}}
+
+```
+
+</div>
+<div>
+
+<br />
+**데이터셋 항목:**
+
+```json
+{
+  "documentation": "Langfuse is an AI Engineering Platform",
+  "question": "What is Langfuse?"
+}
+```
+
+</div>
+</div>
+
+이 예시에서:
+
+- 프롬프트 변수 `{{documentation}}`은 JSON 키 `"documentation"`에 매핑됩니다
+- 프롬프트 변수 `{{question}}`은 JSON 키 `"question"`에 매핑됩니다
+- 실험이 정상적으로 실행되려면 두 키 모두 데이터셋 항목의 입력 JSON에 존재해야 합니다
+
+</Details>
+
+### LLM 연결 구성
+
+프롬프트가 각 데이터셋 항목에 대해 실행되므로, 프로젝트 설정에서 LLM 연결을 구성해야 합니다. [LLM 연결을 구성하는 방법은?](/docs/administration/llm-connection)
+
+### 선택 사항: 평가기 설정
+
+의미론적 기준을 채점하려면 [LLM-as-a-judge 평가기](/docs/evaluation/evaluation-methods/llm-as-a-judge)를, 결정론적 검사를 위해서는 [코드 평가기](/docs/evaluation/evaluation-methods/code-evaluators)를 설정할 수 있습니다. 실험을 대상으로 지정하고 사용할 데이터셋으로 필터링하는 것을 잊지 마세요.
+
+</Steps>
+
+## UI를 통해 실험 실행하기 (Prompt Experiment)
+
+<Steps>
+### 데이터셋으로 이동
+
+실험은 현재 데이터셋의 상세 페이지에서 시작할 수 있습니다.
+
+- `Your Project` > `Datasets`로 **이동합니다**
+- 실험을 시작할 데이터셋을 **클릭합니다**
+
+<Frame fullWidth>
+  ![New Experiment Button](/images/docs/navigate-to-dataset.png)
+</Frame>
+
+### 설정 페이지 열기
+
+설정 페이지를 열려면 `Start Experiment`를 **클릭합니다**
+
+<Frame fullWidth>
+  ![New Experiment Button](/images/docs/trigger-process.png)
+</Frame>
+
+`prompt Experiment` 아래의 `Create`를 **클릭합니다**
+
+<Frame>![New Experiment Button](/images/docs/trigger-process-2.png)</Frame>
+
+### 실험 구성
+
+1. 실험 이름을 **설정합니다**
+2. 사용할 프롬프트를 **선택합니다**
+   - 동적 콘텐츠가 하나뿐이라면, 정적인 시스템 프롬프트와 동적인 사용자 메시지(예: 전체 사용자 메시지를 변수로 사용)로 구성된 채팅 프롬프트를 권장합니다. 이렇게 하면 동적 콘텐츠를 사용자 메시지로 매핑할 수 있습니다.
+   - 동적 콘텐츠가 여러 개라면, 각 동적 콘텐츠마다 프롬프트에 변수를 만드는 것을 권장합니다. 이렇게 하면 각 동적 콘텐츠를 해당 변수에 매핑할 수 있습니다.
+3. 사용할 LLM 연결을 **설정하거나 선택합니다**
+4. 사용할 데이터셋을 **선택합니다**
+5. **선택적으로 구조화된 출력을 구성합니다** - 토글을 켜서 JSON 스키마 응답 형식을 강제할 수 있습니다
+   - 프로젝트의 기존 스키마를 선택하거나 새로 만듭니다
+   - 스키마는 [Playground](/docs/playground)에서 생성 및 저장하여 여기서 재사용할 수 있습니다
+   - 스키마 선택기 옆의 눈 아이콘을 사용해 스키마를 보거나 편집할 수 있습니다
+6. **선택적으로** 사용할 평가기를 **선택합니다**
+7. 실험을 실행하려면 `Create`를 **클릭합니다**
+
+<Frame>![New Experiment Button](/images/docs/configure_dataset_run.png)</Frame>
+
+<Callout type="info">
+  **구조화된 출력(Structured output)**은 LLM 응답이 특정 JSON 스키마를
+  따르도록 보장합니다. 이는 평가나 후속 처리를 위해 일관되고 파싱 가능한
+  출력이 필요할 때 유용합니다. Playground에서 정의한 것과 동일한 스키마를
+  실험에서도 사용할 수 있습니다.
+</Callout>
+
+이렇게 하면 실험이 실행되고 Experiments 페이지로 이동합니다. 실행은 프롬프트의 복잡도와 데이터셋 크기에 따라 몇 초에서 몇 분 정도 걸릴 수 있습니다.
+
+### 실행 결과 비교
+
+각 실험 실행 후, Experiments 테이블에서 집계된 점수를 확인하고 결과를 나란히 비교할 수 있습니다. 회귀 분석과 다중 후보 비교에 대한 자세한 내용은 [AI 에이전트의 체계적 평가](/blog/2025-11-06-experiment-interpretation) 가이드를 참고하세요.
+
+<Video
+  src="https://static.langfuse.com/docs-videos/datasets-compare.mp4"
+  aspectRatio={16 / 9}
+  gifStyle
+/>
+
+</Steps>
+
+## 관련 자료
+
+- 프롬프트만 실행하는 대신 전체 애플리케이션이나 에이전트 로직(사용자 지정 런타임 구성 포함)을 평가해야 하는 경우, [SDK를 통한 실험](/docs/evaluation/experiments/experiments-via-sdk)을 사용하세요. [웹훅](/docs/evaluation/experiments/experiments-via-sdk#configure-webhook)을 사용하면 UI에서도 SDK 기반 평가 실행을 트리거할 수 있습니다.
+
+## GitHub 토론
+
+import { Details, Summary } from "@/components/Details";
+import { GhDiscussionsPreview } from "@/components/gh-discussions/GhDiscussionsPreview";
+
+<GhDiscussionsPreview labels={["feat-prompt-experiments"]} />

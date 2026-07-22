@@ -1,0 +1,269 @@
+---
+title: 메타데이터
+description: 관측 항목(observation)에 사용자 정의 메타데이터를 추가하여 애플리케이션을 더 잘 이해하고 관측 항목 간 상관관계를 파악하세요
+sidebarTitle: 메타데이터
+sourceRevision: ebd88776f7a2585db353a96b9309ff06a258a8fa
+translationStatus: machine
+---
+
+import { PropagationRestrictionsCallout } from "@/components/PropagationRestrictionsCallout";
+
+# 메타데이터
+
+관측 항목(observation, [Langfuse 데이터 모델](/docs/observability/data-model) 참고)에는 애플리케이션을 더 잘 이해하고 Langfuse에서 관측 항목 간 상관관계를 파악할 수 있도록 메타데이터를 추가할 수 있습니다.
+
+Langfuse UI와 API에서 메타데이터 키로 필터링할 수 있습니다.
+
+## 전파되는 메타데이터
+
+`propagate_attributes()`를 사용하면 컨텍스트 내 모든 관측 항목에 메타데이터가 자동으로 적용됩니다. 전파되는 메타데이터는 값이 최대 200자 문자열로 제한되는 키-값 쌍입니다. 키는 영숫자 문자만 사용할 수 있습니다. 메타데이터 값이 200자를 초과하면 삭제됩니다.
+
+<LangTabs items={["Python SDK", "JS/TS SDK", "OpenAI (Python)", "OpenAI (JS/TS)", "Langchain (Python)", "Langchain (JS/TS)", "Flowise"]}>
+<Tab>
+
+`@observe()` 데코레이터를 사용하는 경우:
+
+```python /propagate_attributes/
+from langfuse import observe, propagate_attributes
+
+@observe()
+def process_data():
+    # 모든 하위 관측 항목에 메타데이터 전파
+    with propagate_attributes(
+        metadata={"source": "api", "region": "us-east-1", "user_tier": "premium"}
+    ):
+        # 중첩된 모든 관측 항목이 이 메타데이터를 자동으로 상속받습니다
+        result = perform_processing()
+        return result
+```
+
+관측 항목을 직접 생성하는 경우:
+
+```python /propagate_attributes(metadata={"request_id": "req_12345", "region": "us-east-1"})/
+from langfuse import get_client, propagate_attributes
+
+langfuse = get_client()
+
+with langfuse.start_as_current_observation(as_type="span", name="process-request") as root_span:
+    # 모든 하위 관측 항목에 메타데이터 전파
+    with propagate_attributes(metadata={"request_id": "req_12345", "region": "us-east-1"}):
+        # 여기서 생성된 모든 관측 항목은 이 메타데이터를 자동으로 갖습니다
+        with root_span.start_as_current_observation(
+            as_type="generation",
+            name="generate-response",
+            model="gpt-4o"
+        ) as gen:
+            # 이 generation은 자동으로 메타데이터를 갖습니다
+            pass
+```
+
+</Tab>
+<Tab title="JS/TS SDK">
+
+컨텍스트 매니저를 사용하는 경우:
+
+```ts /propagateAttributes/
+import { startActiveObservation, propagateAttributes } from "@langfuse/tracing";
+
+await startActiveObservation("context-manager", async (span) => {
+  span.update({
+    input: { query: "What is the capital of France?" },
+  });
+
+  // 모든 하위 관측 항목에 메타데이터 전파
+  await propagateAttributes(
+    {
+      metadata: { source: "api", region: "us-east-1", userTier: "premium" },
+    },
+    async () => {
+      // 여기서 생성된 모든 관측 항목은 이 메타데이터를 자동으로 갖습니다
+      // ... 로직 작성 ...
+    }
+  );
+});
+```
+
+`observe` 래퍼를 사용하는 경우:
+
+```ts /propagateAttributes/
+import { observe, propagateAttributes } from "@langfuse/tracing";
+
+const processData = observe(
+  async (data: string) => {
+    // 모든 하위 관측 항목에 메타데이터 전파
+    return await propagateAttributes(
+      { metadata: { source: "api", region: "us-east-1" } },
+      async () => {
+        // 중첩된 모든 관측 항목이 이 메타데이터를 자동으로 상속받습니다
+        const result = await performProcessing(data);
+        return result;
+      }
+    );
+  },
+  { name: "process-data" }
+);
+
+const result = await processData("input");
+```
+
+자세한 내용은 [JS/TS SDK 문서](/docs/sdk/typescript/guide)를 참고하세요.
+
+</Tab>
+<Tab title="OpenAI (Python v2)">
+
+```python /propagate_attributes/
+from langfuse import get_client, propagate_attributes
+from langfuse.openai import openai
+
+langfuse = get_client()
+
+with langfuse.start_as_current_observation(as_type="span", name="openai-call"):
+    # OpenAI generation을 포함한 모든 관측 항목에 메타데이터 전파
+    with propagate_attributes(
+        metadata={"source": "api", "region": "us-east-1"}
+    ):
+        completion = openai.chat.completions.create(
+            name="test-chat",
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a calculator."},
+                {"role": "user", "content": "1 + 1 = "}
+            ],
+            temperature=0,
+        )
+```
+
+</Tab>
+<Tab title="OpenAI (JS/TS)">
+
+```ts /propagateAttributes/
+import OpenAI from "openai";
+import { observeOpenAI } from "@langfuse/openai";
+import { startActiveObservation, propagateAttributes } from "@langfuse/tracing";
+
+await startActiveObservation("openai-call", async () => {
+  // 모든 관측 항목에 메타데이터 전파
+  await propagateAttributes(
+    {
+      metadata: { source: "api", region: "us-east-1" },
+    },
+    async () => {
+      const res = await observeOpenAI(new OpenAI()).chat.completions.create({
+        messages: [{ role: "system", content: "Tell me a story about a dog." }],
+        model: "gpt-3.5-turbo",
+        max_tokens: 300,
+      });
+    }
+  );
+});
+```
+
+</Tab>
+<Tab>
+
+```python /propagate_attributes/
+from langfuse import get_client, propagate_attributes
+from langfuse.langchain import CallbackHandler
+
+langfuse = get_client()
+langfuse_handler = CallbackHandler()
+
+with langfuse.start_as_current_observation(as_type="span", name="langchain-call"):
+    # 모든 하위 관측 항목에 메타데이터 전파
+    with propagate_attributes(
+        metadata={"foo": "bar", "baz": "qux"}
+    ):
+        response = chain.invoke(
+            {"topic": "cats"},
+            config={"callbacks": [langfuse_handler]}
+        )
+```
+
+</Tab>
+<Tab title="Langchain (JS/TS)">
+
+```ts /propagateAttributes/
+import { startActiveObservation, propagateAttributes } from "@langfuse/tracing";
+import { CallbackHandler } from "@langfuse/langchain";
+
+const langfuseHandler = new CallbackHandler();
+
+// 모든 하위 관측 항목에 메타데이터 전파
+await propagateAttributes(
+  {
+    metadata: { key: "value" },
+  },
+  async () => {
+    await chain.invoke(
+      { input: "<user_input>" },
+      { callbacks: [langfuseHandler] }
+    );
+  }
+);
+```
+
+</Tab>
+
+<Tab title="Flowise">
+
+override 설정을 통해 `metadata`를 설정할 수 있습니다. 자세한 내용은 [Flowise 통합 문서](/docs/flowise)를 참고하세요.
+
+</Tab>
+
+</LangTabs>
+
+<PropagationRestrictionsCallout attributes={['metadata']}/>
+
+## 전파되지 않는 메타데이터
+
+특정 관측 항목에만 메타데이터를 추가할 수도 있습니다.
+
+<LangTabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab>
+
+```python
+# Python SDK
+from langfuse import get_client
+
+langfuse = get_client()
+
+with langfuse.start_as_current_observation(as_type="span", name="process-request") as root_span:
+    # 이 특정 관측 항목에만 메타데이터 추가
+    root_span.update(metadata={"stage": "parsing"})
+
+    # ... 또는 현재 컨텍스트를 통해 span에 접근
+    langfuse.update_current_span(metadata={"stage": "parsing"})
+```
+
+</Tab>
+
+<Tab>
+
+```typescript
+// TypeScript SDK
+import {
+  startActiveObservation,
+  updateActiveObservation,
+} from "@langfuse/tracing";
+
+await startActiveObservation("process-request", async (span) => {
+  // 이 특정 관측 항목에만 메타데이터 추가
+  span.update({
+    metadata: { stage: "parsing" },
+  })
+
+  // ... 또는 현재 컨텍스트를 통해 span에 접근
+  updateActiveObservation({
+    metadata: { stage: "parsing" },
+  });
+});
+```
+
+</Tab>
+</LangTabs>
+
+## GitHub 토론
+
+import { GhDiscussionsPreview } from "@/components/gh-discussions/GhDiscussionsPreview";
+
+<GhDiscussionsPreview labels={["feat-metadata"]} />

@@ -1,0 +1,18 @@
+{
+  "title": "구성",
+  "pages": [
+    "import",
+    "---필수---",
+    "index",
+    "scaling",
+    "backups",
+    "---고급---",
+    "caching",
+    "code-evaluators",
+    "custom-base-path",
+    "encryption",
+    "health-readiness-endpoints",
+    "observability",
+    "transactional-emails"
+  ]
+}

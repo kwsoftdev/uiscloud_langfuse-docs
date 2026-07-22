@@ -1,0 +1,58 @@
+---
+title: 인시던트 대응
+sourceRevision: dbfb2eee2be7c44308fa98fa0be33b6a941bf315
+translationStatus: machine
+---
+
+# Langfuse 인시던트 대응 계획
+
+### 인시던트 선언
+
+**Langfuse 또는 ClickHouse 팀원 누구나** 언제든지 인시던트를 선언할 수 있습니다 — 확신이 설 때까지 기다리지 마세요. 의심스러울 때는 페이지하세요.
+
+Langfuse 인시던트는 **ClickHouse incident.io 계정**에서 처리됩니다.
+
+1. Slack에서 `/inc`를 사용하거나 incident.io에서 직접 인시던트를 선언합니다.
+2. 제목과 설명에 이것이 **Langfuse** 인시던트임을 명확히 표시합니다.
+3. 영향을 받는 서비스, 지역, 고객 영향, 그리고 오류, 대시보드, 트레이스, 지원 티켓에 대한 유용한 링크를 포함합니다.
+4. 가능성이 가장 높은 심각도를 선택합니다 — 이는 외부에 공개되지 않습니다.
+
+긴급한 문제의 경우 `/inc escalate`를 사용해 Langfuse에 직접 페이지를 보냅니다. Slack에서 `@langfuse-oncall`을 태그할 수도 있습니다. ClickHouse 팀원은 `#langfuse`에서 팀을 찾을 수 있으며, ClickHouse 인스턴스와 관련된 문제라면 `#ch-sre-team`도 함께 참여시키세요.
+
+incident.io는 자동으로 Slack 채널을 생성하고 에스컬레이션을 Langfuse 온콜 팀으로 라우팅합니다. Salesforce 지원 에스컬레이션도 동일한 Langfuse 온콜 흐름을 사용해야 합니다. 로테이션이 어떻게 구성되고 검토되는지는 [Langfuse의 온콜](/handbook/product-engineering/how-we-work/on-call)을 참고하세요.
+
+**페이지해야 할 때:** 플랫폼 장애, Langfuse에 영향을 주는 ClickHouse 인스턴스 문제, 보안 문제, 오류 급증, 핵심 제품 플로우 장애, 또는 한 고객이 다른 고객의 데이터를 보는 경우.
+
+### 대응
+
+인시던트 채널에 **가장 먼저 합류한 엔지니어**가 **인시던트 리드**가 됩니다. incident.io에서 자신에게 이 역할을 할당하세요. 영향을 받는 컴포넌트의 [DRI](https://langfuse.com/handbook/how-we-work/ownership), ClickHouse SRE, 또는 필요하다면 Max를 참여시킵니다. 고객에게 영향을 미치는 인시던트의 경우, 비즈니스 쪽 담당자를 참여시켜 Slack 채널과 지원 티켓을 모니터링하게 합니다.
+
+1. **분류(Triage)** — 증거(스크린샷, 메트릭, 로그)를 수집하고 상태 페이지 업데이트를 게시합니다(아래 참고). 치명적인 인시던트의 경우 제품 공지 배너를 활성화합니다.
+2. **완화(Mitigate)** — 먼저 시스템을 복구합니다: 롤백, 스케일 업, 기능 플래그, 핫픽스. 근본 원인 분석은 나중에 진행합니다.
+3. **안정화(Stabilize)** — incident.io에서 완화됨(mitigated)으로 표시하고, 상태 페이지를 업데이트하고, 15~30분간 모니터링한 후 콜을 종료합니다.
+
+### 워룸 콜
+
+원격 팀원들이 빠르게 합류할 수 있고 포스트모템을 위한 기록을 남길 수 있도록, 모든 인시던트 커뮤니케이션은 incident.io 워룸 콜에서 진행하세요.
+
+1. incident.io가 생성한 인시던트 Slack 채널을 엽니다.
+2. incident.io 메시지에서 **☎️ Join the call**을 클릭합니다.
+
+### 상태 페이지
+
+상태 페이지는 매우 중요합니다 — 이는 사용자에게 투명성을 보여주고 신뢰를 구축하는 우리의 수단입니다. **의심스러울 때는 항상 상태 페이지를 설정하세요.**
+
+다음 경우에는 **항상** 상태 페이지가 있어야 합니다:
+
+- 평가 실행 지연
+- 수집(ingestion) 지연
+- 공개 API의 오류/지연 시간
+- 로그인 문제
+
+게시하려면: incident.io에서 **"Status Pages"**로 이동하여 공개 상태 페이지를 선택하고 **"Publish Incident"**를 클릭합니다. Slack에서 `/inc`로 인시던트를 선언해도 공개 상태 페이지 업데이트가 자동으로 생성되지는 **않습니다** — 별도로 게시해야 합니다.
+
+인시던트 리드는 인시던트 진행 중 [상태 페이지](https://status.langfuse.com)를 간결하고 정확한 정보로 계속 업데이트합니다.
+
+### 포스트모템
+
+완화 후에는 근본 원인을 찾아 수정합니다. 자동 생성된 타임라인을 사용하여 [Linear](https://linear.app/langfuse/view/incidents-952de24cfbb8)에서 포스트모템을 작성합니다. 요약, 영향, 근본 원인, 기여 요인, 그리고 담당자가 지정된 후속 조치 항목을 다룹니다. 후속 조치는 Linear 티켓에서 추적합니다. **#team-engineering**에서 공유합니다.

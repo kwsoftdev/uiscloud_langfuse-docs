@@ -1,0 +1,80 @@
+---
+title: 개요
+description: 지연 시간, 비용, 다양한 차원에 걸친 품질을 추적하는 오픈 소스 메트릭으로 LLM 애플리케이션을 개선하세요.
+sourceRevision: 9c0d419484845ffbd56805fd068677856e5d764c
+translationStatus: machine
+---
+
+# 메트릭
+
+Langfuse 메트릭은 [관측성](/docs/observability) 및 [평가](/docs/evaluation) 트레이스로부터 실행 가능한 인사이트를 도출합니다.
+
+메트릭은 [커스터마이즈 가능한 대시보드](/docs/metrics/features/custom-dashboards)와 [메트릭 API](/docs/metrics/features/metrics-api)를 통해 원하는 방식으로 분석할 수 있습니다.
+
+<Frame fullWidth>
+  <img src="/images/docs/llm-analytics.png" alt="LLM Analytics" />
+</Frame>
+
+## 기능
+
+import { LayoutDashboard, Activity } from "lucide-react";
+
+<Cards num={2}>
+  <Card
+    title="Custom Dashboards"
+    href="/docs/metrics/features/custom-dashboards"
+    icon={<LayoutDashboard />}
+    arrow
+  />
+  <Card
+    title="Metrics API"
+    href="/docs/metrics/features/metrics-api"
+    icon={<Activity />}
+    arrow
+  />
+  <Card
+    title="Export to PostHog"
+    href="/integrations/analytics/posthog"
+    icon={
+      <div className="w-6 h-6 dark:bg-white rounded-sm p-1 flex items-center justify-center">
+        <img
+          src="/images/integrations/posthog_icon.svg"
+          alt="PostHog icon"
+          className="w-full h-full object-contain"
+        />
+      </div>
+    }
+    arrow
+  />
+  <Card
+    title="Export to Mixpanel"
+    href="/integrations/analytics/mixpanel"
+    icon={
+      <div className="w-6 h-6 dark:bg-white rounded-sm p-1 flex items-center justify-center">
+        <img
+          src="/images/integrations/mixpanel_icon.svg"
+          alt="Mixpanel icon"
+          className="w-full h-full object-contain"
+        />
+      </div>
+    }
+    arrow
+  />
+</Cards>
+
+## 메트릭 및 차원
+
+메트릭:
+
+- **품질**은 사용자 피드백, 모델 기반 점수 산정, 휴먼 인 더 루프(human-in-the-loop) 방식으로 점수화된 샘플, 또는 SDK/API를 통한 커스텀 점수를 통해 측정됩니다([점수](/docs/evaluation/overview) 참고). 품질은 시간 흐름에 따라, 그리고 프롬프트 버전, LLM, 사용자별로도 평가됩니다.
+- **비용 및 지연 시간**은 사용자, 세션, 지역, 기능, 모델, 프롬프트 버전별로 정확하게 측정되고 분류됩니다.
+- **볼륨**은 수집된 트레이스와 사용된 토큰을 기준으로 산정됩니다.
+
+차원:
+
+- 트레이스 이름: 트레이스에 `name` 필드를 추가하여 서로 다른 사용 사례, 기능 등을 구분합니다.
+- 사용자: 사용자별 사용량과 비용을 추적합니다. 트레이스에 `userId`만 추가하면 됩니다([문서](/docs/observability/features/users)).
+- 태그: 트레이스에 [태그](/docs/observability/features/tags)를 추가하여 서로 다른 사용 사례, 기능 등을 필터링합니다.
+- 릴리스 및 버전 번호: LLM 애플리케이션의 변경 사항이 메트릭에 어떤 영향을 미쳤는지 추적합니다.
+
+정확한 정의는 [메트릭 API 문서](/docs/metrics/features/metrics-api)를 참고하세요.

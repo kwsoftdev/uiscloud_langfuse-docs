@@ -1,0 +1,102 @@
+---
+title: Langfuse 셀프 호스팅 (오픈소스 LLM 관측성)
+sidebarTitle: 개요
+description: Langfuse 셀프 호스팅 - 이 가이드는 Docker, Kubernetes 또는 VM을 사용하여 자체 인프라에 오픈소스 LLM 관측성을 배포하는 방법을 보여줍니다.
+label: "Version: v3"
+sourceRevision: 3ae8ee6d78d14712b476ede271bf8761f4efe1a5
+translationStatus: machine
+---
+
+# Langfuse 셀프 호스팅
+
+<Callout type="info">
+  관리형 솔루션을 찾고 계신가요? Langfuse 팀이 유지 관리하는 [Langfuse
+  Cloud](https://cloud.langfuse.com)를 고려해 보세요.
+</Callout>
+
+Langfuse는 오픈소스이며 Docker를 사용하여 셀프 호스팅할 수 있습니다.
+이 섹션에는 다양한 배포 시나리오를 위한 가이드가 포함되어 있습니다.
+일부 애드온 기능은 [라이선스 키](/self-hosting/license-key)가 필요합니다.
+
+Langfuse를 셀프 호스팅하면 Langfuse Cloud를 구동하는 것과 동일한 인프라를 실행하게 됩니다. 이것이 우리에게 왜 중요한지 자세히 알아보려면 ["Why Langfuse?"](/why)를 읽어보세요.
+
+## 배포 옵션 [#deployment-options]
+
+### Langfuse Cloud
+
+[Langfuse Cloud](https://cloud.langfuse.com)는 Langfuse 팀이 호스팅하고 유지 관리하는 완전 관리형 버전의 Langfuse입니다. 일반적으로 저렴한 [가격](/pricing)으로 Langfuse를 가장 쉽고 빠르게 시작할 수 있는 방법입니다.
+
+### 소규모 배포
+
+[Docker Compose를 사용하여 VM 또는 로컬에서 Langfuse를 실행](/self-hosting/deployment/docker-compose)할 수 있습니다.
+이는 테스트 및 소규모 배포에 권장되며, 고가용성, 확장 기능, 백업 기능은 지원되지 않습니다.
+
+### 프로덕션 규모 배포
+
+프로덕션 및 고가용성 배포의 경우 다음 옵션 중 하나를 권장합니다.
+
+- [Kubernetes (Helm)](/self-hosting/deployment/kubernetes-helm)
+- [AWS (Terraform)](/self-hosting/deployment/aws)
+- [Azure (Terraform)](/self-hosting/deployment/azure)
+- [GCP (Terraform)](/self-hosting/deployment/gcp)
+- [Railway](/self-hosting/deployment/railway)
+
+## 아키텍처
+
+Langfuse는 오픈소스 구성 요소에만 의존하며 로컬, 클라우드 인프라 또는 온프레미스에 배포할 수 있습니다.
+
+import ArchitectureDiagram from "@/components-mdx/architecture-diagram-v3.mdx";
+
+<ArchitectureDiagram />
+
+import ArchitectureDescription from "@/components-mdx/architecture-description-v3.mdx";
+
+<ArchitectureDescription />
+
+## 타임존 요구 사항
+
+모든 인프라 구성 요소(ClickHouse 및 Postgres)는 타임존을 UTC로 설정하여 실행해야 **합니다**. UTC가 아닌 타임존을 사용하면 쿼리가 잘못되거나 비어 있는 결과를 반환하게 됩니다. 이를 확인하는 방법은 [타임존 문제 해결 FAQ](/faq/all/self-hosting-timezone-errors)를 참고하세요.
+
+## 성능, 안정성, 가동 시간에 최적화
+
+셀프 호스팅된 Langfuse는 프로덕션 환경에 최적화되어 있습니다. Langfuse Cloud와 정확히 동일한 코드베이스이며, 단지 자체 인프라에 배포될 뿐입니다. Langfuse 팀은 높은 가용성([상태 페이지](https://status.langfuse.com))과 성능으로 수천 개의 팀에게 Langfuse Cloud를 제공하고 있습니다.
+
+주요 최적화 사항은 다음과 같습니다.
+
+- **큐 기반 트레이스 수집**: 모든 트레이스는 Langfuse Web 컨테이너에서 배치로 수신되어 즉시 S3에 기록됩니다. 큐잉을 위해 참조만 Redis에 저장됩니다. 이후 Langfuse Worker가 S3에서 트레이스를 가져와 Clickhouse에 수집합니다. 이를 통해 요청 부하가 급증하더라도 데이터베이스 제약으로 인한 타임아웃이나 오류가 발생하지 않습니다.
+- **API 키 캐싱**: API 키는 Redis에 인메모리로 캐싱됩니다. 이를 통해 모든 API 호출마다 데이터베이스에 접근하지 않으며, 인증되지 않은 요청은 매우 낮은 리소스 사용량으로 거부될 수 있습니다.
+- **프롬프트 캐싱(SDK 및 API)**: 프롬프트는 Langfuse SDK에 의해 클라이언트 측에서 캐싱되고 백그라운드에서만 재검증되지만([문서](/docs/prompts)), 최초 사용 시에는 Langfuse에서 가져와야 합니다. 따라서 API 응답 시간이 매우 중요합니다. 프롬프트는 Redis의 read-through 캐시에 캐싱됩니다. 이를 통해 자주 사용되는 프롬프트는 데이터베이스에 접근하지 않고도 Langfuse에서 가져올 수 있습니다.
+- **OLAP 데이터베이스**: 읽기 위주의 모든 분석 작업은 빠른 쿼리 성능을 위해 OLAP 데이터베이스(Clickhouse)로 오프로드됩니다.
+- **S3의 멀티모달 트레이스**: 멀티모달 트레이스에는 대용량 동영상이나 임의의 파일이 포함될 수 있습니다. 이를 지원하기 위해 클라이언트 SDK에서 S3/Blob Storage로 직접 업로드됩니다. 자세한 내용은 [여기](/docs/tracing-features/multi-modality)에서 확인하세요.
+- **이벤트 복구 가능성**: 수신되는 모든 트레이싱 및 평가 이벤트는 먼저 S3/Blob Storage에 저장됩니다. 처리가 성공적으로 완료된 후에만 데이터베이스에 기록됩니다. 이를 통해 데이터베이스가 일시적으로 사용 불가능한 경우에도 이벤트가 손실되지 않고 나중에 처리될 수 있습니다.
+- **백그라운드 마이그레이션**: 업그레이드에 필요하지만 일반적인 운영을 차단하지 않는 장시간 실행되는 마이그레이션은 백그라운드 작업으로 오프로드됩니다. 이를 통해 업그레이드 중 다운타임을 크게 줄일 수 있습니다. 자세한 내용은 [여기](/self-hosting/upgrade/background-migrations)에서 확인하세요.
+
+아키텍처에 대한 피드백이나 질문이 있으시면 언제든지 문의해 주세요.
+
+## 기능
+
+Langfuse는 다양한 설정 옵션과 셀프 호스팅 기능을 지원합니다.
+자세한 내용은 [설정 가이드](/self-hosting/configuration)를 참고하세요.
+
+import SelfHostFeatures from "@/components-mdx/self-host-features.mdx";
+
+<SelfHostFeatures />
+
+## 업데이트 구독
+
+import { ProductUpdateSignup } from "@/components/ProductUpdateSignup";
+
+릴리스 노트는 [GitHub](https://github.com/langfuse/langfuse/releases)에 게시됩니다. Langfuse는 태그가 지정된 semver 릴리스를 사용합니다([버전 관리 정책](/self-hosting/upgrade/versioning)).
+
+새로운 릴리스와 새로운 메이저 버전에 대한 알림을 받으려면 메일링 리스트를 구독할 수 있습니다.
+
+<ProductUpdateSignup source="self-host" className="mt-3 mb-3 max-w-sm" />
+
+새로운 릴리스에 대한 알림을 받기 위해 GitHub 릴리스를 관심 목록(watch)에 추가할 수도 있습니다.
+
+<Frame className="max-w-md block">
+  ![Langfuse
+  releases](https://static.langfuse.com/docs-legacy-gifs/github-watch-changelog.gif)
+</Frame>
+
+> **셀프 호스팅 인스턴스와 Langfuse Cloud 간에**(또는 두 인스턴스 간에) 데이터를 이동하려면, 트레이스, 프롬프트, 데이터셋을 전송하는 Python 스크립트를 제공하는 [데이터 마이그레이션 쿡북](/guides/cookbook/example_data_migration)을 참고하세요.

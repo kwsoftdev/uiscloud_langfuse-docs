@@ -3,10 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import NextLink from "next/link";
+import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { HoverCorners } from "@/components/ui/corner-box";
+import { isKoreanPath } from "@/lib/i18n/koPaths";
 
 export function HiringBadge({ className }: { className?: string }) {
+  const ko = isKoreanPath(usePathname());
   const [isHovered, setIsHovered] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const [goats, setGoats] = useState<
@@ -101,7 +104,7 @@ export function HiringBadge({ className }: { className?: string }) {
           </span>
           <span className="relative min-w-0 flex-1 text-left">
             <span className={cn("block truncate", isHovered && "invisible")}>
-              Hiring in Europe and SF
+              {ko ? "유럽 및 SF 지역 채용 중" : "Hiring in Europe and SF"}
             </span>
             <span
               className={cn(
@@ -109,7 +112,7 @@ export function HiringBadge({ className }: { className?: string }) {
                 !isHovered && "invisible",
               )}
             >
-              Looking for GOATS!
+              {ko ? "인재를 찾고 있어요!" : "Looking for GOATS!"}
             </span>
           </span>
         </NextLink>

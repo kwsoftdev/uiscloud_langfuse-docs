@@ -1,0 +1,203 @@
+---
+title: 메시지 플레이스홀더
+sidebarTitle: 메시지 플레이스홀더
+description: 채팅 프롬프트 내 특정 위치에 채팅 메시지 목록을 삽입하려면 메시지 플레이스홀더를 사용하세요.
+sourceRevision: 90f3dbd173ae8203c8b712991caab6d3b7dca511
+translationStatus: machine
+---
+
+# 채팅 프롬프트의 메시지 플레이스홀더
+
+메시지 플레이스홀더(Message Placeholders)를 사용하면 채팅 프롬프트 내 특정 위치에 채팅 메시지 목록(`[{role: "...", content: "..."}]`)을 삽입할 수 있습니다.
+
+하나의 프롬프트에 여러 개의 플레이스홀더를 정의하고, 런타임에 서로 다른 값으로 이를 해석(resolve)할 수 있습니다.
+메시지 플레이스홀더는 [Playground](/docs/playground)와 [프롬프트 실험](/docs/datasets/prompt-experiments)에서도 지원됩니다.
+
+<Callout type="info">
+  애플리케이션에서 플레이스홀더를 사용하려면 최소 `langfuse >= 3.1.0`(python) 또는
+  `langfuse >= 3.38.0`(js)가 필요합니다.
+</Callout>
+
+<Steps>
+
+## 플레이스홀더가 포함된 프롬프트 생성
+
+<LangTabs items={["UI","Python SDK", "JS/TS SDK"]}>
+<Tab>
+
+<Frame fullWidth>
+  ![프롬프트 편집기의 프롬프트 플레이스홀더](/images/docs/prompt-placeholder.png)
+</Frame>
+
+1. `Add message placeholder` 버튼을 사용하여 아무 프롬프트에나 플레이스홀더를 생성합니다.
+2. 애플리케이션에서 이를 참조할 때 사용할 `name`을 플레이스홀더에 지정합니다.
+
+</Tab>
+<Tab>
+
+```python
+from langfuse import get_client
+
+langfuse = get_client()
+
+langfuse.create_prompt(
+    name="movie-critic-chat",
+    type="chat",
+    prompt=[
+      { "role": "system", "content": "You are an {{criticlevel}} movie critic" },
+      { "type": "placeholder", "name": "chat_history" },
+      { "role": "user", "content": "What should I watch next?" },
+    ],
+    labels=["production"],  # 바로 production으로 승격
+)
+```
+
+</Tab>
+
+<Tab>
+
+```typescript
+import { LangfuseClient } from "@langfuse/client";
+
+const langfuse = new LangfuseClient();
+
+await langfuse.prompt.create({
+  name: "movie-critic-chat",
+  type: "chat",
+  prompt: [
+    { role: "system", content: "You are an {{criticlevel}} movie critic" },
+    { type: "placeholder", name: "chat_history" },
+    { role: "user", content: "What should I watch next?" },
+  ],
+  labels: ["production"], // 바로 production으로 승격
+});
+```
+
+</Tab>
+</LangTabs>
+
+## 런타임에 플레이스홀더 해석하기
+
+SDK에서는 `ChatPromptClient`의 `.compile(variables, placeholders)` 메서드를 사용하여 플레이스홀더에 채워 넣을 값을 설정합니다.
+채워 넣는 메시지는 `role`과 `content` 속성을 가진 `ChatMessage` 형식이어야 하지만, `compile`은 메시지 형식을 검증하지 않으므로 커스텀 형식도 허용됩니다.
+
+<LangTabs items={["Python SDK", "JS/TS SDK", "LangChain (Python)", "LangChain (JS/TS)"]}>
+<Tab>
+
+```python
+from langfuse import get_client
+
+langfuse = get_client()
+
+# 애플리케이션에서 플레이스홀더가 포함된 프롬프트 사용
+prompt = langfuse.get_prompt("movie-critic-chat")
+
+# 변수를 채워 넣고, 메시지 목록으로 플레이스홀더를 해석합니다.
+compiled_prompt = prompt.compile(criticlevel="expert", chat_history=[
+  {"role": "user", "content": "I love Ron Fricke movies like Baraka"},
+  {"role": "user", "content": "Also, the Korean movie Memories of a Murderer"}
+])
+
+# -> compiled_prompt = [
+#   { "role": "system", "content": "You are an expert movie critic" },
+#   { "role": "user", "content": "I love Ron Fricke movies like Baraka" },
+#   { "role": "user", "content": "Also, the Korean movie Memories of a Murderer" },
+#   { "role": "user", "content": "What should I watch next?" },
+# ]
+```
+
+</Tab>
+
+<Tab>
+
+```typescript
+import { LangfuseClient } from "@langfuse/client";
+
+const langfuse = new LangfuseClient();
+
+const prompt = await langfuse.prompt.get("movie-critic-chat", {
+  type: "chat",
+});
+
+// 변수를 채워 넣고, 메시지 목록으로 플레이스홀더를 해석합니다.
+const compiledPrompt = prompt.compile(
+  // 변수
+  { criticlevel: "expert" },
+  // 플레이스홀더
+  {
+    chat_history: [
+      { role: "user", content: "I love Ron Fricke movies like Baraka" },
+      {
+        role: "user",
+        content: "Also, the Korean movie Memories of a Murderer",
+      },
+    ],
+  }
+);
+
+// -> compiledPrompt = [
+//   { role: "system", content: "You are an expert movie critic" },
+//   { role: "user", content: "I love Ron Fricke movies like Baraka" },
+//   { role: "user", content: "Also, the Korean movie Memories of a Murderer" },
+//   { role: "user", content: "What should I watch next?" },
+// ]
+```
+
+</Tab>
+
+<Tab>
+
+```python
+from langfuse import get_client
+from langchain_core.prompts import ChatPromptTemplate
+
+langfuse = get_client()
+
+langfuse_prompt = langfuse.get_prompt("movie-critic-chat")
+
+# langchain을 사용하면 해석되지 않은 플레이스홀더에 대해 MessagesPlaceholder 객체를 얻을 수 있습니다.
+langchain_prompt = ChatPromptTemplate.from_messages(langfuse_prompt.get_langchain_prompt())
+
+# -> langchain_prompt = [
+#   SystemMessage(content="You are an expert movie critic"),
+#   MessagesPlaceholder(name="chat_history"),
+#   HumanMessage(content="What should I watch next?"),
+# ]
+```
+
+</Tab>
+
+<Tab>
+
+```typescript
+import { LangfuseClient } from "@langfuse/client";
+import { ChatPromptTemplate } from "@langchain/core/prompts";
+
+const langfuse = new LangfuseClient();
+
+// 현재 `production` 버전 가져오기
+const langfusePrompt = await langfuse.prompt.get("movie-critic-chat", {
+  type: "chat",
+});
+
+// langchain을 사용하면 해석되지 않은 플레이스홀더에 대해 MessagesPlaceholder 객체를 포함한 ChatPromptTemplate을 얻을 수 있습니다.
+const langchainPrompt = ChatPromptTemplate.fromMessages(
+  langfusePrompt.getLangchainPrompt()
+);
+
+// -> langchainPrompt = [
+//   SystemMessage(content="You are an expert movie critic"),
+//   MessagesPlaceholder(name="chat_history"),
+//   HumanMessage(content="What should I watch next?"),
+// ]
+```
+
+</Tab>
+</LangTabs>
+
+</Steps>
+
+원하는 기능이 아닌가요? 다음과 같은 유사한 기능들을 확인해보세요.
+
+- 프롬프트에 동적 텍스트를 삽입하기 위한 [변수](/docs/prompt-management/features/variables)
+- 하위 프롬프트를 재사용하기 위한 [프롬프트 참조](/docs/prompt-management/features/composability)

@@ -1,0 +1,127 @@
+---
+title: 코드 평가기 (셀프 호스팅)
+description: 셀프 호스팅 코드 평가기 실행을 위한 디스패처와 워커를 구성합니다.
+label: "Version: v3"
+sidebarTitle: "코드 평가기"
+sourceRevision: 8d1c8e34f21a6c91afea32a6e71e20abcc7d64be
+translationStatus: machine
+---
+
+# 코드 평가기
+
+셀프 호스팅 코드 평가기는 Langfuse 워커가 이를 감지하여 디스패처 백엔드를 통해 실행합니다. 디스패처는 현재 AWS Lambda 또는 로컬 비보안(insecure) 러너를 동기적으로 호출합니다. 프로덕션 셀프 호스팅 배포에는 실행을 위한 디스패처가 필요합니다.
+
+코드 평가기 사용 가능 여부는 `LANGFUSE_CODE_EVAL_DISPATCHER`에 의해 결정됩니다. 이 변수가 설정되지 않으면 셀프 호스팅 배포에서 코드 평가기가 비활성화됩니다. 웹 서비스에는 UI가 지원되는 코드 평가기 템플릿을 표시할 수 있도록, 워커 서비스에는 실행을 디스패치할 수 있도록 이 변수를 설정하세요.
+
+## 사용 가능한 디스패처
+
+`LANGFUSE_CODE_EVAL_DISPATCHER`를 다음 중 하나의 값으로 설정하세요.
+
+| 디스패처    | 값               | 용도                             | 런타임 지원                     |
+| ----------- | ---------------- | -------------------------------- | ------------------------------- |
+| AWS Lambda  | `aws-lambda`     | 프로덕션 셀프 호스팅 배포        | TypeScript/JavaScript 및 Python |
+| 로컬 비보안 | `insecure-local` | 로컬 개발 및 신뢰할 수 있는 배포 | TypeScript/JavaScript만         |
+
+<Callout type="warning">
+  AWS에서 Langfuse를 실행하지 않는 경우, 모든 평가기 코드가 완전히 신뢰할 수
+  있을 때만 `insecure-local` 디스패처를 사용하세요. 다른 플랫폼에서 샌드박스
+  실행이 필요하다면 [GitHub
+  Discussions](https://github.com/orgs/langfuse/discussions)에서 필요한 지원
+  사항을 알려주세요.
+</Callout>
+
+## AWS Lambda 디스패처
+
+프로덕션 셀프 호스팅 배포에는 AWS Lambda 디스패처를 사용하세요.
+
+```bash
+LANGFUSE_CODE_EVAL_DISPATCHER=aws-lambda
+QUEUE_CONSUMER_CODE_EVAL_EXECUTION_QUEUE_IS_ENABLED=true
+```
+
+AWS Lambda 디스패처는 TypeScript/JavaScript 및 Python 코드 평가기를 활성화합니다.
+
+기본적으로 Langfuse는 TypeScript/JavaScript 및 Python 평가기를 다음 Lambda 함수로 디스패치합니다.
+
+```bash
+LANGFUSE_CODE_EVAL_AWS_LAMBDA_NODE_FUNCTION_NAME=code-based-eval-executor-node
+LANGFUSE_CODE_EVAL_AWS_LAMBDA_PYTHON_FUNCTION_NAME=code-based-eval-executor-python
+```
+
+Lambda 함수가 다른 이름을 사용하는 경우 이 변수들을 설정하세요.
+
+### Lambda 러너
+
+지원되는 런타임마다 하나씩 Lambda 러너를 생성하세요. 러너 소스 코드는 `main` 브랜치에서 확인할 수 있습니다.
+
+| 런타임     | 기본 함수 이름                    | AWS 런타임   | 핸들러          | 번들 파일   | 러너 소스                                                                                                                                                                   |
+| ---------- | --------------------------------- | ------------ | --------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Python     | `code-based-eval-executor-python` | `python3.14` | `index.handler` | `index.py`  | [`scripts/code-eval-runners/python/code_based_eval_handler.py`](https://github.com/langfuse/langfuse/blob/main/scripts/code-eval-runners/python/code_based_eval_handler.py) |
+| JavaScript | `code-based-eval-executor-node`   | `nodejs24.x` | `index.handler` | `index.mjs` | [`scripts/code-eval-runners/node/code-based-eval-handler.mjs`](https://github.com/langfuse/langfuse/blob/main/scripts/code-eval-runners/node/code-based-eval-handler.mjs)   |
+
+[테넌트 격리(tenant isolation)](https://docs.aws.amazon.com/lambda/latest/dg/tenant-isolation.html)를 활성화하여 각 Lambda를 구성하세요.
+
+```hcl
+tenancy_config {
+  tenant_isolation_mode = "PER_TENANT"
+}
+```
+
+테넌트 격리 모드는 아시아 태평양(뉴질랜드)을 제외한 모든 상용 리전에서 지원됩니다.
+
+평가기 실행이 무제한으로 Lambda 용량을 소비하지 않도록 짧은 타임아웃과 제한된 동시성을 사용하세요. Langfuse Cloud는 현재 128MB 메모리, 2초 타임아웃, 런타임별 예약 동시성(reserved concurrency)을 사용합니다.
+
+### IAM 권한
+
+Langfuse 워커가 코드 평가기 러너 함수만 호출할 수 있도록 권한을 부여하세요.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "lambda:InvokeFunction",
+      "Resource": [
+        "arn:aws:lambda:<region>:<account-id>:function:code-based-eval-executor-node",
+        "arn:aws:lambda:<region>:<account-id>:function:code-based-eval-executor-python"
+      ]
+    }
+  ]
+}
+```
+
+Lambda 실행 역할(execution role)은 최소한으로 유지해야 합니다. `lambda.amazonaws.com`을 신뢰하고, 러너의 CloudWatch 로그 그룹에 쓰기를 허용하며, 애플리케이션, 데이터베이스, 시크릿, 스토리지 관련 권한은 부여하지 마세요. 사용자가 제공한 평가기 코드가 이 함수 내부에서 실행되므로, 러너 역할은 Lambda 플랫폼 자체가 요구하는 것 이상으로 Langfuse 인프라에 접근할 수 없어야 합니다.
+
+로컬 AWS 호환 엔드포인트의 경우 사용자 지정 Lambda 엔드포인트를 설정하세요.
+
+```bash
+LANGFUSE_CODE_EVAL_AWS_LAMBDA_ENDPOINT=http://localhost:4566
+```
+
+<Callout type="warning">
+  Lambda 러너를 배포하는 셀프 호스팅 사용자는 네트워크 아웃바운드 차단
+  격리(no-network-egress isolation)를 포함하여 평가기 실행을 격리할 책임이
+  있습니다.
+</Callout>
+
+## 로컬 비보안 디스패처
+
+로컬 개발 및 신뢰할 수 있는 프로덕션 환경에서는 워커 프로세스 내에서 코드 평가기를 실행할 수 있습니다.
+
+```bash
+LANGFUSE_CODE_EVAL_DISPATCHER=insecure-local
+QUEUE_CONSUMER_CODE_EVAL_EXECUTION_QUEUE_IS_ENABLED=true
+```
+
+`insecure-local`은 사용자가 제공한 코드를 Langfuse 워커 프로세스 내부에서 실행합니다. 이는 프로덕션 환경을 포함하여 모든 평가기 코드가 신뢰할 수 있는 경우에만 적합합니다. 신뢰할 수 없는 코드에 대한 샌드박스 경계가 아닙니다. 현재 TypeScript/JavaScript만 지원합니다.
+
+## 큐 및 런타임 옵션
+
+다음 선택적 변수들로 실행 동작을 조정할 수 있습니다.
+
+| 변수                                              | 설명                                                    |
+| ------------------------------------------------- | ------------------------------------------------------- |
+| `LANGFUSE_CODE_EVAL_EXECUTION_QUEUE_SHARD_COUNT`  | 코드 평가기 실행 큐의 샤드 수입니다.                    |
+| `LANGFUSE_CODE_EVAL_EXECUTION_WORKER_CONCURRENCY` | 코드 평가기 실행을 위한 워커 동시성입니다.              |
+| `LANGFUSE_CODE_EVAL_LOCAL_TIMEOUT_MS`             | 로컬에서 실행되는 코드 평가기의 타임아웃(밀리초)입니다. |

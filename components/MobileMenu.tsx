@@ -3,17 +3,30 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { productLinks, resourcesLinks } from "@/lib/nav-links";
-import type { SectionNavData } from "@/lib/nav-tree";
+import {
+  productLinks,
+  productLinksKo,
+  resourcesLinks,
+  resourcesLinksKo,
+} from "@/lib/nav-links";
+import {
+  sectionNavData,
+  sectionNavDataKo,
+  type SectionNavData,
+} from "@/lib/nav-tree";
+import { isKoreanPath } from "@/lib/i18n/koPaths";
 
 export function MobileMenu({
-  sectionNavData,
+  sectionNavData: _sectionNavData,
 }: {
   sectionNavData: SectionNavData[];
 }) {
+  const pathname = usePathname();
+  const ko = isKoreanPath(pathname);
   const [open, setOpen] = useState(false);
   const [productOpen, setProductOpen] = useState(false);
   const [resourcesOpen, setResourcesOpen] = useState(false);
@@ -104,11 +117,11 @@ export function MobileMenu({
                 <nav className="flex flex-col">
                   {/* Product */}
                   <CollapsibleRow
-                    label="Product"
+                    label={ko ? "제품" : "Product"}
                     open={productOpen}
                     onToggle={() => setProductOpen((v) => !v)}
                   >
-                    {productLinks.map((link) => (
+                    {(ko ? productLinksKo : productLinks).map((link) => (
                       <Link
                         key={link.name}
                         href={link.href}
@@ -122,11 +135,11 @@ export function MobileMenu({
 
                   {/* Resources */}
                   <CollapsibleRow
-                    label="Resources"
+                    label={ko ? "리소스" : "Resources"}
                     open={resourcesOpen}
                     onToggle={() => setResourcesOpen((v) => !v)}
                   >
-                    {resourcesLinks.map((link) => (
+                    {(ko ? resourcesLinksKo : resourcesLinks).map((link) => (
                       <Link
                         key={link.name}
                         href={link.href}
@@ -139,7 +152,7 @@ export function MobileMenu({
                   </CollapsibleRow>
 
                   {/* Sections from nav tree */}
-                  {sectionNavData.map((section) => (
+                  {(ko ? sectionNavDataKo : sectionNavData).map((section) => (
                     <Link
                       key={section.href}
                       href={section.href}

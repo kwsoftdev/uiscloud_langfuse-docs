@@ -1,0 +1,65 @@
+---
+title: API를 통한 조직 관리
+description: 셀프 호스팅 설치 환경에서 Langfuse API를 통해 조직을 생성, 업데이트, 삭제하는 방법을 알아보세요.
+label: "Version: v3"
+sidebarTitle: "관리 API (EE)"
+sourceRevision: 9c0d419484845ffbd56805fd068677856e5d764c
+translationStatus: machine
+---
+
+# 인스턴스 관리 API
+
+<Callout type="info">
+
+이 기능은 Enterprise Edition에서만 사용할 수 있습니다. 활성화하려면 [라이선스 키](/self-hosting/license-key)를 추가하세요.
+
+</Callout>
+
+## 개요
+
+인스턴스 관리 API를 사용하면 관리자가 셀프 호스팅 Langfuse 인스턴스에서 조직을 프로그래밍 방식으로 관리할 수 있습니다.
+이 API는 Langfuse Cloud에서는 사용할 수 없습니다.
+
+| 리소스      | 설명                          |
+| ----------- | ----------------------------- |
+| 조직        | 조직 생성, 업데이트, 삭제     |
+| 조직 API 키 | 조직 수준 API 키 생성 및 관리 |
+
+<Callout type="info">
+
+조직 API 키를 통해 조직 범위 라우트를 사용하여 프로젝트, 사용자(SCIM), 권한을 프로비저닝할 수 있습니다. 자세한 내용은 여기에서 확인하세요: [관리 API](/docs/administration/scim-and-org-api).
+
+</Callout>
+
+## 인증
+
+<Steps>
+
+### `ADMIN_API_KEY` 구성
+
+환경 설정에 `ADMIN_API_KEY`를 구성합니다:
+
+```bash filename="Environment"
+ADMIN_API_KEY=your-admin-api-key
+```
+
+### API로 인증하기
+
+그런 다음 Authorization 헤더를 설정하여 API로 인증합니다:
+
+```bash
+Authorization: Bearer $ADMIN_API_KEY
+```
+
+</Steps>
+
+## API 레퍼런스
+
+이 API는 조직을 생성, 조회, 업데이트, 삭제하는 엔드포인트를 제공합니다.
+또한 조직 범위로 API 키를 생성, 나열, 삭제할 수 있습니다.
+이러한 키는 Langfuse API로 인증하고 프로젝트 및 사용자 관리를 위한 관리 라우트를 사용하는 데 활용할 수 있습니다([관리 API](/docs/admin-api)).
+
+참고 자료:
+
+- API 레퍼런스: https://instance-management-api.reference.langfuse.com
+- OpenAPI 스펙: https://cloud.langfuse.com/generated/organizations-api/openapi.yml

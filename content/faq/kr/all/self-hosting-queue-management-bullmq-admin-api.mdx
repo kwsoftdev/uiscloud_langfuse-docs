@@ -1,0 +1,184 @@
+---
+title: 셀프 호스팅 Langfuse에서 BullMQ Admin API를 통한 큐 관리
+tags: [self-hosting]
+sourceRevision: 6c549009e68e4ffd3798b1593d50afeadc4dffc5
+translationStatus: machine
+---
+
+import { Details, Summary } from "@/components/Details";
+
+# 셀프 호스팅 Langfuse에서 BullMQ Admin API를 통한 큐 관리
+
+Langfuse는 백그라운드 작업 큐를 관리하기 위해 BullMQ를 사용합니다. BullMQ admin 엔드포인트를 사용하면 큐 길이를 모니터링하고, 실패한 이벤트를 재시도하며, 원하지 않는 이벤트를 큐에서 제거할 수 있습니다. 이는 이벤트 처리 문제를 해결하고 큐 백로그를 관리하는 데 특히 유용합니다.
+
+<Callout type="warning">
+  이 API는 인스턴스 소유자의 관리 목적을 위한 것이며 언제든지 변경될 수
+  있습니다. 이 API를 대상으로 개발하거나 이를 중심으로 중요한 로직을
+  구축하지 않는 것을 권장합니다.
+</Callout>
+
+## 인증 설정
+
+<Steps>
+
+### `ADMIN_API_KEY` 구성
+
+환경 설정에서 `ADMIN_API_KEY`를 구성합니다.
+
+```bash filename="Environment"
+ADMIN_API_KEY=your-admin-api-key
+```
+
+### API 인증
+
+그런 다음 Authorization 헤더를 설정하여 API를 인증합니다.
+
+```bash
+Authorization: Bearer $ADMIN_API_KEY
+```
+
+</Steps>
+
+## 큐 길이 모니터링
+
+모든 큐에 걸친 현재 상태와 작업 수를 확인하려면 admin 엔드포인트로 GET 요청을 보냅니다.
+
+```bash
+curl -X GET "https://your-langfuse-instance.com/api/admin/bullmq" \
+  -H "Authorization: Bearer YOUR_ADMIN_API_KEY" \
+  -H 'Content-Type: application/json' \
+  --data '{
+    "action": "retry",
+    "queueNames": [ "ingestion-queue" ]
+}'
+```
+
+이는 모든 큐에 대한 작업 수를 반환하여 병목 현상이나 주의가 필요한 실패한 작업을 식별하는 데 도움이 됩니다.
+content-type과 payload는 필수이지만 요청 내에서 평가되지는 않습니다.
+
+## 실패한 이벤트 재시도
+
+특정 큐에서 실패한 작업을 재시도하려면 `retry` 액션과 함께 POST 엔드포인트를 사용합니다.
+
+```bash
+curl -X POST "https://your-langfuse-instance.com/api/admin/bullmq" \
+  -H "Authorization: Bearer YOUR_ADMIN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "action": "retry",
+    "queueNames": ["ingestion-queue", "evaluation-queue"]
+  }'
+```
+
+## 큐에서 이벤트 제거
+
+특정 상태를 가진 작업을 큐에서 제거하려면 `remove` 액션과 함께 POST 엔드포인트를 사용합니다.
+
+```bash
+curl -X POST "https://your-langfuse-instance.com/api/admin/bullmq" \
+  -H "Authorization: Bearer YOUR_ADMIN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "action": "remove",
+    "queueNames": ["ingestion-queue"],
+    "bullStatus": "failed"
+  }'
+```
+
+사용 가능한 상태 옵션: `completed`, `failed`, `active`, `delayed`, `prioritized`, `paused`, `wait`.
+
+## API 사양
+
+<Details>
+  <Summary>전체 BullMQ Admin API 사양</Summary>
+
+```yaml
+openapi: 3.0.1
+info:
+  title: Langfuse Admin BullMQ API
+  description: API for managing BullMQ jobs in Langfuse
+  version: "1.0.0"
+paths:
+  /api/admin/bullmq:
+    get:
+      summary: Get job counts for all queues
+      operationId: bullmq_getCounts
+      tags:
+        - BullMQ
+      responses:
+        "200":
+          description: Job counts for all queues
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    queueName:
+                      type: string
+                    jobCount:
+                      type: object
+                      additionalProperties:
+                        type: number
+    post:
+      summary: Manage BullMQ jobs
+      operationId: bullmq_manageJobs
+      tags:
+        - BullMQ
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  required:
+                    - action
+                    - queueNames
+                  properties:
+                    action:
+                      type: string
+                      enum: [retry]
+                    queueNames:
+                      type: array
+                      items:
+                        type: string
+                - type: object
+                  required:
+                    - action
+                    - queueNames
+                    - bullStatus
+                  properties:
+                    action:
+                      type: string
+                      enum: [remove]
+                    queueNames:
+                      type: array
+                      items:
+                        type: string
+                    bullStatus:
+                      type: string
+                      enum:
+                        [
+                          completed,
+                          failed,
+                          active,
+                          delayed,
+                          prioritized,
+                          paused,
+                          wait,
+                        ]
+      responses:
+        "200":
+          description: Jobs successfully managed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+```
+
+</Details>

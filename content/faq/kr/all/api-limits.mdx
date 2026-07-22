@@ -1,0 +1,54 @@
+---
+title: Langfuse API에 제한이 있나요?
+tags: [platform]
+sourceRevision: df7950a51fb5fa60fa727b2f0d441c167bcefa9d
+translationStatus: machine
+---
+
+# Langfuse API의 제한은 무엇인가요?
+
+[Langfuse API](/docs/api)는 매우 개방적이고 유연하지만, 플랫폼의 안정성과 성능을 보장하기 위해 일부 제한이 있습니다.
+
+## Langfuse Cloud
+
+<Callout type="info">
+  예상치 못한 제한에 도달했거나 제한을 늘려야 하는 경우, 채팅 위젯을 통해
+  문의해 주세요.
+</Callout>
+
+### Payloads
+
+요청당 5MB, 응답당 5MB
+
+### Request Constraints
+
+- **Trace Deletion**: 단일 DELETE 요청에 30~50개를 초과하는 trace id를 전송하지 않는 것을 강력히 권장합니다. 수동 삭제 대신 [data retention](/docs/administration/data-retention)을 사용하여 오래된 트레이스를 자동으로 삭제하는 것을 고려하세요.
+
+### Rate Limits
+
+Rate limit은 조직(organization) 단위로 적용됩니다. Metrics API v2는 레거시 Metrics API와 별도의 rate-limit 버킷을 사용합니다.
+
+| Resource                                                                                                                               | Hobby              | Core               | Pro/Team/Enterprise |
+| -------------------------------------------------------------------------------------------------------------------------------------- | ------------------ | ------------------ | ------------------- |
+| **Tracing**. SDK 및 통합에서 트레이스를 수집하기 위해 사용하는 배치 `/ingestion` 및 `/otel` 엔드포인트입니다.                          | 1,000&nbsp;req/min | 4,000&nbsp;req/min | 20,000&nbsp;req/min |
+| **Legacy Tracing**. 레거시 ingestion 엔드포인트입니다.                                                                                 | 100&nbsp;req/min   | 400&nbsp;req/min   | 400&nbsp;req/min    |
+| **Trace Data Deletion**. 트레이스, observation, 점수(score)를 포함한 트레이스 데이터를 삭제하는 데 사용되는 공개 API 엔드포인트입니다. | 50&nbsp;req/day    | 200&nbsp;req/day   | 1,000&nbsp;req/day  |
+| **Prompts**. 애플리케이션에서 사용할 프롬프트를 가져오는 GET API입니다.                                                                | No limit           | No limit           | No limit            |
+| **[Metrics API v2](/docs/metrics/features/metrics-api#v2)**. 집계 분석 데이터를 위한 `GET /api/public/v2/metrics`입니다.               | 100&nbsp;req/day   | 100&nbsp;req/hour  | 500&nbsp;req/hour   |
+| **[Legacy Metrics API](/docs/metrics/features/metrics-api#v1)**. 레거시 `GET /api/public/metrics` 엔드포인트입니다.                    | 100&nbsp;req/day   | 2,000&nbsp;req/day | 2,000&nbsp;req/day  |
+| **Datasets**. [데이터셋과 실험](/docs/datasets) 작업에 사용되는 API입니다.                                                             | 100&nbsp;req/min   | 200&nbsp;req/min   | 1,000&nbsp;req/min  |
+| **Legacy read APIs**. 아래에 나열된, 이전 방식의 트레이스, observation, 세션 조회 엔드포인트입니다.                                    | 15&nbsp;req/min    | 30&nbsp;req/min    | 100&nbsp;req/min    |
+| **API**. 그 외 모든 API입니다.                                                                                                         | 30&nbsp;req/min    | 100&nbsp;req/min   | 1,000&nbsp;req/min  |
+
+레거시 read API는 `GET /api/public/traces`, `GET /api/public/traces/{traceId}`, `GET /api/public/observations`, `GET /api/public/observations/{observationId}`, `GET /api/public/sessions`, `GET /api/public/sessions/{sessionId}`입니다.
+
+Enterprise 플랜에서는 [지원팀](/support)에 문의하여 커스텀 rate limit을 요청할 수 있습니다.
+
+**Rate limit 응답**
+
+- HTTP 상태 코드 429
+- 재시도 전 대기해야 하는 시간(초)을 나타내는 `Retry-After` 응답 헤더
+
+## 셀프 호스팅 인스턴스
+
+하드 제한은 없으며, 인프라 용량과 로드 밸런서 설정에 따라 달라집니다.

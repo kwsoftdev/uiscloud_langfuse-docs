@@ -1,0 +1,58 @@
+---
+title: 데이터 보존
+description: Langfuse에서 데이터 보존을 제어하세요
+sidebarTitle: 데이터 보존
+sourceRevision: 9c0d419484845ffbd56805fd068677856e5d764c
+translationStatus: machine
+---
+
+# 데이터 보존
+
+<AvailabilityBanner
+  availability={{
+    hobby: "not-available",
+    core: "not-available",
+    pro: "full",
+    enterprise: "full",
+    selfHosted: "ee",
+  }}
+/>
+
+Langfuse의 데이터 보존 기능을 사용하면 이벤트 데이터(트레이스, Observation, 점수, 미디어 자산)가 Langfuse에 저장되는 기간을 제어할 수 있습니다.
+
+## 설정
+
+데이터 보존은 프로젝트 단위로 설정되며, 최소 3일 이상의 일수를 지정할 수 있습니다.
+프로젝트 소유자와 관리자는 프로젝트 설정(Project Settings) 화면에서 데이터 보존 설정을 변경할 수 있습니다.
+
+<Callout type="info">
+  기본적으로 Langfuse는 이벤트 데이터(트레이스, Observation, 점수, 미디어
+  자산)를 무기한 보관합니다.
+</Callout>
+
+<Frame className="my-10" fullWidth>
+  ![Langfuse에서 데이터 보존 설정하기](/images/docs/data-retention.png)
+</Frame>
+
+데이터 보존은 [프로젝트 API](/docs/administration/scim-and-org-api)를 통해서도 설정할 수 있습니다.
+
+## 세부 사항
+
+Langfuse는 매일 밤 설정된 보존 기간보다 오래된 트레이스, Observation, 점수, 미디어 자산을 선택하여 삭제합니다.
+각 엔티티가 보존 기간을 벗어났는지 판단할 때 다음 속성을 사용합니다.
+
+- **트레이스**: `timestamp`
+- **Observation**: `start_time`
+- **점수**: `timestamp`
+- **미디어 자산**: `created_at`
+
+삭제된 자산은 복구할 수 없습니다. 보존 기간을 넘어서도 데이터를 보존해야 한다면, [블롭 스토리지 내보내기(Blob Storage Export)](/docs/api-and-data-platform/features/export-to-blob-storage)를 설정하여 트레이스, Observation, 점수를 S3, GCS, Azure에 정기적으로 자동 동기화할 수 있습니다.
+
+보존 정책은 참조 관계와 무관하게 해당 데이터에 적용됩니다.
+예를 들어 데이터셋이 어떤 트레이스를 참조하고 있는데 해당 트레이스가 30일 후 삭제되면, 데이터셋 실행 항목(run item)은 존재하지 않는 트레이스를 가리키게 됩니다.
+
+## 셀프 호스팅 인스턴스
+
+셀프 호스팅 환경에서 데이터 보존 기능을 사용하려면, 모든 버킷에 대해 Langfuse IAM 역할에 `s3:DeleteObject` 권한을 부여해야 합니다([블롭 스토리지(S3) 문서](/self-hosting/deployment/infrastructure/blobstorage) 참고).
+Langfuse는 API를 통해 삭제(delete) 문만 실행한다는 점에 유의하세요.
+버전 관리(versioned) 버킷을 사용하는 경우, 삭제 마커와 이전 버전(non-current version)은 수동으로 또는 수명 주기 규칙(lifecycle rule)을 통해 별도로 제거해야 합니다.

@@ -1,0 +1,30 @@
+{
+  "title": "문서",
+  "pages": [
+    "index",
+    "demo",
+    "ask-ai",
+    "---시작하기---",
+    "[트레이싱 시작하기](/docs/observability/get-started)",
+    "[프롬프트 관리 사용하기](/docs/prompt-management/get-started)",
+    "[평가 설정하기](/docs/evaluation/overview)",
+    "---제품---",
+    "observability",
+    "prompt-management",
+    "evaluation",
+    "---플랫폼---",
+    "metrics",
+    "api-and-data-platform",
+    "langfuse-assistant",
+    "administration",
+    "security-and-guardrails",
+    "---더 보기---",
+    "glossary",
+    "roadmap",
+    "v4",
+    "docs-mcp",
+    "references",
+    "external:[보안 및 컴플라이언스 ↗](/security)",
+    "external:[지원 ↗](/support)"
+  ]
+}

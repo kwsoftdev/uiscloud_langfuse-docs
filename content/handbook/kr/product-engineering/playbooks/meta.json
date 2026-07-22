@@ -1,0 +1,9 @@
+{
+  "title": "플레이북",
+  "pages": [
+    "code-structure",
+    "documentation",
+    "releases",
+    "vulnerability-handling"
+  ]
+}

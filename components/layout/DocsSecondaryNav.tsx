@@ -17,6 +17,7 @@ import IconBook from "@/components/icons/book";
 import IconBookBookmark from "@/components/icons/book-bookmark";
 import IconDesktopTower from "@/components/icons/desktop-tower";
 import IconCompass from "@/components/icons/compass";
+import { isKoreanPath } from "@/lib/i18n/koPaths";
 
 const SECTIONS = [
   { title: "Docs", path: "/docs", Icon: IconBook },
@@ -26,6 +27,23 @@ const SECTIONS = [
   { title: "Academy", path: "/academy", Icon: GraduationCap },
   { title: "Workshop", path: "/workshop", Icon: Presentation },
   { title: "AI Engineering Library", path: "/library", Icon: IconBookBookmark },
+] as const;
+
+// Korean counterpart, shown instead of the above when browsing a /kr section
+// (see lib/i18n/koPaths.ts). Sections without a Korean translation yet keep
+// their Korean label but link to the English page.
+const SECTIONS_KO = [
+  { title: "문서", path: "/docs/kr", Icon: IconBook },
+  { title: "인테그레이션", path: "/integrations", Icon: Unplug },
+  { title: "셀프 호스팅", path: "/self-hosting/kr", Icon: IconDesktopTower },
+  { title: "가이드", path: "/guides/kr", Icon: IconCompass },
+  { title: "아카데미", path: "/academy/kr", Icon: GraduationCap },
+  { title: "워크숍", path: "/workshop", Icon: Presentation },
+  {
+    title: "AI 엔지니어링 라이브러리",
+    path: "/library",
+    Icon: IconBookBookmark,
+  },
 ] as const;
 
 /** Derive a human-readable page name from the last pathname segment. */
@@ -47,8 +65,9 @@ export function DocsSecondaryNavMobile() {
   const pathname = usePathname();
   const { open, setOpen } = useSidebar();
   const treePath = useTreePath();
+  const sections = isKoreanPath(pathname) ? SECTIONS_KO : SECTIONS;
 
-  const activeSection = SECTIONS.find((s) => pathname?.startsWith(s.path));
+  const activeSection = sections.find((s) => pathname?.startsWith(s.path));
 
   const sectionTitle =
     activeSection?.title ??
@@ -95,6 +114,7 @@ export function DocsSecondaryNavMobile() {
 
 export function DocsSecondaryNav() {
   const pathname = usePathname();
+  const sections = isKoreanPath(pathname) ? SECTIONS_KO : SECTIONS;
   return (
     <div
       className="hidden overflow-x-auto overflow-y-hidden sticky z-50 md:block bg-surface-1"
@@ -104,7 +124,7 @@ export function DocsSecondaryNav() {
     >
       <nav className="px-px mx-auto border-b max-w-380 bg-line-structure border-line-structure">
         <div className="flex gap-0 items-stretch rounded-sm bg-surface-1">
-          {SECTIONS.map((item) => {
+          {sections.map((item) => {
             const isActive = pathname?.startsWith(item.path);
             return (
               <Link

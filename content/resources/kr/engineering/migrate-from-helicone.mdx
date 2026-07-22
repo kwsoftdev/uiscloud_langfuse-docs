@@ -1,0 +1,174 @@
+---
+title: "Helicone에서 Langfuse로 마이그레이션하는 방법"
+description: 프롬프트 템플릿, 변수, 버전 관리, 트레이싱을 포함하여 Helicone에서 Langfuse로 프롬프트 관리와 관측성을 마이그레이션하는 단계별 가이드입니다.
+tags: [migration, integration]
+sourceRevision: 4a702ece53852a6af86b3883f434adf3f5cae421
+translationStatus: machine
+---
+
+# Helicone에서 Langfuse로 마이그레이션하기
+
+Helicone은 Mintlify에 인수된 이후 [유지보수 모드로 전환](https://www.helicone.ai/blog/joining-mintlify)되었습니다. 이 가이드는 **프롬프트 관리**와 **관측성/트레이싱** 설정을 Helicone에서 Langfuse로 마이그레이션하는 방법을 다룹니다.
+
+## 프롬프트 관리 마이그레이션
+
+Helicone은 [프롬프트 관리](https://docs.helicone.ai/gateway/prompt-integration)에 두 가지 방식을 제공합니다. `prompt_id`를 전달하면 게이트웨이가 서버 측에서 템플릿을 단일 API 호출로 컴파일하는 **게이트웨이 방식**과, `@helicone/helpers` 패키지를 통해 클라이언트 측에서 프롬프트를 가져와 컴파일하는 **SDK 방식**입니다. Langfuse는 Helicone의 SDK 방식과 유사한 SDK 기반 모델을 사용합니다. 프롬프트는 [애플리케이션 코드에서 가져와 컴파일](/docs/prompt-management/get-started)되며, 지연 시간을 낮게 유지하고 [가용성을 보장](/docs/prompt-management/features/guaranteed-availability)하기 위한 내장 [캐싱](/docs/prompt-management/features/caching)을 제공합니다.
+
+**Helicone의 게이트웨이 방식**을 사용했다면 주요 변경 사항은 프롬프트 리졸루션을 애플리케이션 코드로 옮기는 것입니다. 이미 **Helicone의 SDK 방식**(`HeliconePromptManager` → `getPromptBody`)을 사용했다면 마이그레이션은 더 간단합니다. 하나의 SDK 가져오기+컴파일 패턴을 다른 패턴으로 교체하는 것뿐입니다.
+
+### 1. Helicone에서 프롬프트 내보내기
+
+[Helicone Prompt API](https://docs.helicone.ai/rest/prompt/query-prompts)를 사용하여 기존 프롬프트를 내보냅니다.
+
+1. `POST /v1/prompt-2025/query`를 통해 **모든 프롬프트 목록**을 가져와 프롬프트 ID를 확인합니다.
+2. `POST /v1/prompt-2025/query/versions`를 통해 각 프롬프트의 **버전 목록**을 가져옵니다.
+3. `GET /v1/prompt-2025/{promptVersionId}/prompt-body`를 통해 각 버전의 **전체 본문**을 가져옵니다.
+4. `POST /v1/prompt-2025/query/environment-version`을 통해 **환경별 배포 정보**를 기록하여 각 버전이 어디에(프로덕션, 스테이징 등) 배포되어 있는지 파악합니다.
+
+### 2. 변수 문법 변환
+
+Helicone은 타입이 지정된 변수(`{{hc:name:type}}`)를 사용하는 반면, Langfuse는 런타임에 [`.compile()`](/docs/prompt-management/features/variables)을 통해 컴파일되는 일반 `{{variable}}` 플레이스홀더를 사용합니다.
+
+| Helicone                      | Langfuse            |
+| ----------------------------- | ------------------- |
+| `{{hc:customer_name:string}}` | `{{customer_name}}` |
+| `{{hc:is_premium:boolean}}`   | `{{is_premium}}`    |
+
+Helicone의 타입 검증에 의존했다면, `.compile()`을 호출하기 전에 해당 로직을 애플리케이션 코드로 옮기세요.
+
+### 3. 프롬프트 본문을 Langfuse에 매핑하기
+
+Helicone은 전체 LLM 요청 형태(`model`, `messages`, `temperature`, `tools` 등)를 하나의 프롬프트 본문에 저장합니다. Langfuse에서는 이를 두 부분으로 나눕니다.
+
+- **프롬프트 콘텐츠** (타입 `chat`): 변환된 변수 문법이 적용된 `messages` 배열입니다. [프롬프트 데이터 모델](/docs/prompt-management/data-model)을 참고하세요.
+- **프롬프트 설정** (JSON): 모델 파라미터(`model`, `temperature`, `max_tokens`)와 도구 정의(`tools`, `tool_choice`, `response_format`)입니다. [프롬프트 설정](/docs/prompt-management/features/config)을 참고하세요.
+
+### 4. Langfuse에서 프롬프트 재생성하기
+
+[SDK](/docs/prompt-management/get-started) 또는 [API](/docs/api-and-data-platform/features/public-api)를 통해 Langfuse에서 프롬프트를 생성하며 다음을 설정합니다.
+
+- **프롬프트 이름**: Helicone의 `prompt_id`에 매핑됩니다.
+- **프롬프트 타입**: `chat` (Helicone이 채팅 메시지를 저장하므로).
+- **레이블**: Helicone 환경(프로덕션/스테이징)을 [Langfuse 레이블](/docs/prompt-management/features/a-b-testing)에 매핑합니다. 예를 들어 "production"에 할당된 Helicone 버전은 Langfuse에서 `production` 레이블을 받습니다.
+- **설정 JSON**: 모델 파라미터와 도구 정의를 포함합니다.
+
+### 5. 프롬프트 파셜과 컴포지션 마이그레이션하기
+
+Helicone 프롬프트 파셜(`{{hcp:prompt_id:index:environment}}`)은 다른 프롬프트에서 메시지를 가져옵니다. Langfuse는 두 가지 대안을 제공합니다.
+
+- **공유 시스템 지침**: 공유할 스니펫에 대해 Langfuse _텍스트_ 프롬프트를 생성하고 [프롬프트 컴포저빌리티](/docs/prompt-management/features/composability)를 통해 참조합니다.
+- **다중 메시지 프래그먼트**: 코드에서 두 프롬프트를 모두 가져와 각각 컴파일한 뒤 메시지 배열을 병합하거나, [메시지 플레이스홀더](/docs/prompt-management/features/message-placeholders)를 사용하여 런타임에 특정 위치에 메시지를 삽입합니다.
+
+### 6. 애플리케이션 코드 업데이트
+
+Helicone의 프롬프트 통합을 Langfuse의 가져오기 + 컴파일 흐름으로 교체합니다.
+
+**Helicone의 게이트웨이 방식**(API 호출에 `prompt_id` + `inputs`)을 사용했다면:
+
+```python
+# 이전 (Helicone 게이트웨이)
+response = client.chat.completions.create(
+    model="gpt-4o-mini",
+    prompt_id="customer_support",
+    inputs={"customer_name": "Alice", "issue_type": "billing"}
+)
+
+# 이후 (Langfuse)
+from langfuse import Langfuse
+
+langfuse = Langfuse()
+prompt = langfuse.get_prompt("customer_support", label="production", type="chat")
+compiled_messages = prompt.compile(customer_name="Alice", issue_type="billing")
+
+response = client.chat.completions.create(
+    model=prompt.config.get("model", "gpt-4o-mini"),
+    messages=compiled_messages
+)
+```
+
+**Helicone의 SDK 방식**(`@helicone/helpers` / `HeliconePromptManager`)을 사용했다면:
+
+```python
+# 이전 (Helicone SDK)
+# body = prompt_manager.get_prompt_body(prompt_id="customer_support", inputs={...})
+# response = client.chat.completions.create(**body)
+
+# 이후 (Langfuse) — 동일한 패턴, 다른 SDK
+from langfuse import Langfuse
+
+langfuse = Langfuse()
+prompt = langfuse.get_prompt("customer_support", label="production", type="chat")
+compiled_messages = prompt.compile(customer_name="Alice", issue_type="billing")
+
+response = client.chat.completions.create(
+    model=prompt.config.get("model", "gpt-4o-mini"),
+    messages=compiled_messages
+)
+```
+
+전체 Python 및 TypeScript 예제는 [프롬프트 관리 시작 가이드](/docs/prompt-management/get-started)를 참고하세요.
+
+## 트레이싱/관측성 마이그레이션
+
+Helicone은 게이트웨이 레벨에서 LLM 요청을 로깅합니다. Langfuse는 중첩된 스팬을 포함한 [계층적 트레이스](/docs/observability/data-model)를 제공하여 개별 LLM 호출뿐 아니라 다단계 에이전트 워크플로우까지 가시성을 확보할 수 있습니다.
+
+### 옵션 A: Langfuse SDK 사용 (권장)
+
+Langfuse는 모든 애플리케이션 코드를 유연하게 감쌀 수 있는 [Python 및 TypeScript SDK](/docs/observability/sdk/overview)와, OpenAI, LangChain, LlamaIndex, Vercel AI SDK, Anthropic 등을 포함한 [100개 이상의 프레임워크 및 모델 프로바이더와의 네이티브 통합](/integrations)을 제공합니다. 여러분의 스택에 맞는 통합을 선택할 수 있습니다. 모든 옵션은 [통합 개요](/integrations)를 참고하세요.
+
+OpenAI 사용자에게 가장 간단한 시작점은 즉시 사용 가능한 [OpenAI SDK 래퍼](/integrations/model-providers/openai-py)입니다. Helicone은 OpenAI 호환이므로, 전환 기간 동안 Helicone을 게이트웨이로 그대로 유지할 수도 있습니다.
+
+```python
+from langfuse.openai import openai
+
+client = openai.OpenAI(
+    api_key="your-api-key",
+    base_url="https://api.openai.com/v1"  # 또는 전환 기간 동안 Helicone의 URL을 유지
+)
+
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+```
+
+단순한 LLM 호출 로깅을 넘어, Langfuse SDK는 애플리케이션 내 어떤 함수든 트레이싱할 수 있는 [`@observe()` 데코레이터](/docs/observability/sdk/instrumentation)(Python)와 이에 상응하는 TypeScript 패턴을 제공합니다. 이를 통해 다단계 에이전트 워크플로우, 도구 호출, 검색 단계 등에 대한 중첩된 스팬을 가진 계층적 트레이스를 생성할 수 있습니다. 이는 게이트웨이 전용 로깅으로는 얻을 수 없는 완전한 트레이스 컨텍스트를 제공합니다.
+
+트레이싱된 제너레이션을 마이그레이션한 프롬프트와 연결하려면 프롬프트 객체를 제너레이션에 전달하세요. [프롬프트를 트레이스에 연결하기](/docs/prompt-management/features/link-to-traces)를 참고하세요.
+
+### 옵션 B: OpenTelemetry 사용
+
+이미 OpenTelemetry 계측을 사용 중이라면 OTLP 익스포터를 [Langfuse의 OTLP 엔드포인트](/docs/observability/sdk/instrumentation)로 지정할 수 있습니다.
+
+```bash
+export OTEL_EXPORTER_OTLP_ENDPOINT="https://cloud.langfuse.com/api/public/otel"
+export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic <base64(public_key:secret_key)>,x-langfuse-ingestion-version=4"
+```
+
+주요 제약 사항:
+
+- Langfuse는 **HTTP/JSON과 HTTP/protobuf를 통한 OTLP over HTTP**를 지원합니다(`gRPC`는 아직 지원되지 않습니다).
+- `x-langfuse-ingestion-version=4` 헤더는 OTEL을 통해 직접 전송된 데이터에 대해 Langfuse v4 트레이싱 테이블에서 실시간 가시성을 활성화합니다.
+- 전체 설정 방법은 [OpenTelemetry 통합 문서](/integrations/native/opentelemetry)를 참고하세요.
+
+### 옵션 C: 게이트웨이를 LiteLLM Proxy로 교체하기
+
+Helicone을 주로 AI 게이트웨이(멀티 프로바이더 라우팅, 페일오버)로 사용했다면, [LiteLLM Proxy](/integrations/gateways/litellm)는 Langfuse와 네이티브로 통합되는 즉시 대체 가능한 솔루션입니다.
+
+```yaml
+# litellm_config.yaml
+litellm_settings:
+  callbacks: ["langfuse_otel"]
+```
+
+이는 게이트웨이 패턴을 유지하면서 모든 트레이스를 Langfuse로 라우팅합니다. 자세한 내용은 [LiteLLM Proxy 통합 가이드](/integrations/gateways/litellm)를 참고하세요.
+
+## 추가 자료
+
+- [Langfuse 프롬프트 관리 개요](/docs/prompt-management/overview)
+- [Langfuse 관측성 개요](/docs/observability/overview)
+- [Langfuse 시작 가이드](/docs/observability/get-started)
+- [Helicone 통합 (Langfuse와 Helicone을 함께 사용하기)](/integrations/gateways/helicone)
+- [Helicone 프롬프트 통합 문서](https://docs.helicone.ai/gateway/prompt-integration)
+- [Helicone Prompt API 문서](https://docs.helicone.ai/rest/prompt/query-prompts)
+- [Helicone 공지](https://www.helicone.ai/blog/joining-mintlify)

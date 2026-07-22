@@ -1,0 +1,253 @@
+---
+title: 변수
+sidebarTitle: 변수
+description: 런타임에 해석되는 변수를 사용하여 프롬프트에 동적 텍스트를 삽입합니다.
+sourceRevision: 90f3dbd173ae8203c8b712991caab6d3b7dca511
+translationStatus: machine
+---
+
+import { FaqPreview } from "@/components/faq/FaqPreview";
+
+# 프롬프트의 변수
+
+변수는 프롬프트 내 동적 문자열을 위한 플레이스홀더입니다. 변수를 사용하면 프롬프트 정의 자체를 변경하지 않고도 런타임에 커스터마이징할 수 있는 유연한 프롬프트 템플릿을 만들 수 있습니다.
+
+모든 프롬프트는 `{{variable}}` 구문을 사용하는 변수를 지원합니다. Langfuse에서 프롬프트를 가져와 컴파일할 때, 프롬프트 템플릿에 삽입될 이 변수들의 값을 제공합니다.
+
+## 시작하기
+
+<Steps>
+
+## 변수가 포함된 프롬프트 생성
+
+<LangTabs items={["Langfuse UI", "Python SDK", "JS/TS SDK"]}>
+
+<Tab>
+
+Langfuse UI에서 프롬프트를 생성할 때, 프롬프트 텍스트의 어느 위치에서든 이중 중괄호 `{{variable_name}}`를 사용하여 변수를 정의할 수 있습니다.
+
+<Frame fullWidth>
+  ![Langfuse UI의 변수가 포함된 프롬프트](/images/docs/playground-variables.png)
+</Frame>
+
+변수는 **텍스트 프롬프트**와 **채팅 프롬프트** 모두에서 작동합니다. 모든 메시지 콘텐츠에서 사용할 수 있습니다.
+
+</Tab>
+
+<Tab>
+
+```python
+from langfuse import get_client
+
+langfuse = get_client()
+
+# 변수가 포함된 텍스트 프롬프트
+langfuse.create_prompt(
+    name="movie-critic",
+    type="text",
+    prompt="As a {{criticLevel}} movie critic, do you like {{movie}}?",
+    labels=["production"],
+)
+
+# 변수가 포함된 채팅 프롬프트
+langfuse.create_prompt(
+    name="movie-critic-chat",
+    type="chat",
+    prompt=[
+        {
+            "role": "system",
+            "content": "You are a {{criticLevel}} movie critic."
+        },
+        {
+            "role": "user",
+            "content": "What do you think about {{movie}}?"
+        }
+    ],
+    labels=["production"],
+)
+```
+
+</Tab>
+
+<Tab>
+
+```typescript
+import { LangfuseClient } from "@langfuse/client";
+
+const langfuse = new LangfuseClient();
+
+// 변수가 포함된 텍스트 프롬프트
+await langfuse.prompt.create({
+  name: "movie-critic",
+  type: "text",
+  prompt: "As a {{criticLevel}} movie critic, do you like {{movie}}?",
+  labels: ["production"],
+});
+
+// 변수가 포함된 채팅 프롬프트
+await langfuse.prompt.create({
+  name: "movie-critic-chat",
+  type: "chat",
+  prompt: [
+    {
+      role: "system",
+      content: "You are a {{criticLevel}} movie critic.",
+    },
+    {
+      role: "user",
+      content: "What do you think about {{movie}}?",
+    },
+  ],
+  labels: ["production"],
+});
+```
+
+</Tab>
+
+</LangTabs>
+
+## 런타임에 변수 컴파일
+
+애플리케이션에서 `.compile()` 메서드를 사용하여 변수를 실제 값으로 치환합니다. 변수는 키워드 인자(Python) 또는 객체(JavaScript/TypeScript)로 전달합니다.
+
+<LangTabs items={["Python SDK", "JS/TS SDK", "LangChain (Python)", "LangChain (JS/TS)"]}>
+
+<Tab>
+
+```python
+from langfuse import get_client
+
+langfuse = get_client()
+
+# 프롬프트 가져오기
+prompt = langfuse.get_prompt("movie-critic")
+
+# 변수 값으로 컴파일
+compiled_prompt = prompt.compile(
+    criticLevel="expert",
+    movie="Dune 2"
+)
+
+# -> compiled_prompt = "As an expert movie critic, do you like Dune 2?"
+
+# LLM과 함께 사용
+response = openai.chat.completions.create(
+    model="gpt-4",
+    messages=[{"role": "user", "content": compiled_prompt}]
+)
+```
+
+</Tab>
+
+<Tab>
+
+```typescript
+import { LangfuseClient } from "@langfuse/client";
+
+const langfuse = new LangfuseClient();
+
+// 프롬프트 가져오기
+const prompt = await langfuse.prompt.get("movie-critic", {
+  type: "text",
+});
+
+// 변수 값으로 컴파일
+const compiledPrompt = prompt.compile({
+  criticLevel: "expert",
+  movie: "Dune 2",
+});
+
+// -> compiledPrompt = "As an expert movie critic, do you like Dune 2?"
+
+// LLM과 함께 사용
+const response = await openai.chat.completions.create({
+  model: "gpt-4",
+  messages: [{ role: "user", content: compiledPrompt }],
+});
+```
+
+</Tab>
+
+<Tab>
+
+```python
+from langfuse import get_client
+from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
+
+langfuse = get_client()
+
+# 텍스트 프롬프트의 경우
+langfuse_prompt = langfuse.get_prompt("movie-critic")
+langchain_prompt = PromptTemplate.from_template(langfuse_prompt.get_langchain_prompt())
+
+# 변수로 컴파일
+compiled = langchain_prompt.format(criticLevel="expert", movie="Dune 2")
+# -> "As an expert movie critic, do you like Dune 2?"
+
+# 채팅 프롬프트의 경우
+langfuse_chat_prompt = langfuse.get_prompt("movie-critic-chat")
+langchain_chat_prompt = ChatPromptTemplate.from_messages(
+    langfuse_chat_prompt.get_langchain_prompt()
+)
+
+# 변수로 컴파일
+compiled_messages = langchain_chat_prompt.format_messages(
+    criticLevel="expert",
+    movie="Dune 2"
+)
+```
+
+</Tab>
+
+<Tab>
+
+```typescript
+import { LangfuseClient } from "@langfuse/client";
+import { PromptTemplate, ChatPromptTemplate } from "@langchain/core/prompts";
+
+const langfuse = new LangfuseClient();
+
+// 텍스트 프롬프트의 경우
+const langfusePrompt = await langfuse.prompt.get("movie-critic", {
+  type: "text",
+});
+const langchainPrompt = PromptTemplate.fromTemplate(
+  langfusePrompt.getLangchainPrompt()
+);
+
+// 변수로 컴파일
+const compiled = await langchainPrompt.format({
+  criticLevel: "expert",
+  movie: "Dune 2",
+});
+// -> "As an expert movie critic, do you like Dune 2?"
+
+// 채팅 프롬프트의 경우
+const langfuseChatPrompt = await langfuse.prompt.get("movie-critic-chat", {
+  type: "chat",
+});
+const langchainChatPrompt = ChatPromptTemplate.fromMessages(
+  langfuseChatPrompt.getLangchainPrompt()
+);
+
+// 변수로 컴파일
+const compiledMessages = await langchainChatPrompt.formatMessages({
+  criticLevel: "expert",
+  movie: "Dune 2",
+});
+```
+
+</Tab>
+
+</LangTabs>
+
+</Steps>
+
+원하시는 기능이 아닌가요? 다음과 같은 유사한 기능들을 참고하세요.
+
+- 하위 프롬프트를 재사용하기 위한 [프롬프트 참조](/docs/prompt-management/features/composability)
+- 문자열 대신 완전한 메시지 배열을 삽입하기 위한 [메시지 플레이스홀더](/docs/prompt-management/features/message-placeholders)
+
+또는 관련 FAQ 페이지를 확인하세요.
+
+<FaqPreview tags={["prompt-management"]} />

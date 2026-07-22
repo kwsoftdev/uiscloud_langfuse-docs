@@ -2,10 +2,12 @@
 
 import { useEffect, useState, useRef } from "react";
 import Image, { type StaticImageData } from "next/image";
+import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { BoxCorners, CornerBox } from "@/components/ui/corner-box";
 import { Button } from "@/components/ui/button";
 import { Text } from "@/components/ui/text";
+import { isKoreanPath } from "@/lib/i18n/koPaths";
 
 import canvaLogo from "./img/canva-tile.png";
 import khanAcademyLogo from "./img/khan-academy-tile.png";
@@ -22,6 +24,8 @@ const stories = [
     logoMono: canvaMono as StaticImageData,
     description:
       "Canva's AI team relies on Langfuse to trace and debug their generative design features in production.",
+    descriptionKo:
+      "Canva의 AI 팀은 프로덕션에서 생성형 디자인 기능을 트레이싱하고 디버깅하는 데 Langfuse를 사용합니다.",
     href: "/users/canva",
   },
   {
@@ -30,6 +34,8 @@ const stories = [
     logoMono: khanAcademyMono as StaticImageData,
     description:
       "Khan Academy builds Khanmigo, their AI tutor, on Langfuse to debug and improve student-facing LLM features.",
+    descriptionKo:
+      "Khan Academy는 AI 튜터 Khanmigo를 구축하며, 학생 대상 LLM 기능을 디버깅하고 개선하기 위해 Langfuse를 사용합니다.",
     href: "/users/khan-academy",
   },
   {
@@ -38,6 +44,8 @@ const stories = [
     logoMono: sumupMono as StaticImageData,
     description:
       "SumUp runs AI-powered support for 4 million merchants across 35+ markets on Langfuse.",
+    descriptionKo:
+      "SumUp은 35개 이상의 시장, 400만 가맹점을 대상으로 한 AI 기반 지원 서비스를 Langfuse 위에서 운영합니다.",
     href: "/users/sumup",
   },
 ] as const;
@@ -47,6 +55,7 @@ export function FeaturedCustomers({
 }: {
   corners?: BoxCorners;
 }) {
+  const ko = isKoreanPath(usePathname());
   const [active, setActive] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
   const [hoveredLogo, setHoveredLogo] = useState<number | null>(null);
@@ -155,7 +164,7 @@ export function FeaturedCustomers({
         {/* Button: right of logos on mobile, far right on desktop */}
         <div className="ml-auto shrink-0 lg:ml-0 lg:order-last">
           <Button href="/cloud" size="default" shortcutKey="s">
-            Start free
+            {ko ? "무료로 시작하기" : "Start free"}
           </Button>
         </div>
       </div>
@@ -198,7 +207,7 @@ export function FeaturedCustomers({
               size="s"
               className="text-left mt-0.5 line-clamp-2 min-h-[calc(2*1.5em)] lg:line-clamp-1 lg:min-h-0 text-text-tertiary"
             >
-              {story.description}
+              {ko ? story.descriptionKo : story.description}
             </Text>
           </motion.div>
         </AnimatePresence>

@@ -1,0 +1,156 @@
+---
+title: 가용성 보장
+sidebarTitle: 가용성 보장
+description: 애플리케이션 시작 시 프롬프트를 미리 가져오고(pre-fetch) 폴백 프롬프트를 제공하여 프롬프트의 100% 가용성을 보장합니다.
+sourceRevision: 9c0d419484845ffbd56805fd068677856e5d764c
+translationStatus: machine
+---
+
+# 가용성 보장
+
+<Callout>
+
+이를 직접 구현하는 것은 애플리케이션에 복잡성을 추가하므로 일반적으로 필요하지 않습니다. Langfuse 프롬프트 관리는 여러 [캐싱 레이어](/docs/prompt-management/features/caching) 덕분에 가용성이 매우 높으며, 저희는 성능을 지속적으로 모니터링하고 있습니다([상태 페이지](https://status.langfuse.com)). 하지만 100% 가용성이 필요한 경우 다음 옵션을 사용할 수 있습니다.
+
+</Callout>
+
+Langfuse API는 가동 시간(uptime)이 높으며, 프롬프트는 SDK 내에서 [로컬로 캐시](/docs/prompt-management/features/caching)되어 네트워크 문제가 애플리케이션에 영향을 미치지 않도록 합니다.
+
+하지만 다음의 경우 `get_prompt()`/`getPrompt()`는 예외(exception)를 발생시킵니다:
+
+- 사용 가능한 로컬 캐시(최신 또는 오래된 캐시)가 없는 경우 -> 새 애플리케이션 인스턴스가 프롬프트를 처음 가져오는 경우
+- _그리고_ 네트워크 요청이 실패하는 경우 -> 네트워크 또는 Langfuse API 문제(재시도 이후)
+
+100% 가용성을 보장하려면 두 가지 옵션이 있습니다:
+
+1. 애플리케이션 시작 시 프롬프트를 미리 가져오고(pre-fetch), 프롬프트를 사용할 수 없는 경우 애플리케이션을 종료합니다.
+2. 이러한 경우에 사용할 `fallback` 프롬프트를 제공합니다.
+
+## 옵션 1: 프롬프트 미리 가져오기(Pre-fetch)
+
+애플리케이션 시작 시 프롬프트를 미리 가져오고, 프롬프트를 사용할 수 없는 경우 애플리케이션을 종료합니다.
+
+<LangTabs items={["Python (Flask)", "JS/TS (Express)"]}>
+<Tab>
+
+```python
+from flask import Flask, jsonify
+from langfuse import Langfuse
+
+# Flask 앱과 Langfuse 클라이언트를 초기화합니다
+app = Flask(__name__)
+langfuse = Langfuse()
+
+def fetch_prompts_on_startup():
+    try:
+        # 프롬프트의 production 버전을 가져와 캐시합니다
+        langfuse.get_prompt("movie-critic")
+    except Exception as e:
+        print(f"Failed to fetch prompt on startup: {e}")
+        sys.exit(1)  # 프롬프트를 사용할 수 없는 경우 애플리케이션을 종료합니다
+
+# 애플리케이션 시작 시 함수를 호출합니다
+fetch_prompts_on_startup()
+
+@app.route('/get-movie-prompt/<movie>', methods=['GET'])
+def get_movie_prompt(movie):
+    prompt = langfuse.get_prompt("movie-critic")
+    compiled_prompt = prompt.compile(criticlevel="expert", movie=movie)
+    return jsonify({"prompt": compiled_prompt})
+
+if __name__ == '__main__':
+    app.run(debug=True)
+```
+
+</Tab>
+<Tab>
+
+```ts
+import express from "express";
+import { LangfuseClient } from "@langfuse/client";
+
+// Express 앱과 Langfuse 클라이언트를 초기화합니다
+const app = express();
+const langfuse = new LangfuseClient();
+
+async function fetchPromptsOnStartup() {
+  try {
+    // 프롬프트의 production 버전을 가져와 캐시합니다
+    await langfuse.prompt.get("movie-critic");
+  } catch (error) {
+    console.error("Failed to fetch prompt on startup:", error);
+    process.exit(1); // 프롬프트를 사용할 수 없는 경우 애플리케이션을 종료합니다
+  }
+}
+
+// 애플리케이션 시작 시 함수를 호출합니다
+fetchPromptsOnStartup();
+
+app.get("/get-movie-prompt/:movie", async (req, res) => {
+  const movie = req.params.movie;
+  const prompt = await langfuse.prompt.get("movie-critic");
+  const compiledPrompt = prompt.compile({ criticlevel: "expert", movie });
+  res.json({ prompt: compiledPrompt });
+});
+
+app.listen(3000, () => {
+  console.log("Server is running on port 3000");
+});
+```
+
+</Tab>
+</LangTabs>
+
+## 옵션 2: 폴백(Fallback) [#fallback]
+
+이러한 경우에 사용할 폴백 프롬프트를 제공합니다:
+
+<LangTabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab>
+
+```python /fallback="Do you like {{movie}}?"/ /fallback=[{"role": "system", "content": "You are an expert on {{movie}}"}]/
+from langfuse import Langfuse
+langfuse = Langfuse()
+
+# 폴백이 있는 `text` 프롬프트 가져오기
+prompt = langfuse.get_prompt(
+  "movie-critic",
+  fallback="Do you like {{movie}}?"
+)
+
+# 폴백이 있는 `chat` 프롬프트 가져오기
+chat_prompt = langfuse.get_prompt(
+  "movie-critic-chat",
+  type="chat",
+  fallback=[{"role": "system", "content": "You are an expert on {{movie}}"}]
+)
+
+# 프롬프트가 폴백인 경우 True
+prompt.is_fallback
+```
+
+</Tab>
+<Tab>
+
+```ts /fallback: "Do you like {{movie}}?"/ /fallback: [{ role: "system", content: "You are an expert on {{movie}}" }]/
+import { LangfuseClient } from "@langfuse/client";
+
+const langfuse = new LangfuseClient();
+
+// 폴백이 있는 `text` 프롬프트 가져오기
+const prompt = await langfuse.prompt.get("movie-critic", {
+  fallback: "Do you like {{movie}}?",
+});
+
+// 폴백이 있는 `chat` 프롬프트 가져오기
+const chatPrompt = await langfuse.prompt.get("movie-critic-chat", {
+  type: "chat",
+  fallback: [{ role: "system", content: "You are an expert on {{movie}}" }],
+});
+
+// 프롬프트가 폴백인 경우 true
+prompt.isFallback;
+```
+
+</Tab>
+</LangTabs>

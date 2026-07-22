@@ -1,0 +1,13 @@
+{
+  "title": "관측성",
+  "pages": [
+    "overview",
+    "get-started",
+    "data-model",
+    "best-practices",
+    "features",
+    "sdk",
+    "external:[통합 ↗](/integrations)",
+    "troubleshooting-and-faq"
+  ]
+}

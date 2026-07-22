@@ -1,0 +1,101 @@
+---
+title: 로컬 배포 (v2, docker compose)
+sidebarTitle: 로컬 배포 (docker compose)
+description: docker compose를 사용하여 로컬 머신에서 Langfuse를 실행하는 단계별 가이드입니다.
+label: "Version: v2"
+sourceRevision: ecc69b1d83e5a0e352ad0c067e6483ce87e579d5
+translationStatus: machine
+---
+
+# 로컬 배포 (v2, docker compose)
+
+<Callout type="info">
+  이 가이드는 Langfuse v2를 다룹니다. Langfuse v3에 대해서는 [v3
+  문서](/self-hosting)를 참고하세요. Langfuse v2는 2025년 1분기 말까지 보안 업데이트를
+  받습니다. 업그레이드 중 궁금한 점이 있다면 [v3
+  업그레이드 가이드](/self-hosting/upgrade-guides/upgrade-v2-to-v3)를 참고하거나 [GitHub
+  Discussions](/gh-support)에 스레드를 열어주세요.
+</Callout>
+
+<Callout type="warning">
+  이 설정은 데이터베이스가 영구적이지 않고 환경 변수가 비공개로 유지되지
+  않으므로 **프로덕션 환경에는 적합하지 않습니다**. 프로덕션에 적합한 설정을
+  원한다면 [배포 가이드](/self-hosting/v2/deployment-guide)를 따르거나
+  Langfuse 팀이 관리하는 [Langfuse
+  Cloud](https://cloud.langfuse.com) 사용을 고려하세요.
+</Callout>
+
+docker compose를 사용하여 로컬 머신에서 Langfuse를 실행할 수 있습니다. 이 방법은 Langfuse를 테스트하고 통합 문제를 해결하는 데 적합합니다.
+
+요구 사항: `docker`와 `docker compose`가 필요하며, 둘 다 Mac 또는 Windows 사용자를 위한 [Docker Desktop](https://docs.docker.com/get-docker/)에 포함되어 있습니다.
+
+## 시작하기
+
+<Steps>
+
+### Langfuse 서버 시작하기
+
+```bash
+# Langfuse 저장소 클론
+git clone https://github.com/langfuse/langfuse.git
+cd langfuse
+
+# V2 브랜치로 체크아웃
+git checkout v2
+
+# 데이터베이스와 langfuse 서버 시작
+docker compose up
+```
+
+이제 Langfuse가 로컬 머신에서 실행 중입니다:
+
+- 서버는 다음 주소에서 접근할 수 있습니다: `http://localhost:3000`
+- 통합: SDK의 `HOST`/`BASEURL`을 `http://localhost:3000`으로 설정하세요
+
+Langfuse는 매우 유연하게 설정할 수 있습니다. 설정 옵션에 대한 자세한 내용은 [배포 가이드](/self-hosting/v2/deployment-guide)를 참고하세요.
+자세한 내용은 [docker-compose.yml](https://github.com/langfuse/langfuse/blob/v2/docker-compose.yml) 파일을 확인하세요.
+
+### 계정 만들기
+
+`http://localhost:3000/auth/sign-up`에서 새 계정을 만드세요.
+
+### 퀵스타트 가이드 따라 하기
+
+[퀵스타트 가이드](/docs/get-started)를 따라 Langfuse 트레이싱을 시작하거나, 나머지 [문서](/docs)를 살펴보세요.
+
+</Steps>
+
+## Langfuse 업데이트하기
+
+Docker는 강력한 캐싱 기능을 가지고 있습니다. 최신 Langfuse 컨테이너를 가져오려면 `docker compose pull langfuse-server`를 실행해야 합니다. 그렇지 않으면 Docker는 캐시된 버전의 Langfuse 컨테이너를 사용합니다.
+
+```bash
+# Langfuse 디렉터리로 이동
+cd langfuse
+
+# 서버와 데이터베이스 중지
+docker compose down
+
+# docker compose 파일의 최신 변경 사항 가져오기
+git pull
+
+# 최신 Langfuse 컨테이너 가져오기
+docker compose pull langfuse-server
+
+# 서버와 데이터베이스 재시작
+docker compose up
+```
+
+## 개발 환경 설정하기
+
+개발 환경 설정 방법에 대한 자세한 지침은 [CONTRIBUTING.md](https://github.com/langfuse/langfuse/blob/main/CONTRIBUTING.md)를 참고하세요.
+
+## 문제 해결
+
+[배포 가이드](/self-hosting/v2/deployment-guide)는 더 자세한 내용을 다루며, docker compose를 사용하는 로컬 배포에도 적용 가능한 문제 해결 단계를 포함하고 있습니다.
+
+## GitHub Discussions
+
+import { GhDiscussionsPreview } from "@/components/gh-discussions/GhDiscussionsPreview";
+
+<GhDiscussionsPreview labels={["self-hosting"]} />

@@ -1,0 +1,11 @@
+{
+  "title": "관리",
+  "pages": [
+    "index",
+    "automated-access-provisioning",
+    "headless-initialization",
+    "organization-creators",
+    "ui-customization",
+    "instance-management-api"
+  ]
+}

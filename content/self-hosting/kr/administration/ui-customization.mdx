@@ -1,0 +1,77 @@
+---
+title: UI 커스터마이징 (셀프 호스팅)
+description: 조직을 위해 Langfuse UI를 커스터마이징하는 방법을 알아봅니다.
+label: "Version: v3"
+sidebarTitle: "UI 커스터마이징 (EE)"
+sourceRevision: 9c0d419484845ffbd56805fd068677856e5d764c
+translationStatus: machine
+---
+
+# UI 커스터마이징
+
+<Callout type="info">
+
+이 기능은 Enterprise Edition에서만 사용할 수 있습니다. 활성화하려면 [라이선스 키](/self-hosting/license-key)를 추가하세요.
+
+</Callout>
+
+대규모 배포를 지원하기 위해 Langfuse는 조직의 환경에 맞게 UI의 주요 부분을 커스터마이징할 수 있도록 지원합니다.
+
+## 링크
+
+아래 스크린샷에 강조 표시된 링크를 커스터마이징할 수 있습니다.
+
+<Frame fullWidth>
+  ![UI Customization Links](/images/docs/ui-customization-links.png)
+</Frame>
+
+| 번호 | 변수                             | 설명                                                                                                                                                                     |
+| ---- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1    | `LANGFUSE_UI_FEEDBACK_HREF`      | 기본 _기능 요청_ 및 _버그 신고_ 링크를 내부 피드백 링크로 교체합니다.                                                                                                    |
+| 2    | `LANGFUSE_UI_DOCUMENTATION_HREF` | 메뉴 및 설정에 표시되는 문서 링크 참조를 내부 문서로 연결되도록 커스터마이징합니다.                                                                                      |
+| 3    | `LANGFUSE_UI_SUPPORT_HREF`       | 메뉴 및 설정에 표시되는 지원 링크 참조를 내부 지원 채널로 연결되도록 커스터마이징합니다.                                                                                 |
+| 4    | `LANGFUSE_UI_API_HOST`           | Langfuse 프로젝트 설정에서 참조되는 호스트명을 커스터마이징합니다. 기본값은 `window.origin`입니다. Langfuse가 API 요청을 위해 리버스 프록시 뒤에 배포된 경우 유용합니다. |
+
+## 코브랜딩
+
+Langfuse 인터페이스를 자체 로고와 함께 코브랜딩할 수 있습니다.
+
+<Frame>![UI Customization Logo](/images/docs/ui-customization-logo.png)</Frame>
+
+Langfuse는 로고 너비에 맞게 조정되며, 최대 종횡비는 1:3입니다. 더 좁은 비율(예: 2:3, 1:1)도 사용할 수 있습니다. 로고는 바운딩 박스에 맞춰 표시되므로 특정 픽셀 제약은 없습니다. 참고로 위 예시 로고는 160px x 400px입니다.
+
+| 변수                               | 설명                                     | 예시                                                                   |
+| ---------------------------------- | ---------------------------------------- | ---------------------------------------------------------------------- |
+| `LANGFUSE_UI_LOGO_LIGHT_MODE_HREF` | 라이트 모드에서 사용할 로고의 URL입니다. | `https://static.langfuse.com/langfuse-dev/example-logo-light-mode.png` |
+| `LANGFUSE_UI_LOGO_DARK_MODE_HREF`  | 다크 모드에서 사용할 로고의 URL입니다.   | `https://static.langfuse.com/langfuse-dev/example-logo-dark-mode.png`  |
+
+## LLM API/게이트웨이 연결 기본값
+
+LLM 연결은 Langfuse 프로젝트 설정에서 구성됩니다. 다음 환경 변수를 통해 기본값을 커스터마이징할 수 있습니다.
+
+| 변수                                        | 설명                                                                                                                                                      |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `LANGFUSE_UI_DEFAULT_MODEL_ADAPTER`         | LLM 플레이그라운드 및 평가에서 사용할 기본 모델 어댑터를 설정합니다. 옵션: `OpenAI`, `Anthropic`, `Azure`. 예시: `Anthropic`                              |
+| `LANGFUSE_UI_DEFAULT_BASE_URL_OPENAI`       | LLM 플레이그라운드 및 평가에서 사용할 OpenAI API의 기본 베이스 URL을 설정합니다. 예시: `https://api.openai.com/v1`                                        |
+| `LANGFUSE_UI_DEFAULT_BASE_URL_ANTHROPIC`    | LLM 플레이그라운드 및 평가에서 사용할 Anthropic API의 기본 베이스 URL을 설정합니다. 예시: `https://api.anthropic.com`                                     |
+| `LANGFUSE_UI_DEFAULT_BASE_URL_AZURE_OPENAI` | LLM 플레이그라운드 및 평가에서 사용할 Azure OpenAI API의 기본 베이스 URL을 설정합니다. 예시: `https://{instanceName}.openai.azure.com/openai/deployments` |
+
+## 제품 모듈 표시 여부 [#visibility]
+
+메인 메뉴에 표시할 제품 모듈을 제어할 수 있습니다. 표시할 모듈을 지정하거나 숨길 모듈을 지정할 수 있습니다.
+
+| 변수                                  | 설명                                                                                                                |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `LANGFUSE_UI_VISIBLE_PRODUCT_MODULES` | 표시할 모듈을 쉼표로 구분한 목록입니다. 나머지 모든 모듈은 숨겨집니다. 예시: `tracing,evaluation,prompt-management` |
+| `LANGFUSE_UI_HIDDEN_PRODUCT_MODULES`  | 숨길 모듈을 쉼표로 구분한 목록입니다. 나머지 모든 모듈은 표시됩니다. 예시: `playground,datasets`                    |
+
+사용 가능한 모듈:
+
+- `dashboards`: 항상 표시되는 기본 대시보드를 제외한 대시보드
+- `tracing`: 트레이스 및 사용자
+- `evaluation`: 평가 및 점수
+- `prompt-management`: 프롬프트 관리
+- `playground`: LLM 플레이그라운드
+- `datasets`: 데이터셋
+
+두 변수가 모두 설정된 경우 `LANGFUSE_UI_VISIBLE_PRODUCT_MODULES`가 우선합니다. 둘 다 설정되지 않은 경우 기본적으로 모든 모듈이 표시됩니다.

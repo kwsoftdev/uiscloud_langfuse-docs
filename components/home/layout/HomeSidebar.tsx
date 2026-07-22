@@ -11,9 +11,20 @@ function formatCount(n: number): string {
   return n.toString();
 }
 
-function formatRelativeDate(isoDate: string): string {
+function formatRelativeDate(isoDate: string, ko: boolean): string {
   const date = new Date(isoDate);
   const dayDiff = (Date.now() - date.getTime()) / (1000 * 60 * 60 * 24);
+  if (ko) {
+    if (dayDiff < 1) return "오늘";
+    if (dayDiff < 14) return `${Math.round(dayDiff)}일 전`;
+    if (dayDiff < 30) return `${Math.round(dayDiff / 7)}주 전`;
+    return date.toLocaleDateString("ko-KR", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      timeZone: "UTC",
+    });
+  }
   if (dayDiff < 1) return "today";
   if (dayDiff < 14) return `${Math.round(dayDiff)} days ago`;
   if (dayDiff < 30) return `${Math.round(dayDiff / 7)} weeks ago`;
@@ -45,37 +56,36 @@ const ideasCount =
     }>
   ).find((c) => c.category === "Ideas")?.discussions.length ?? 0;
 
-const communityStats: Array<{
-  label: string;
-  value: string;
-  href: string;
-  tooltip: string;
-}> = [
-  {
-    label: "GitHub Stars",
-    value: formatCount(githubStars),
-    href: "https://github.com/langfuse/langfuse",
-    tooltip: "Leave a Star ⭐",
-  },
-  {
-    label: "Contributors",
-    value: "300+",
-    href: "https://github.com/langfuse/langfuse/graphs/contributors",
-    tooltip: "View contributors",
-  },
-  {
-    label: "Community Q&A threads",
-    value: formatCount(qaCount),
-    href: "https://github.com/orgs/langfuse/discussions/categories/support",
-    tooltip: "Browse Q&A",
-  },
-  {
-    label: "Roadmap threads",
-    value: formatCount(ideasCount),
-    href: "https://github.com/orgs/langfuse/discussions/categories/ideas",
-    tooltip: "Browse ideas",
-  },
-];
+function communityStatsFor(
+  t: Strings,
+): Array<{ label: string; value: string; href: string; tooltip: string }> {
+  return [
+    {
+      label: t.githubStars,
+      value: formatCount(githubStars),
+      href: "https://github.com/langfuse/langfuse",
+      tooltip: t.leaveStar,
+    },
+    {
+      label: t.contributors,
+      value: "300+",
+      href: "https://github.com/langfuse/langfuse/graphs/contributors",
+      tooltip: t.viewContributors,
+    },
+    {
+      label: t.qaThreads,
+      value: formatCount(qaCount),
+      href: "https://github.com/orgs/langfuse/discussions/categories/support",
+      tooltip: t.browseQa,
+    },
+    {
+      label: t.roadmapThreads,
+      value: formatCount(ideasCount),
+      href: "https://github.com/orgs/langfuse/discussions/categories/ideas",
+      tooltip: t.browseIdeas,
+    },
+  ];
+}
 
 const selfHostingLinks = [
   { label: "Docker Compose", href: "/self-hosting/deployment/docker-compose" },
@@ -88,9 +98,51 @@ const selfHostingLinks = [
   { label: "Azure (Terraform)", href: "/self-hosting/deployment/azure" },
 ];
 
+const STRINGS = {
+  en: {
+    communityStats: "Community Stats",
+    githubStars: "GitHub Stars",
+    leaveStar: "Leave a Star ⭐",
+    contributors: "Contributors",
+    viewContributors: "View contributors",
+    qaThreads: "Community Q&A threads",
+    browseQa: "Browse Q&A",
+    roadmapThreads: "Roadmap threads",
+    browseIdeas: "Browse ideas",
+    viewReleases: "View releases",
+    latestRelease: "Latest OSS release",
+    changelog: "Changelog",
+    viewAll: "View All",
+    readArticle: "Read article",
+    selfHostingGuides: "Self Hosting Guides",
+  },
+  ko: {
+    communityStats: "커뮤니티 통계",
+    githubStars: "GitHub Stars",
+    leaveStar: "Star 남기기 ⭐",
+    contributors: "기여자",
+    viewContributors: "기여자 보기",
+    qaThreads: "커뮤니티 Q&A 스레드",
+    browseQa: "Q&A 둘러보기",
+    roadmapThreads: "로드맵 스레드",
+    browseIdeas: "아이디어 둘러보기",
+    viewReleases: "릴리스 보기",
+    latestRelease: "최신 OSS 릴리스",
+    changelog: "체인지로그",
+    viewAll: "전체 보기",
+    readArticle: "글 읽기",
+    selfHostingGuides: "셀프 호스팅 가이드",
+  },
+} as const;
+
+type Strings = (typeof STRINGS)["en" | "ko"];
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export async function HomeSidebar() {
+export async function HomeSidebar({ lang = "en" }: { lang?: "en" | "ko" }) {
+  const ko = lang === "ko";
+  const t = STRINGS[lang];
+  const communityStats = communityStatsFor(t);
   const changelogItems = changelogSource
     .getPages()
     .filter((p) => p.data.title && p.data.date)
@@ -125,7 +177,7 @@ export async function HomeSidebar() {
               size="s"
               className="px-2 mb-3 font-[430] text-left text-[13px] text-text-primary"
             >
-              Community Stats
+              {t.communityStats}
             </Text>
             <div className="flex flex-col gap-[2px] mb-[2px]">
               {communityStats.map((stat) => (
@@ -156,7 +208,7 @@ export async function HomeSidebar() {
             {latestReleaseDate && (
               <LinkBox
                 href="https://github.com/langfuse/langfuse/releases"
-                tooltip="View releases"
+                tooltip={t.viewReleases}
                 className="block px-2 w-full hover:bg-surface-bg"
               >
                 <div className="flex gap-2 justify-between items-center w-full">
@@ -164,13 +216,13 @@ export async function HomeSidebar() {
                     size="s"
                     className="text-left text-[13px] group-hover:text-text-primary"
                   >
-                    Latest OSS release
+                    {t.latestRelease}
                   </Text>
                   <Text
                     size="s"
                     className="text-right text-[13px] shrink-0 group-hover:text-text-primary"
                   >
-                    {formatRelativeDate(latestReleaseDate)}
+                    {formatRelativeDate(latestReleaseDate, ko)}
                   </Text>
                 </div>
               </LinkBox>
@@ -186,14 +238,14 @@ export async function HomeSidebar() {
                 size="s"
                 className="font-[430] text-[13px] text-left text-text-primary"
               >
-                Changelog
+                {t.changelog}
               </Text>
               <Link href="/changelog">
                 <Text
                   size="xs"
                   className="transition-colors hover:text-text-primary"
                 >
-                  View All
+                  {t.viewAll}
                 </Text>
               </Link>
             </div>
@@ -202,7 +254,7 @@ export async function HomeSidebar() {
                 <LinkBox
                   key={item.route}
                   href={item.route}
-                  tooltip="Read article"
+                  tooltip={t.readArticle}
                   tooltipPlacement="bottom-right"
                   className="block px-2 w-full hover:bg-surface-bg"
                 >
@@ -217,7 +269,7 @@ export async function HomeSidebar() {
                       size="xs"
                       className="text-left no-underline group-hover:text-text-primary"
                     >
-                      {formatRelativeDate(item.date)}
+                      {formatRelativeDate(item.date, ko)}
                     </Text>
                   </div>
                 </LinkBox>
@@ -233,7 +285,7 @@ export async function HomeSidebar() {
               size="s"
               className="block px-2 mb-2 font-[430] text-left text-[13px] text-text-primary"
             >
-              Self Hosting Guides
+              {t.selfHostingGuides}
             </Text>
             <div className="flex flex-col gap-[2px]">
               {selfHostingLinks.map((link) => (

@@ -1,23 +1,13 @@
 import { HiringBadge } from "@/components/HiringBadge";
 import { NavbarExtraContent } from "@/components/NavbarExtraContent";
 import { NavLinks } from "@/components/NavLinks";
-import { type SectionNavData } from "@/lib/nav-tree";
+import { LanguagePreferenceToggle } from "@/components/LanguagePreferenceToggle";
+import { sectionNavData } from "@/lib/nav-tree";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/Logo";
 import InkeepSearchBar from "@/components/inkeep/InkeepSearchBar";
 
-export const sectionNavData: SectionNavData[] = [
-  { name: "Docs", href: "/docs" },
-  { name: "Self Hosting", href: "/self-hosting" },
-  { name: "Guides", href: "/guides" },
-  { name: "Integrations", href: "/integrations" },
-  { name: "FAQ", href: "/faq" },
-  { name: "Handbook", href: "/handbook" },
-  { name: "Changelog", href: "/changelog" },
-  { name: "Pricing", href: "/pricing" },
-  { name: "Library", href: "/library" },
-  { name: "Security & Compliance", href: "/security" },
-];
+export { sectionNavData };
 
 const cornersStyle = cn(
   "flex items-stretch flex-1 bg-line-structure p-px py-0",
@@ -35,7 +25,7 @@ export function Navbar() {
       <nav className="flex mx-auto h-full border-b max-w-380 border-line-structure">
         <div className={cn(cornersStyle, "pr-0 lg:max-w-[240px] lg:pr-px")}>
           <div className={cn(contentStyle, "rounded-r-none lg:rounded-r-sm")}>
-            <Logo showAffiliation />
+            <Logo />
           </div>
         </div>
         <div className={cn(cornersStyle, "hidden relative px-0 lg:flex")}>
@@ -47,6 +37,7 @@ export function Navbar() {
               <InkeepSearchBar className="hidden" />
               <NavLinks sectionNavData={sectionNavData} />
             </div>
+            <LanguagePreferenceToggle />
           </div>
         </div>
         <div

@@ -1,0 +1,38 @@
+---
+title: 네트워킹 (셀프 호스팅)
+description: 셀프 호스팅 Langfuse 배포를 위한 네트워킹 구성 방법을 알아보세요. Langfuse는 인터넷 액세스 없이도 실행할 수 있습니다.
+label: "Version: v3"
+sidebarTitle: "네트워킹"
+sourceRevision: 9c0d419484845ffbd56805fd068677856e5d764c
+translationStatus: machine
+---
+
+# 네트워킹
+
+Langfuse는 VPC 내부 또는 고보안 환경의 온프레미스에 배포할 수 있습니다. 이 가이드에서는 네트워킹 요구 사항과 고려 사항을 다룹니다.
+
+아키텍처 다이어그램 (자세한 내용은 [아키텍처 개요](/self-hosting#architecture) 참고):
+
+import ArchitectureDiagram from "@/components-mdx/architecture-diagram-v3.mdx";
+
+<ArchitectureDiagram />
+
+## 네트워크 노출 및 서비스 구성
+
+사용자가 API 및 SDK를 통해 액세스해야 하는 컨테이너는 `langfuse/langfuse` (web) 컨테이너뿐입니다.
+필요에 따라 방화벽, 프록시 또는 VPN 뒤에 둘 수 있습니다.
+
+기본적으로 Langfuse Web 컨테이너에는 `PORT=3000`이 사용됩니다. 이는 `PORT` 환경 변수를 통해 구성할 수 있습니다 ([문서](/self-hosting/configuration)). 일반적으로 네트워크 로드 밸런서를 사용해 서비스를 노출하고 SSL 종료를 처리합니다 ([문서](/self-hosting/configuration/encryption)).
+
+Langfuse는 웹 서비스로 공개적으로 노출되도록 설계되었습니다.
+Langfuse 팀이 관리형 Langfuse Cloud 오퍼링에서도 동일한 컨테이너를 운영하고 있기 때문에, 이는 침투 테스트를 거쳤으며 기본적으로 안전하게 설계되어 있습니다.
+자세한 내용은 Langfuse Cloud의 [보안 문서](/security)를 참고하세요.
+
+## 인터넷 액세스
+
+Langfuse는 인터넷 액세스가 필요하지 않습니다.
+
+LLM Playground나 LLM 평가와 같은 일부 선택적 컴포넌트는 [LLM API/Gateway](/self-hosting/deployment/infrastructure/llm-api)에 대한 액세스가 필요합니다.
+이는 동일한 VPC 내에 배포하거나 해당 VPC와 피어링할 수 있습니다.
+
+Langfuse는 업데이트 여부를 확인하기 위해 GitHub API의 캐시된 버전에 핑을 보냅니다. 인터넷 액세스가 불가능한 경우 이 확인 작업은 정상적으로 실패 처리됩니다 (graceful failure).

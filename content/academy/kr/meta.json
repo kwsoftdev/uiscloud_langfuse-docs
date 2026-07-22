@@ -1,0 +1,15 @@
+{
+  "title": "아카데미",
+  "pages": [
+    "index",
+    "ai-engineering-loop",
+    "---단계---",
+    "tracing",
+    "monitoring",
+    "datasets",
+    "experiments",
+    "evaluate",
+    "---보충 자료---",
+    "examples"
+  ]
+}

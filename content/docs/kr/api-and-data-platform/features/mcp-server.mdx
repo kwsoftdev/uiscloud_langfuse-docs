@@ -1,0 +1,279 @@
+---
+title: MCP 서버
+sidebarTitle: MCP 서버
+description: AI 어시스턴트가 프로그래밍 방식으로 Langfuse 데이터와 상호작용할 수 있도록 지원하는 Langfuse 전용 Model Context Protocol(MCP) 서버입니다.
+sourceRevision: e2e567c1474523c7b03487e94927804ad4f3b6c1
+translationStatus: machine
+---
+
+# Langfuse MCP 서버
+
+Langfuse에는 AI 어시스턴트와 에이전트가 프로그래밍 방식으로 Langfuse 데이터와 상호작용할 수 있도록 지원하는 네이티브 [Model Context Protocol](https://modelcontextprotocol.io) (MCP) 서버가 포함되어 있습니다.
+
+새로운 도구에 대한 피드백이나 아이디어가 있으시면 [GitHub에서 공유](https://github.com/orgs/langfuse/discussions/10605)해 주세요.
+
+<Callout type="info">
+
+CLI 도구를 설치하고 bash 명령을 실행할 수 있는 환경에서 AI 에이전트를 실행 중이라면, MCP 서버 대신 [Langfuse Agent Skill](/docs/api-and-data-platform/features/agent-skill)을 사용하는 것을 권장합니다.
+
+</Callout>
+
+<Callout type="info">
+
+이는 Langfuse 데이터 플랫폼을 위한 인증된 MCP 서버입니다. Langfuse 문서를 위한 공개 MCP 서버도 별도로 존재합니다 ([docs](/docs/docs-mcp)).
+
+</Callout>
+
+## 설정
+
+Langfuse MCP 서버는 각 API 키가 특정 프로젝트로 범위가 지정되는 상태 비저장(stateless) 아키텍처를 사용합니다. MCP 서버에 연결하려면 다음 설정을 사용하세요.
+
+<Tabs items={["Cloud EU", "Cloud US", "Cloud Japan", "HIPAA US", "Self-Hosted"]}>
+
+<Tab>
+
+- 엔드포인트: `https://cloud.langfuse.com/api/public/mcp`
+- 전송 방식: `streamableHttp`
+- 인증: authorization 헤더를 통한 Basic Auth
+
+</Tab>
+
+<Tab>
+
+- 엔드포인트: `https://us.cloud.langfuse.com/api/public/mcp`
+- 전송 방식: `streamableHttp`
+- 인증: authorization 헤더를 통한 Basic Auth
+
+</Tab>
+
+<Tab>
+
+- 엔드포인트: `https://jp.cloud.langfuse.com/api/public/mcp`
+- 전송 방식: `streamableHttp`
+- 인증: authorization 헤더를 통한 Basic Auth
+
+</Tab>
+
+<Tab>
+
+- 엔드포인트: `https://hipaa.cloud.langfuse.com/api/public/mcp`
+- 전송 방식: `streamableHttp`
+- 인증: authorization 헤더를 통한 Basic Auth
+
+</Tab>
+
+<Tab>
+
+- 엔드포인트: `https://your-domain.com/api/public/mcp`
+- 전송 방식: `streamableHttp`
+- 인증: authorization 헤더를 통한 Basic Auth
+- 리버스 프록시 배포의 경우, 프록시가 공개 `Host`
+  헤더를 유지하도록 해야 합니다. MCP 엔드포인트가 내부 호스트를 대신 수신하는 경우,
+  `LANGFUSE_MCP_ALLOWED_HOSTS`를 MCP 엔드포인트가 허용하는 정확한 추가
+  호스트명 또는 origin의 쉼표로 구분된 목록으로 설정하세요. 그렇지 않으면 `403` 오류가 발생합니다.
+
+</Tab>
+
+</Tabs>
+
+## MCP 레퍼런스
+
+<Callout type="info">
+
+[MCP 레퍼런스](https://mcp.reference.langfuse.com)는 현재 Langfuse MCP 서버, 설정 스니펫, 도구, 입력 스키마, 생성된 요청 예제에 대한 정본(canonical source)입니다.
+
+</Callout>
+
+<Callout type="warning">
+  **읽기 및 쓰기 도구가 기본적으로 모두 제공됩니다.** 읽기 전용 도구만
+  사용하고 싶다면 쓰기 작업에 대한 접근을 제한하도록 MCP 클라이언트에
+  허용 목록(allowlist)을 설정하세요. 전체 도구 목록은 [MCP 레퍼런스](https://mcp.reference.langfuse.com)를 참고하세요.
+</Callout>
+
+## 설정 방법 [#set-up]
+
+<Steps>
+
+### 인증 헤더 가져오기
+
+1. 프로젝트 설정으로 이동하여 **프로젝트 범위 API 키**를 생성하거나 복사합니다.
+   - Public Key: `pk-lf-...`
+   - Secret Key: `sk-lf-...`
+2. 자격 증명을 base64 형식으로 인코딩합니다.
+   ```bash filename="your-base64-token"
+   echo -n "pk-lf-your-public-key:sk-lf-your-secret-key" | base64
+   ```
+
+### 클라이언트 설정
+
+<Tabs items={["Claude Code", "Cursor", "Other MCP Clients"]}>
+
+<Tab>
+
+1. 단일 명령으로 Langfuse MCP 서버를 등록합니다. `{your-base64-token}`을 인코딩한 자격 증명으로 교체하세요.
+
+   ```bash filename="terminal" /{your-base64-token}/
+   # Langfuse Cloud (EU)
+   claude mcp add --transport http langfuse https://cloud.langfuse.com/api/public/mcp \
+       --header "Authorization: Basic {your-base64-token}"
+
+   # Langfuse Cloud (US)
+   claude mcp add --transport http langfuse https://us.cloud.langfuse.com/api/public/mcp \
+       --header "Authorization: Basic {your-base64-token}"
+
+   # Langfuse Cloud (Japan)
+   claude mcp add --transport http langfuse https://jp.cloud.langfuse.com/api/public/mcp \
+       --header "Authorization: Basic {your-base64-token}"
+
+   # Langfuse Cloud (HIPAA)
+   claude mcp add --transport http langfuse https://hipaa.cloud.langfuse.com/api/public/mcp \
+       --header "Authorization: Basic {your-base64-token}"
+
+   # Self-Hosted (HTTPS required)
+   claude mcp add --transport http langfuse https://your-domain.com/api/public/mcp \
+       --header "Authorization: Basic {your-base64-token}"
+
+   # Local Development
+   claude mcp add --transport http langfuse http://localhost:3000/api/public/mcp \
+       --header "Authorization: Basic {your-base64-token}"
+   ```
+
+2. Claude Code에게 `list all prompts in the project`라고 요청하여 연결을 확인합니다. Claude Code는 `listPrompts` 도구를 사용하여 프롬프트 목록을 반환해야 합니다.
+
+</Tab>
+
+<Tab>
+
+1. Cursor 설정을 엽니다 (`Cmd/Ctrl + Shift + J`)
+2. **Tools & Integrations** 탭으로 이동합니다
+3. **"Add Custom MCP"**를 클릭합니다
+4. Langfuse MCP 서버 설정을 추가합니다. `{your-base64-token}`을 인코딩한 자격 증명으로 교체하세요.
+
+<Tabs items={["Cloud EU", "Cloud US", "Cloud Japan", "HIPAA US", "Self-Hosted"]}>
+
+<Tab>
+
+```json filename="mcp.json" /{your-base64-token}/
+{
+  "mcp": {
+    "servers": {
+      "langfuse": {
+        "url": "https://cloud.langfuse.com/api/public/mcp",
+        "headers": {
+          "Authorization": "Basic {your-base64-token}"
+        }
+      }
+    }
+  }
+}
+```
+
+</Tab>
+<Tab>
+
+```json filename="mcp.json" /{your-base64-token}/
+{
+  "mcp": {
+    "servers": {
+      "langfuse": {
+        "url": "https://us.cloud.langfuse.com/api/public/mcp",
+        "headers": {
+          "Authorization": "Basic {your-base64-token}"
+        }
+      }
+    }
+  }
+}
+```
+
+</Tab>
+<Tab>
+
+```json filename="mcp.json" /{your-base64-token}/
+{
+  "mcp": {
+    "servers": {
+      "langfuse": {
+        "url": "https://jp.cloud.langfuse.com/api/public/mcp",
+        "headers": {
+          "Authorization": "Basic {your-base64-token}"
+        }
+      }
+    }
+  }
+}
+```
+
+</Tab>
+<Tab>
+
+```json filename="mcp.json" /{your-base64-token}/
+{
+  "mcp": {
+    "servers": {
+      "langfuse": {
+        "url": "https://hipaa.cloud.langfuse.com/api/public/mcp",
+        "headers": {
+          "Authorization": "Basic {your-base64-token}"
+        }
+      }
+    }
+  }
+}
+```
+
+</Tab>
+<Tab>
+
+```json filename="mcp.json" /{your-base64-token}/
+{
+  "mcp": {
+    "servers": {
+      "langfuse": {
+        "url": "https://your-domain.com/api/public/mcp",
+        "headers": {
+          "Authorization": "Basic {your-base64-token}"
+        }
+      }
+    }
+  }
+}
+```
+
+</Tab>
+</Tabs>
+
+5. 파일을 저장하고 Cursor를 재시작합니다
+6. MCP 설정에 서버가 표시되고, 녹색 점이 활성화 상태임을 나타내야 합니다
+
+</Tab>
+
+<Tab>
+
+- 엔드포인트: `/api/public/mcp`
+  - EU: `https://cloud.langfuse.com/api/public/mcp`
+  - US: `https://us.cloud.langfuse.com/api/public/mcp`
+  - Japan: `https://jp.cloud.langfuse.com/api/public/mcp`
+  - HIPAA: `https://hipaa.cloud.langfuse.com/api/public/mcp`
+  - Self-Hosted: `https://your-domain.com/api/public/mcp`
+- 전송 방식: `streamableHttp`
+- 인증: authorization 헤더를 통한 Basic Auth
+  - `Authorization: Basic {your-base64-token}`
+
+</Tab>
+</Tabs>
+
+</Steps>
+
+## 피드백
+
+Langfuse MCP 서버에 대한 여러분의 경험을 듣고 싶습니다. [GitHub Discussion](https://github.com/orgs/langfuse/discussions/10605)에서 피드백, 아이디어, 사용 사례를 공유해 주세요.
+
+## 관련 문서
+
+- [MCP 레퍼런스](https://mcp.reference.langfuse.com) - MCP 서버, 설정 스니펫, 도구, 스키마, 요청에 대한 레퍼런스
+- [MCP를 활용한 프롬프트 관리](/docs/prompt-management/features/mcp-server) - 프롬프트 관련 워크플로 및 예제
+- [프롬프트 관리 개요](/docs/prompt-management/overview) - Langfuse 프롬프트 관리에 대해 알아보기
+- [Public API](/docs/api-and-data-platform/features/public-api) - 프로그래밍 방식 접근을 위한 REST API
+- [Langfuse Agent Skill](/docs/api-and-data-platform/features/agent-skill) - 코딩 에이전트에서 Langfuse 기능 사용하기
+- [Langfuse for Agents](/agents) - 코딩 에이전트를 위한 skill, CLI, MCP 서버 개요

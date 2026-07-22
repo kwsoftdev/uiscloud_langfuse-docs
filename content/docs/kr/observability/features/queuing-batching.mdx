@@ -1,0 +1,139 @@
+---
+title: 이벤트 큐잉/배칭
+description: Langfuse 트레이싱을 위한 큐잉/배칭 설정.
+sourceRevision: ecc69b1d83e5a0e352ad0c067e6483ce87e579d5
+translationStatus: machine
+---
+
+# 이벤트 큐잉/배칭
+
+Langfuse의 클라이언트 SDK와 통합은 모두 백그라운드에서 요청을 큐에 넣고 배치 처리하여 API 호출과 네트워크 시간을 최적화하도록 설계되었습니다. 배치는 시간과 크기(이벤트 수 및 배치 크기)의 조합으로 결정됩니다.
+
+### 설정
+
+모든 통합은 합리적인 기본 설정을 제공하지만, 필요에 맞게 배칭 동작을 커스터마이즈할 수 있습니다.
+
+| 옵션 (Python) [SDK 생성자, 환경 변수]           | 옵션 (JS)                 | 설명                                             |
+| ----------------------------------------------- | ------------------------- | ------------------------------------------------ |
+| `flush_at`, `LANGFUSE_FLUSH_AT`                 | `flushAt`                 | 전송 전에 배치할 수 있는 최대 이벤트 수입니다.   |
+| `flush_interval`, `LANGFUSE_FLUSH_INTERVAL` (s) | `flushInterval` (seconds) | 배치를 전송하기 전 대기하는 최대 시간(초)입니다. |
+
+예를 들어 `flushAt=1`로 설정하면 모든 이벤트를 즉시 전송하고, `flushInterval=1`로 설정하면 매초 전송합니다.
+
+### 수동 플러시
+
+<Callout type="info">
+  Vercel Functions, AWS Lambda와 같은 단기 실행 환경(short-lived environment)에서는 프로세스가 종료되거나 런타임 환경이 정지(freeze)되기 전에 트레이스를 명시적으로 플러시해야 합니다. 클라이언트를 플러시하지 않으면 이벤트가 유실될 수 있습니다.
+</Callout>
+
+배치를 즉시 전송하려면 클라이언트에서 `flush` 메서드를 호출하면 됩니다. 네트워크 문제가 발생하면 flush는 오류를 기록하고 배치를 재시도하며, 예외를 발생시키지 않습니다.
+
+<LangTabs items={["Python SDK","JS/TS SDK","OpenAI SDK (Python)","Langchain","Langchain (JS)"]}>
+
+<Tab>
+{/* Python SDK */}
+
+```python
+from langfuse import get_client
+
+# access the client directly
+
+langfuse = get_client()
+
+# Flush all pending observations
+
+langfuse.flush()
+
+```
+
+애플리케이션을 종료할 때는 `shutdown` 메서드를 사용하여 프로세스가 종료되기 전에 모든 요청이 플러시되고 대기 중인 요청이 완료되도록 하세요. 이 함수가 성공적으로 완료되면 더 이상 Langfuse API로 이벤트가 전송되지 않습니다.
+
+```python
+from langfuse import get_client
+
+langfuse = get_client()
+
+langfuse.shutdown()
+```
+
+</Tab>
+<Tab>
+{/* JS/TS */}
+
+`LangfuseSpanProcessor`는 이벤트를 버퍼링하여 배치로 전송하므로, 마지막에 플러시를 수행하면 데이터 유실을 방지할 수 있습니다.
+
+OTEL SDK 설정 파일에서 프로세서를 export할 수 있습니다.
+
+```ts filename="instrumentation.ts" /langfuseSpanProcessor/ /forceFlush/
+import { NodeSDK } from "@opentelemetry/sdk-node";
+import { LangfuseSpanProcessor } from "@langfuse/otel";
+
+// Export the processor to be able to flush it
+export const langfuseSpanProcessor = new LangfuseSpanProcessor();
+
+const sdk = new NodeSDK({
+  spanProcessors: [langfuseSpanProcessor],
+});
+
+sdk.start();
+```
+
+그런 다음, 서버리스 함수 핸들러에서 함수가 종료되기 전에 `forceFlush()`를 호출하세요.
+
+```ts filename="handler.ts"
+import { langfuseSpanProcessor } from "./instrumentation";
+
+export async function handler(event, context) {
+  // ... your application logic ...
+
+  // Flush before exiting
+  await langfuseSpanProcessor.forceFlush();
+}
+```
+
+</Tab>
+<Tab>
+{/* OpenAI SDK (Python) */}
+
+```python
+from langfuse import get_client
+
+# access the client directly
+langfuse = get_client()
+
+# Flush all pending observations
+langfuse.flush()
+```
+
+</Tab>
+<Tab>
+{/* Langchain (Python) */}
+
+```python
+from langfuse import get_client
+
+langfuse = get_client()
+
+langfuse.flush()
+
+# access the client directly
+langfuse_handler.client.flush()
+
+```
+
+</Tab>
+<Tab>
+{/* Langchain (JS) */}
+
+```javascript
+await langfuseHandler.flushAsync();
+```
+
+애플리케이션을 종료할 때는 `shutdownAsync` 메서드를 사용하여 프로세스가 종료되기 전에 모든 요청이 플러시되고 대기 중인 요청이 완료되도록 하세요.
+
+```javascript
+await langfuseHandler.shutdownAsync();
+```
+
+</Tab>
+</LangTabs>

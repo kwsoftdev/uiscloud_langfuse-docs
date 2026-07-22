@@ -1,0 +1,187 @@
+---
+title: 좋은 트레이스란 어떤 모습인가요?
+sidebarTitle: 모범 사례
+description: 디버깅, 평가, 비용 추적이 원활하게 동작하도록 Langfuse 트레이스를 구조화하는 모범 사례 - 범위, 이름 지정, 입력/출력, 속성.
+sourceRevision: 094f047d7c40227e3ee6c38b7aa1908b70fa20e8
+translationStatus: machine
+---
+
+import { Fan, Wrench } from "lucide-react";
+
+# 좋은 트레이스란 어떤 모습인가요?
+
+Langfuse에 트레이스가 나타나는 것은 확인했지만, 이를 잘 구성했는지는 어떻게 알 수 있을까요? 확인하고 최적화할 수 있는 몇 가지 항목을 소개합니다.
+
+트레이스 구조는 단순히 보기 좋으라고 있는 것이 아닙니다. 많은 Langfuse 기능이 트레이스 구조를 기반으로 동작합니다.
+
+- [LLM-as-a-judge 평가기](/docs/evaluation/evaluation-methods/llm-as-a-judge)는 이름과 유형으로 관측을 대상으로 지정하고, 그 입력과 출력을 읽습니다.
+- [대시보드](/docs/metrics/features/custom-dashboards)는 트레이스와 관측 이름별로 메트릭을 필터링하고 집계합니다.
+- [데이터셋 실험](/docs/evaluation/experiments)은 실행 간 트레이스 입력과 출력을 비교합니다.
+- 트레이싱 테이블에 저장된 뷰는 이름과 속성을 참조합니다.
+
+잘 구조화된 트레이스는 오늘 당장 디버깅을 더 빠르게 만들어 주며, 안정적인 이름과 의미 있는 입력/출력은 애플리케이션이 발전하는 동안에도 평가기, 대시보드, 실험이 계속 정상 동작하도록 해줍니다.
+
+## 트레이스 하나의 범위는 어디까지인가요?
+
+Langfuse의 [데이터 모델](/docs/observability/data-model)은 세 단계의 그룹화 수준을 가집니다. 관측(개별 단계)은 `trace_id`를 통해 트레이스로 그룹화되고, 트레이스는 `session_id`를 통해 세션으로 그룹화될 수 있습니다.
+
+트레이스는 애플리케이션 내에서 자체적으로 완결된 하나의 작업 단위를 나타냅니다. 일반적인 트레이스의 좋은 예시는 다음과 같습니다.
+
+- 챗봇의 한 턴 (사용자가 메시지를 보내고, 애플리케이션이 컨텍스트를 조회하고, LLM을 호출하고, 응답을 반환)
+- 하나의 에이전트 실행 (에이전트가 작업을 받아 추론하고, 도구를 호출하고, 결과를 생성)
+- 하나의 파이프라인 실행 (문서가 들어와서 청크로 분할되고, 임베딩되고, 저장됨)
+
+이런 작업이 순차적으로 여러 번 발생하는 경우, 예를 들어 여러 턴에 걸친 대화나 최종 보고서로 이어지는 여러 에이전트 실행이 있다면, 이때 [세션](/docs/observability/features/sessions)이 필요합니다. 각 단계는 각각 하나의 트레이스이며, 세션이 이들을 하나로 묶어줍니다. 챗봇의 경우 이는 턴마다 하나의 트레이스, 대화마다 하나의 세션을 의미합니다. 대화가 언제 끝날지 미리 알 수 없기 때문에, 턴 단위 모델을 사용하면 트레이스가 작게 유지되어 세션 뷰에서 탐색하기 쉬워집니다.
+
+트레이스는 Langfuse UI에서 트레이스 트리와 [에이전트 그래프](/docs/observability/features/agent-graphs)로 표시됩니다.
+
+<div className="grid grid-cols-2 mt-4 gap-4">
+
+![Trace tree](/images/docs/faq/good-trace-tree.png)
+
+![Agent graph](/images/docs/faq/good-trace-agent-graph.png)
+
+</div>
+
+## 트레이스 트리 살펴보기
+
+트레이스를 클릭하면 트레이스 트리가 표시됩니다. 확인할 수 있는 사항은 두 가지입니다.
+
+### 올바른 단계가 표시되고 있나요?
+
+트리에는 LLM 호출, 도구 호출, 그 밖의 중요한 단계가 표현되어야 합니다. 이들은 올바른 [관측 유형](/docs/observability/features/observation-types)을 가져야 합니다.
+
+예를 들어
+
+- LLM 호출은 <Fan size={16} className="text-muted-magenta inline" /> `generation`으로 표시되어야 합니다. `generation`은 [비용, 토큰 사용량, 모델 정보](#track-model-tokens-and-cost-on-generations)를 담을 수 있기 때문에 중요합니다.
+- 도구 호출은 <Wrench size={16} className="text-orange-600 inline" /> `tool`로 표시되어야 합니다. 이후 [LLM-as-a-judge](/docs/evaluation/evaluation-methods/llm-as-a-judge) 평가기를 만들 때 도구 호출 관측 기준으로 필터링할 수 있습니다.
+
+프레임워크 통합은 일반적으로 이러한 유형을 자동으로 설정합니다. 수동으로 계측하는 경우 `as_type` 파라미터(Python) 또는 `asType`(JS/TS)를 통해 설정할 수 있습니다. 전체 목록은 [관측 유형 문서](/docs/observability/features/observation-types)를 참고하세요.
+
+### 올바르게 중첩되어 있나요?
+
+도구 호출은 그 단계를 조율하는 `agent` 또는 `span` 아래에, 해당 도구를 호출한 `generation`의 형제로 중첩되어야 합니다. 그래야 트리가 각 동작이 어떤 단계에 속하는지 보여주며, 도구 호출이 트레이스 루트에 붕 뜬 채로 남지 않습니다.
+
+프레임워크 통합은 대개 이를 자동으로 올바르게 처리합니다. 수동으로 계측하는 경우 [관측 중첩](/docs/observability/sdk/instrumentation#nesting-observations)을 참고하세요.
+
+### 불필요한 노이즈는 없나요?
+
+트리에 있는 모든 관측이 애플리케이션의 동작을 이해하는 데 유용한 것은 아닙니다. HTTP 스팬, 데이터베이스 쿼리, 프레임워크 내부 동작은 의미 있는 통찰 없이 잡음만 늘리는 경우가 많습니다. 이런 관측이 트레이스 트리를 어지럽히고 있다면 [필터링해서 제외](/faq/all/unwanted-http-database-spans)할 수 있습니다.
+
+<div className="max-w-[50%]">
+
+![Noisy spans in a trace tree](/images/docs/faq/good-trace-noisy-spans.png)
+
+</div>
+
+## 좋은 이름 선택하기
+
+관측 및 트레이스 이름은 여러 곳에서 사용됩니다.
+
+- [LLM-as-a-judge 평가기](/docs/evaluation/evaluation-methods/llm-as-a-judge)를 설정할 때, 이름으로 특정 관측을 대상으로 지정합니다.
+- [대시보드](/docs/metrics/features/custom-dashboards)에서는 관측 이름별로 메트릭을 필터링하고 집계할 수 있습니다.
+- 트레이싱 테이블에서 이름은 각 단계가 무엇을 하는지 빠르게 파악하는 데 도움이 됩니다.
+
+이름이 이 모든 곳에서 참조되기 때문에, 이름을 하나의 API처럼 다뤄야 합니다. 이름이 바뀌면, 이전 이름을 대상으로 하던 평가기, 대시보드 쿼리, 저장된 필터가 조용히 매칭을 멈춰버립니다. 이름은 신중하게 선택하고, 이후에는 안정적으로 유지하세요.
+
+**능동형 표현을 사용하세요.** 관측이 수행하는 동작을 따라 동사를 앞에 두고 이름을 지으세요: `classify-intent`, `retrieve-context`, `generate-response`, `summarize-results`. 이렇게 하면 트레이스 트리가 애플리케이션이 수행한 작업에 대한 설명처럼 읽히고, 특정 단계를 필터링하기도 쉬워집니다.
+
+**동적인 값은 이름에 넣지 마세요.** `process-order-8945`나 `generate-response-retry-2`가 아니라 `process-order`를 사용하세요. 이름은 하나의 실행 인스턴스가 아니라 그 연산 자체를 식별해야 합니다. 그렇지 않으면 트레이스마다 새로운 이름이 생성되어 더 이상 그룹화, 필터링, 대상 지정을 할 수 없게 됩니다. 실행별로 달라지는 값은 대신 [메타데이터](/docs/observability/features/metadata)에 넣으세요. (이는 OpenTelemetry가 스팬 이름에 대해 권장하는 것과 동일한 저(低)카디널리티 규칙입니다.)
+
+<Callout type="warning">
+
+관측 이름을 사용된 AI 모델 이름(`gpt-4o`, `claude-sonnet`)으로 짓지 않는 것이 좋습니다. 모델을 교체하는 순간, 해당 이름을 참조하는 모든 필터, 평가기, 대시보드가 깨집니다. 모델은 이미 `generation` 관측의 별도 속성으로 존재하므로 그것을 사용하세요.
+
+</Callout>
+
+## 의미 있는 입력과 출력 선택하기
+
+일반적으로 각 연산에는 입력 및/또는 출력이 있는 것이 권장됩니다. 어떤 관측에 입력도 출력도 없다면, 그 관측이 정말 유용한지, 아니면 제거할 수 있는지 스스로에게 물어보세요.
+
+**루트 관측**은 가장 많은 주의를 기울여야 합니다. 트레이스 수준의 입력과 출력이 여기서 파생되기 때문입니다. 이는 트레이싱 테이블에 표시되고, 평가기가 읽으며, [데이터셋 실험](/docs/evaluation/experiments)에서 실행 간에 비교됩니다. 리뷰어가 한눈에 파악해야 할 내용으로 설정하세요 - 챗봇이라면 사용자 메시지를 입력으로, 어시스턴트 응답을 출력으로 설정하고, 함수 인자를 담은 원본 JSON 덩어리로 설정하지 마세요. 디버깅을 위해 원본 페이로드가 필요하다면 [메타데이터](/docs/observability/features/metadata)에 넣으세요.
+
+**가장 많이 조회하는 관측**에 대해서는 좀 더 신경 써서 설정하세요. 트레이싱 화면과 세션 화면에 미리 필터링된 뷰를 만들게 될 가능성이 높습니다. 여기서 필터링하는 관측이 가장 많이 확인될 관측입니다. 이런 관측에 대해서는 다음을 자문해 보세요. **트레이스/세션을 한눈에 빠르게 평가하려면 무엇을 봐야 하는가?**
+
+![Tracing table with input and output](/images/docs/faq/good-trace-tracing-table-io.png)
+
+`GENERATION` 관측에서 일반적인 입력/출력은 다음과 같습니다.
+
+- 챗봇의 경우: 사용자 메시지(입력)와 어시스턴트 응답(출력).
+- RAG 파이프라인의 경우: 사용자 쿼리와 생성된 답변.
+- 분류 작업의 경우: 분류 대상 텍스트와 예측된 레이블.
+
+<Callout type="info">
+
+대부분의 입력/출력은 원본 JSON 덩어리가 아니라 읽기 쉽고 역할(role)이 표시된 대화 형식으로 렌더링될 수 있습니다. 만약 원본 JSON으로 표시된다면 형식을 확인해 보세요. 표준 OpenAI 형식의 메시지 목록이어야 하며(각각 `role`과 `content`를 가짐), 도구 호출은 어시스턴트 메시지의 `tool_calls` 배열 안에 있고 각 호출의 `arguments`가 JSON으로 인코딩된 문자열로 주어질 때만(예: `"{\"location\": \"Paris\"}"`) 카드로 렌더링됩니다.
+
+</Callout>
+
+입력과 출력 필드가 의도치 않게 비어 있다면 [트레이스의 입력과 출력이 비어 있는 이유는 무엇인가요?](/faq/all/empty-trace-input-and-output)를 참고하세요.
+
+## 유용한 속성
+
+관측에는 사용 사례에 유용하게 활용할 수 있는 여러 속성이 있습니다. 이를 통해 필터링, 스코어링, 대시보드 구성을 한층 더 확장할 수 있습니다.
+
+### 컨텍스트를 위한 메타데이터 추가
+
+[메타데이터](/docs/observability/features/metadata)는 각 관측에 있는 유연한 키-값 저장소입니다. 유용한 컨텍스트이지만 이름이나 입력/출력에는 속하지 않는 정보를 넣기에 적합한 곳입니다. 실무에서 유용한 메타데이터 예시는 다음과 같습니다.
+
+- **평가 컨텍스트**: [LLM-as-a-judge 평가기](/docs/evaluation/evaluation-methods/llm-as-a-judge)가 필요로 하지만 실제 입력/출력에는 포함되지 않는 정답(ground truth), 기대 동작, 기타 컨텍스트. 평가기는 변수 매핑에서 메타데이터 필드를 참조할 수 있습니다.
+- **요청 컨텍스트**: 내부 요청 ID, 요청을 처리한 API 경로나 앱 버전, 활성화되어 있던 실험 변형 / 기능 플래그 등. 이를 통해 트레이스를 다른 시스템과 연관 지을 수 있고 롤아웃 기준으로 필터링할 수 있습니다.
+- **검색(retrieval) 컨텍스트**: RAG 단계의 경우 데이터 소스, 검색된 청크 수, 쿼리한 인덱스 등. 검색 단계가 왜 좋지 않은 결과를 반환했는지 디버깅할 때 유용합니다.
+- **원본 페이로드**: 입력/출력 필드를 어지럽히지만 디버깅을 위해 가끔 필요한 전체 요청/응답 객체.
+- **주석(annotation) 컨텍스트**: 수동 검토를 할 때, 메타데이터는 주석 작성자에게 더 나은 판단을 내릴 수 있는 추가 정보를 제공합니다.
+
+Langfuse UI에서 메타데이터 키로 필터링할 수 있으며, 이는 특정 특징을 가진 트레이스를 찾을 때 유용합니다.
+
+### generation의 모델, 토큰, 비용 추적 [#track-model-tokens-and-cost-on-generations]
+
+모델별, 사용자별, 기능별로 세분화된 LLM 사용 비용을 파악하고 싶다면 `generation` 관측에 다음 세 가지가 필요합니다.
+
+- **모델 이름**: Langfuse는 이 값으로 [모델 가격 테이블](/docs/model-usage-and-cost)에서 가격을 조회합니다. 모델 이름이 일치하지 않으면 Langfuse가 비용을 자동으로 계산할 수 없습니다.
+- **사용량 세부 정보**: 입력 토큰, 출력 토큰, 그리고 선택적으로 캐시된 토큰. 이는 대시보드의 토큰 사용량 뷰를 뒷받침하는 정보입니다.
+- **비용 세부 정보** (선택 사항): Langfuse의 자동 가격 책정을 재정의하고 싶다면 - 예를 들어 별도의 가격 계약이 있는 경우 - 비용을 명시적으로 전달할 수 있습니다.
+
+대부분의 [통합](/integrations)이 이 모든 정보를 자동으로 수집합니다. 수동으로 계측하는 경우 [토큰 및 비용 추적 문서](/docs/observability/features/token-and-cost-tracking)를 참고하세요.
+
+Langfuse UI의 `GENERATION` 관측에서 이러한 속성을 확인할 수 있습니다.
+
+![Generation attributes in Langfuse](/images/docs/faq/good-trace-generation-attributes.png)
+
+### 비즈니스 수준 차원을 위한 태그 사용
+
+[태그](/docs/observability/features/tags)를 사용하면 비즈니스에 중요한 차원별로 필터링과 메트릭 분석이 가능합니다. 좋은 태그는 "우리의 `web` 사용자와 `api` 사용자 간에 지연 시간이 어떻게 다른가?" 같은 질문에 답할 수 있게 해줍니다.
+
+태그의 한 가지 특징은 **불변(immutable)이며 관측 생성 시점에 설정되어야 한다**는 점입니다. 이 때문에 요청이 어디서 왔는지, 어떤 기능의 일부인지 등 미리 알고 있는 정보에는 적합하지만, 나중에야 알게 되는 정보에는 적합하지 않습니다.
+
+[LLM-as-a-judge](/docs/evaluation/evaluation-methods/llm-as-a-judge) 평가 결과처럼 사후에 결정되는 무언가를 기준으로 트레이스에 레이블을 붙여야 한다면, 대신 [점수](/docs/evaluation/overview)를 사용하세요.
+
+### 프롬프트를 트레이스에 연결하기
+
+[Langfuse에서 프롬프트를 관리](/docs/prompt-management)한다면, [프롬프트를 generation에 연결](/docs/prompt-management/features/link-to-traces)할 수 있습니다. 이를 통해 특정 트레이스에 어떤 프롬프트 버전이 사용되었는지 확인할 수 있고, 프롬프트 버전에 따라 메트릭이 어떻게 변화하는지 추적할 수 있습니다. 프롬프트를 반복적으로 개선하며 성능을 비교하고 싶을 때 유용합니다.
+
+### 환경 설정하기
+
+테스트용 트레이스가 프로덕션 대시보드와 평가를 오염시키지 않도록 [환경](/docs/observability/features/environments) 속성(`production`, `staging`, `development`)을 설정하세요.
+
+### 사용자 ID로 사용자 추적하기
+
+[사용자 ID](/docs/observability/features/users)를 설정하면 트레이스가 특정 사용자와 연결되어, Langfuse에서 사용자별 뷰를 사용할 수 있게 됩니다. 다음과 같은 질문에 답하고 싶을 때 유용합니다.
+
+- 어떤 사용자가 가장 많은 비용을 발생시키고 있는가?
+- 사용자에 따라 출력 품질이 어떻게 달라지는가?
+- 특정 사용자의 사용 패턴은 어떤 모습인가?
+
+### 세션 ID로 관련된 트레이스 그룹화하기
+
+애플리케이션에서 논리적으로 서로 연관된 여러 트레이스가 발생한다면, 이를 [세션](/docs/observability/features/sessions)으로 그룹화하세요. 이를 통해 전체 상호작용을 순서대로 볼 수 있는 세션 재현(replay) 뷰를 사용할 수 있습니다.
+
+이는 다음과 같은 경우에 의미가 있습니다.
+
+- 챗봇을 구축하는 경우 (사용자 메시지마다 새로운 트레이스가 생성되지만, 전체 대화는 하나의 세션입니다)
+- 여러 에이전트가 각각 최종 결과물에 기여하는 경우 (예: 다섯 개의 에이전트가 협력하여 보고서를 작성)
+- 워크플로우가 사람이 개입하는(human-in-the-loop) 단계를 사이에 두고 여러 요청에 걸쳐 이어지는 경우
+
+애플리케이션이 호출 간 연속성이 없는 단일 요청/단일 응답 방식이라면, 세션은 필요하지 않을 가능성이 높습니다.
+
+![Sessions view in Langfuse](/images/docs/faq/good-trace-sessions-view.png)

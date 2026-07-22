@@ -1,0 +1,190 @@
+---
+title: 버전 관리
+sidebarTitle: 버전 관리
+description: SDK에서 특정 프롬프트 버전을 가져오기 위해 프롬프트 레이블을 사용하는 방법입니다.
+sourceRevision: ecc69b1d83e5a0e352ad0c067e6483ce87e579d5
+translationStatus: machine
+---
+
+# 프롬프트 버전 관리
+
+Langfuse에서 프롬프트의 버전 관리 및 배포는 `versions`와 `labels`를 통해 관리됩니다.
+
+## 버전 및 레이블
+
+각 프롬프트 버전에는 `version ID`가 자동으로 할당됩니다. 또한 원하는 버전 관리 체계를 따르기 위해 `labels`를 지정할 수 있습니다.
+
+레이블은 환경(스테이징, 프로덕션), 테넌트(tenant-1, tenant-2), 또는 실험(prod-a, prod-b)에 프롬프트를 할당하는 데 사용할 수 있습니다.
+
+<LangTabs items={["Langfuse UI","Python SDK", "JS/TS SDK"]}>
+<Tab>
+
+Langfuse UI를 사용하여 프롬프트에 레이블을 할당합니다.
+
+<Video
+  src="https://static.langfuse.com/docs-videos/deploy-prompt.mp4"
+  aspectRatio={16 / 9}
+  gifStyle
+/>
+
+</Tab>
+<Tab>
+
+Python SDK를 사용하여 새 프롬프트 버전을 생성할 때 레이블을 할당합니다.
+
+```python {5}
+langfuse.create_prompt(
+    name="movie-critic",
+    type="text",
+    prompt="As a {{criticlevel}} movie critic, do you like {{movie}}?",
+    labels=["production"],  # 프롬프트 버전에 "production" 레이블 추가
+)
+```
+
+또한 Python SDK를 사용하여 기존 프롬프트 버전의 레이블을 업데이트할 수도 있습니다.
+
+```python {5}
+langfuse = Langfuse()
+langfuse.update_prompt(
+    name="movie-critic",
+    version=1,
+    new_labels=["john", "doe"], # 프롬프트 버전에 이 레이블들을 할당
+)
+```
+
+</Tab>
+<Tab>
+
+JS/TS SDK를 사용하여 새 프롬프트 버전을 생성할 때 레이블을 할당합니다.
+
+```ts {5}
+import { LangfuseClient } from "@langfuse/client";
+
+const langfuse = new LangfuseClient();
+
+await langfuse.prompt.create({
+  name: "movie-critic",
+  type: "text",
+  prompt: "As a {{criticlevel}} critic, do you like {{movie}}?",
+  labels: ["production"], // 프롬프트 버전에 "production" 레이블 추가
+});
+```
+
+또한 JS/TS SDK를 사용하여 기존 프롬프트 버전의 레이블을 업데이트할 수도 있습니다.
+
+```ts {5}
+await langfuse.prompt.update({
+  name: "movie-critic",
+  version: 1,
+  newLabels: ["john", "doe"],
+});
+```
+
+</Tab>
+</LangTabs>
+
+## 레이블 또는 버전으로 가져오기
+
+애플리케이션에서 프롬프트를 사용하기 위해 가져올 때는 특정 버전 또는 레이블을 지정하여 가져올 수 있습니다.
+다음은 레이블 또는 버전으로 프롬프트를 가져오는 코드 예시입니다.
+
+**프롬프트 버전을 "배포"하려면**, 해당 프롬프트 버전에 `production` 레이블이나 직접 만든 환경 레이블을 할당해야 합니다.
+
+프롬프트를 가져올 때 참고할 사항:
+
+- `latest` 레이블은 가장 최근에 생성된 버전을 가리킵니다.
+- 레이블을 지정하지 않고 프롬프트를 사용하면, Langfuse는 `production` 레이블이 지정된 버전을 제공합니다.
+
+<LangTabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab>
+
+```python
+from langfuse import get_client
+
+# Langfuse 클라이언트 초기화
+langfuse = get_client()
+
+# 특정 버전 가져오기
+prompt = langfuse.get_prompt("movie-critic", version=1)
+
+# 특정 레이블 가져오기
+prompt = langfuse.get_prompt("movie-critic", label="staging")
+
+# 최신 프롬프트 버전 가져오기. 'latest' 레이블은 Langfuse가 자동으로 관리합니다.
+prompt = langfuse.get_prompt("movie-critic", label="latest")
+```
+
+</Tab>
+
+<Tab>
+
+```ts
+import { LangfuseClient } from "@langfuse/client";
+
+const langfuse = new LangfuseClient();
+
+// 프롬프트의 특정 버전 가져오기 (여기서는 버전 1)
+const prompt = await langfuse.prompt.get("movie-critic", {
+  version: 1,
+});
+
+// 특정 레이블 가져오기
+const prompt = await langfuse.prompt.get("movie-critic", {
+  label: "staging",
+});
+
+// 최신 프롬프트 버전 가져오기. 'latest' 레이블은 Langfuse가 자동으로 관리합니다.
+const prompt = await langfuse.prompt.get("movie-critic", {
+  label: "latest",
+});
+```
+
+</Tab>
+
+</LangTabs>
+
+## 롤백
+
+프롬프트에 `production` 레이블이 지정되어 있으면, SDK에서는 기본적으로 해당 버전이 제공됩니다. Langfuse UI에서 이전 버전에 `production` 레이블을 다시 지정하면 빠르게 이전 버전으로 롤백할 수 있습니다.
+
+## 프롬프트 Diff
+
+프롬프트 버전 diff 뷰는 시간에 따라 프롬프트에 적용된 변경 사항을 보여줍니다. 이를 통해 프롬프트가 어떻게 발전해왔는지, 문제를 디버깅하거나 변경 사항의 영향을 파악하는 데 어떤 변경이 이루어졌는지 이해할 수 있습니다.
+
+<Video
+  src="https://static.langfuse.com/docs-videos/prompt-changes.mp4"
+  gifStyle
+  aspectRatio={16 / 9}
+/>
+
+## 보호된 프롬프트 레이블
+
+<AvailabilityBanner
+  availability={{
+    hobby: "not-available",
+    core: "not-available",
+    pro: "team-add-on",
+    enterprise: "full",
+    selfHosted: "ee",
+  }}
+/>
+
+보호된 프롬프트 레이블을 사용하면 프로젝트 관리자와 소유자([RBAC 문서](/docs/rbac))가 레이블의 수정 또는 삭제를 방지하여 프롬프트 배포를 더 잘 제어할 수 있습니다.
+
+`production`과 같은 레이블이 보호됨으로 표시되면 다음과 같이 동작합니다.
+
+- `viewer` 및 `member` 역할은 프롬프트에서 해당 레이블을 수정하거나 삭제할 수 없으며, 이로써 `production` 프롬프트 버전에 대한 변경이 차단됩니다. 이는 해당 프롬프트의 삭제도 차단합니다.
+- `admin` 및 `owner` 역할은 여전히 레이블을 수정하거나 삭제할 수 있으며, 이를 통해 `production` 프롬프트 버전을 변경할 수 있습니다.
+
+관리자와 소유자는 프로젝트 설정에서 레이블의 보호 상태를 업데이트할 수 있습니다.
+
+<Video
+  src="https://static.langfuse.com/docs-videos/250402-protected-prompt-labels.mp4"
+  aspectRatio={16 / 9}
+  gifStyle
+/>
+
+## 관련 자료
+
+- 프롬프트는 프로젝트 단위로 범위가 지정됩니다 — 환경별로 별도의 프로젝트를 사용하는 경우, [프로젝트 간 프롬프트를 동기화하는 방법](/faq/all/managing-different-environments)을 참고하세요.
+- 레이블을 승격하기 전에 데이터셋에서 프롬프트 버전을 비교하려면 [실험](/docs/evaluation/core-concepts#experiments)을 실행하세요.

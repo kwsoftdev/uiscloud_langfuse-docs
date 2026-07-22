@@ -1,0 +1,33 @@
+---
+title: Terraform으로 GCP에 Langfuse 배포하기
+description: Terraform을 사용하여 GCP에서 Langfuse를 실행하는 단계별 가이드입니다.
+label: "Version: v3"
+sidebarTitle: "GCP (Terraform)"
+sourceRevision: 9c0d419484845ffbd56805fd068677856e5d764c
+translationStatus: machine
+---
+
+# Terraform으로 GCP에 Langfuse 배포하기
+
+이 가이드에서는 공식 Terraform 모듈([langfuse/langfuse-terraform-gcp](https://github.com/langfuse/langfuse-terraform-gcp))을 사용하여 GCP에 Langfuse를 배포하는 단계를 안내합니다.
+GCP 계정에 접근할 수 있어야 하며, 로컬 머신에 Terraform CLI가 설치되어 있어야 합니다.
+
+기본적으로 이 Terraform 모듈은 Langfuse 애플리케이션 컨테이너와 데이터 저장소([아키텍처 개요](/self-hosting#architecture))에 필요한 인프라를 프로비저닝합니다.
+필요에 따라 기존 GCP 리소스를 사용하도록 모듈을 구성할 수도 있습니다. 자세한 내용은 Readme를 참고하세요.
+
+또는 [Helm 차트](/self-hosting/deployment/kubernetes-helm)를 사용하여 Kubernetes에 Langfuse를 배포할 수도 있습니다.
+
+<Callout type="info">
+  Terraform 배포 가이드나 모듈에 기여하고 싶으시다면 [GitHub
+  저장소](https://github.com/langfuse/langfuse-terraform-gcp)에 이슈를 생성해 주세요.
+</Callout>
+
+## Readme
+
+출처: [langfuse/langfuse-terraform-gcp](https://github.com/langfuse/langfuse-terraform-gcp)
+
+import { GitHubReadme } from "@/components/GitHubReadme";
+
+<div className="p-6 mt-6 border bg-card rounded-md">
+  <GitHubReadme url="https://raw.githubusercontent.com/langfuse/langfuse-terraform-gcp/main/README.md" />
+</div>

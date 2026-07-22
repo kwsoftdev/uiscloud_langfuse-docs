@@ -1,0 +1,431 @@
+---
+title: 트레이스의 input과 output이 비어 있는 이유는 무엇인가요?
+description: 이 문서는 트레이스의 input과 output이 비어 있는 이유와 이를 해결하는 방법을 설명합니다.
+tags: [observability, observability-get-started]
+sourceRevision: ebd88776f7a2585db353a96b9309ff06a258a8fa
+translationStatus: machine
+---
+
+import { Details, Summary } from "@/components/Details";
+
+# 트레이스의 input과 output이 비어 있는 이유는 무엇인가요?
+
+트레이스에 input과 output이 있는지 여부는 여러 중요한 기능에 영향을 미칩니다.
+
+- **트레이스 탐색**: 트레이스 목록에는 input/output 미리보기가 표시되어 원하는 항목을 더 쉽게 찾을 수 있습니다
+- **평가**: LLM-as-a-judge 평가기는 트레이스의 input/output을 사용해 품질을 평가합니다. 필드가 비어 있으면 평가가 동작하지 않습니다
+- **검색**: input/output 내용으로 트레이스를 검색할 수 있지만, 값이 채워져 있어야만 가능합니다
+
+## 트레이스 input/output의 동작 방식
+
+해결 방법을 살펴보기 전에, 이 섹션에서는 Langfuse가 트레이스의 input/output을 어떻게 채우는지 설명합니다.
+
+### 트레이스와 관측(observation)
+
+Langfuse에서 **트레이스(trace)** 는 하나의 완전한 요청 또는 작업을 나타냅니다. 각 트레이스 내부에는 **관측(observation)** 이 존재합니다.
+
+```
+Trace: "User asks about weather"
+├── Observation: Parse user intent
+├── Observation: Call weather API
+└── Observation: Generate response (LLM call)
+```
+
+트레이스와 관측 모두 각자의 input/output 필드를 가질 수 있으며, 서로 다른 목적을 가집니다.
+
+|                 | 트레이스 input/output                          | 관측 input/output           |
+| --------------- | ---------------------------------------------- | --------------------------- |
+| **나타내는 것** | 전체 요청과 응답                               | 개별 단계 각각              |
+| **확인 위치**   | 트레이스 목록, 평가                            | 트레이스 상세 보기 내부     |
+| **설정 방식**   | 루트 관측으로부터 상속되거나 명시적으로 설정됨 | 각 관측에 개별적으로 설정됨 |
+
+### "루트 관측(root observation)" 규칙
+
+기본적으로 트레이스의 input/output은 최상위 관측(이를 "루트 관측"이라고 부릅니다)의 값을 그대로 복사한 것입니다.
+
+이는 다음을 의미합니다.
+
+- 루트 관측에 input/output이 있으면 → 트레이스에도 존재합니다
+- 루트 관측에 input/output이 없으면 → (명시적으로 설정하지 않는 한) 트레이스는 비어 있게 됩니다. [아래](#solution-b)를 참고하세요
+
+이것이 개별 관측 내부에서는 데이터를 볼 수 있는데도 트레이스에는 빈 필드가 표시되는 이유입니다.
+
+## 문제 해결
+
+트레이스의 input/output이 비어 있는 가장 흔한 원인은 다음과 같습니다.
+
+### 1. 수명이 짧은 애플리케이션(스크립트, 서버리스, 노트북)을 사용하는 경우
+
+**증상**: 트레이스에 데이터가 누락되어 나타나거나, 아예 표시되지 않습니다.
+
+[Langfuse는 애플리케이션의 속도를 유지하기 위해 백그라운드에서 데이터를 전송합니다](/docs/observability/data-model#background-processing). 스크립트나 서버리스 함수가 데이터 전송이 끝나기 전에 종료되면 데이터가 유실됩니다.
+
+**해결 방법**: 애플리케이션이 종료되기 전에 `flush()`를 호출하세요.
+
+<Tabs items={["Python", "JS/TS"]}>
+<Tab>
+
+```python
+from langfuse import get_client
+
+langfuse = get_client()
+
+# Your code here...
+
+# Before your script ends:
+langfuse.flush()
+```
+
+`@observe()` 데코레이터를 사용하는 경우:
+
+```python
+from langfuse import observe, get_client
+
+@observe()
+def main():
+    # Your code here...
+    pass
+
+main()
+get_client().flush()
+```
+
+</Tab>
+<Tab>
+
+```typescript
+import { NodeSDK } from "@opentelemetry/sdk-node";
+import { LangfuseSpanProcessor } from "@langfuse/otel";
+
+const langfuseSpanProcessor = new LangfuseSpanProcessor();
+
+const sdk = new NodeSDK({
+  spanProcessors: [langfuseSpanProcessor],
+});
+sdk.start();
+
+async function main() {
+  // Your code here...
+}
+
+// Ensure data is sent before exit
+main().finally(() => langfuseSpanProcessor.forceFlush());
+```
+
+</Tab>
+</Tabs>
+
+---
+
+### 2. 루트 스팬(root span)에 input/output을 설정하지 않은 경우
+
+**증상**: 트레이스의 input/output은 항상 비어 있지만, 트레이스 내부의 관측에는 데이터가 존재합니다.
+
+스팬을 수동으로 생성하는 경우, 다음 중 하나를 수행해야 합니다.
+
+- 루트 스팬에 input/output을 설정하거나, 또는
+- 트레이스 자체에 input/output을 명시적으로 설정해야 합니다
+
+**해결 방법 A**: 루트 스팬에 input/output 설정하기
+
+<Tabs items={["Python", "JS/TS"]}>
+<Tab>
+
+```python
+from langfuse import get_client
+
+langfuse = get_client()
+
+with langfuse.start_as_current_observation(
+    as_type="span",
+    name="my-pipeline"
+) as root_span:
+    user_input = "What's the weather like?"
+    result = process_request(user_input)
+
+    # Set input/output on the root span
+    # This will automatically populate the trace
+    root_span.update(
+        input={"query": user_input},
+        output={"response": result}
+    )
+```
+
+</Tab>
+<Tab>
+
+```typescript
+import { startActiveObservation } from "@langfuse/tracing";
+
+await startActiveObservation("my-pipeline", async (rootSpan) => {
+  const userInput = "What's the weather like?";
+  const result = await processRequest(userInput);
+
+  // Set input/output on the root span
+  // This will automatically populate the trace
+  rootSpan.update({
+    input: { query: userInput },
+    output: { response: result },
+  });
+});
+```
+
+</Tab>
+</Tabs>
+
+<span id="solution-b"></span>
+
+**해결 방법 B**: 트레이스에 직접 input/output 설정하기
+
+경우에 따라 트레이스의 input/output이 어떤 관측의 값과도 달라야 할 수 있습니다(예: 깔끔하게 요약된 값을 원하는 경우). 이때는 다음과 같이 명시적으로 설정할 수 있습니다.
+
+<Tabs items={["Python", "JS/TS"]}>
+<Tab>
+
+```python
+from langfuse import get_client
+
+langfuse = get_client()
+
+with langfuse.start_as_current_observation(
+    as_type="span",
+    name="my-pipeline"
+) as root_span:
+    user_input = "What's the weather like?"
+    result = process_request(user_input)
+
+    # Set trace input/output explicitly (deprecated — only for backward compat with legacy trace-level LLM-as-a-judge evaluators)
+    root_span.set_trace_io(
+        input={"user_question": user_input},
+        output={"answer": result}
+    )
+```
+
+</Tab>
+<Tab>
+
+```typescript
+import { startActiveObservation, setActiveTraceIO } from "@langfuse/tracing";
+
+await startActiveObservation("my-pipeline", async (rootSpan) => {
+  const userInput = "What's the weather like?";
+  const result = await processRequest(userInput);
+
+  // Set trace input/output explicitly (deprecated — only for backward compat with legacy trace-level LLM-as-a-judge evaluators)
+  setActiveTraceIO({
+    input: { user_question: userInput },
+    output: { answer: result },
+  });
+});
+```
+
+</Tab>
+</Tabs>
+
+---
+
+### 3. 루트 스팬이 필터링되어 제외된 경우
+
+**증상**: `shouldExportSpan`으로 스팬을 필터링할 때 트레이스의 input/output이 비어 있습니다.
+
+`LangfuseSpanProcessor`에서 스팬을 필터링하기 위해 `shouldExportSpan`을 사용하고 있고, 루트 스팬이 필터링되어 제외되면 트레이스의 input/output이 비게 됩니다. 이는 트레이스의 input/output이 기본적으로 [루트 관측으로부터 도출되기](#the-root-observation-rule) 때문입니다.
+
+**해결 방법**: 루트 스팬을 계속 필터링해서 제외하고 싶다면, 필터링되지 않는 하위 스팬 내에서 `setTraceIO()`를 사용해 트레이스의 input/output을 수동으로 설정하세요.
+
+<Callout type="warning">
+`setTraceIO()`와 `set_trace_io()`는 더 이상 사용되지 않는(deprecated) 기능입니다. 이는 트레이스 input/output을 읽는 트레이스 레벨의 [LLM-as-a-judge](/docs/evaluation/evaluation-methods/llm-as-a-judge) 평가기를 계속 사용하는 경우에만 필요합니다. [관측 레벨 평가기로 마이그레이션](/faq/all/llm-as-a-judge-migration)을 완료했다면, 이 호출들은 아무런 효과가 없으므로 코드베이스에서 제거해도 됩니다.
+</Callout>
+
+```typescript
+span.setTraceIO({
+  input: yourInputData,
+  output: yourOutputData,
+});
+```
+
+`shouldExportSpan`에 대한 자세한 내용은 [고급 기능 문서](/docs/observability/sdk/advanced-features#filtering-by-instrumentation-scope)를 참고하세요.
+
+---
+
+### 4. `@observe()` 데코레이터를 사용하지만 input/output 캡처가 비활성화된 경우
+
+**증상**: 데코레이터가 적용된 함수가 값을 반환하는데도 input/output이 표시되지 않습니다.
+
+`@observe()` 데코레이터는 [함수 인자를 input으로, 반환 값을 output으로 자동으로 캡처합니다](/docs/observability/sdk/instrumentation#observe-wrapper). 하지만 이 기능은 비활성화될 수 있습니다.
+
+**캡처가 비활성화되어 있는지 확인하기**:
+
+```bash
+# Check your environment variables
+echo $LANGFUSE_OBSERVE_DECORATOR_IO_CAPTURE_ENABLED
+```
+
+이 값이 `false`로 설정되어 있으면 input/output이 캡처되지 않습니다.
+
+**해결 방법**: 캡처 활성화하기
+
+```bash
+# In your environment
+export LANGFUSE_OBSERVE_DECORATOR_IO_CAPTURE_ENABLED=true
+```
+
+또는 함수별로 활성화할 수도 있습니다.
+
+```python
+from langfuse import observe
+
+@observe(capture_input=True, capture_output=True)
+def my_function(data):
+    return process(data)
+```
+
+---
+
+### 5. OpenTelemetry 기반 통합을 사용하는 경우
+
+**증상**: OTEL 통합(OpenLLMetry, Logfire 등)에서 온 트레이스에 input/output이 비어 있습니다.
+
+서로 다른 OpenTelemetry 프로바이더는 input/output에 대해 서로 다른 attribute 이름을 사용합니다. Langfuse는 특정 attribute를 찾는데, 사용 중인 프로바이더가 다른 이름을 사용하는 경우 이를 찾지 못할 수 있습니다.
+
+**해결 방법**: Langfuse가 기대하는 attribute를 설정하기
+
+Langfuse는 다음 OTEL 스팬 attribute를 관측의 input/output에 매핑합니다(아래 순서대로 확인합니다).
+
+| 관측 필드 | OTEL attribute(우선순위 순)                                                              |
+| --------- | ---------------------------------------------------------------------------------------- |
+| `input`   | `langfuse.observation.input`, `gen_ai.prompt`, `input.value`, `mlflow.spanInputs`        |
+| `output`  | `langfuse.observation.output`, `gen_ai.completion`, `output.value`, `mlflow.spanOutputs` |
+
+트레이스 레벨의 input/output에 대해서는 Langfuse가 다음을 확인합니다.
+
+- `langfuse.trace.input` / `langfuse.trace.output`, 또는
+- 루트 스팬의 관측 input/output(위 attribute 사용)
+
+지원되는 모든 attribute 목록은 [전체 속성 매핑 참고 자료](/integrations/native/opentelemetry#property-mapping)를 참고하세요.
+
+**예시**: Langfuse가 인식하는 attribute를 수동으로 설정하기
+
+<Tabs items={["Python", "JS/TS"]}>
+<Tab>
+
+```python
+from opentelemetry import trace
+import json
+
+tracer = trace.get_tracer(__name__)
+
+with tracer.start_as_current_span("my-operation") as span:
+    # Set attributes that Langfuse recognizes
+    span.set_attribute("input.value", str(input_data))
+    span.set_attribute("output.value", str(output_data))
+
+    # Or use the langfuse namespace for guaranteed mapping
+    span.set_attribute("langfuse.observation.input", json.dumps(input_data))
+    span.set_attribute("langfuse.observation.output", json.dumps(output_data))
+```
+
+</Tab>
+<Tab>
+
+```typescript
+import { trace } from "@opentelemetry/api";
+
+const tracer = trace.getTracer("my-service");
+
+tracer.startActiveSpan("my-operation", (span) => {
+  // Set attributes that Langfuse recognizes
+  span.setAttribute("input.value", JSON.stringify(inputData));
+  span.setAttribute("output.value", JSON.stringify(outputData));
+
+  // Or use the langfuse namespace for guaranteed mapping
+  span.setAttribute("langfuse.observation.input", JSON.stringify(inputData));
+  span.setAttribute("langfuse.observation.output", JSON.stringify(outputData));
+
+  span.end();
+});
+```
+
+</Tab>
+</Tabs>
+
+<Details>
+<Summary>**내 OTEL 프로바이더는 어떤 attribute를 사용하나요?**</Summary>
+
+프로바이더마다 서로 다른 시맨틱 컨벤션(semantic convention)을 사용합니다. 사용 중인 프로바이더가 무엇을 전송하는지 확인하는 방법은 다음과 같습니다.
+
+1. OTEL exporter에서 **디버그 로깅을 활성화**하여 원본 스팬 attribute를 확인합니다
+2. **Langfuse에서 트레이스를 확인합니다**: 트레이스를 열고 관측을 클릭한 뒤 "Metadata" 탭에서 어떤 attribute가 수신되었는지 확인합니다
+3. 해당 프로바이더의 시맨틱 컨벤션에 대해 **프로바이더 문서를 참고합니다**
+
+주요 프로바이더와 해당 컨벤션은 다음과 같습니다.
+
+- **OpenLLMetry**: `gen_ai.prompt`와 `gen_ai.completion` 사용
+- **OpenInference**: `input.value`와 `output.value` 사용
+- **MLflow**: `mlflow.spanInputs`와 `mlflow.spanOutputs` 사용
+- **Pydantic Logfire**: 커스텀 attribute 사용(PR #5841 이후 Langfuse에서 전용 지원 제공)
+
+사용 중인 프로바이더가 다른 attribute 이름을 사용한다면 다음 두 가지 방법이 있습니다.
+
+1. (위에서 설명한 대로) Langfuse가 기대하는 attribute를 수동으로 설정합니다
+2. 사용 중인 프로바이더의 컨벤션 지원을 요청하는 [GitHub 이슈](https://github.com/langfuse/langfuse/issues)를 등록합니다
+
+</Details>
+
+최근 Langfuse 버전에서는 OTEL 관련 다수의 문제가 수정되었습니다. 셀프 호스팅 중이라면 최신 버전을 사용하고 있는지 확인하세요.
+
+---
+
+## 여전히 문제가 해결되지 않나요?
+
+위의 해결 방법이 모두 통하지 않는 경우:
+
+1. **디버그 로깅을 활성화**하여 전송되는 데이터를 확인합니다.
+
+<Tabs items={["Python", "JS/TS"]}>
+<Tab>
+
+```python
+from langfuse import Langfuse
+
+langfuse = Langfuse(debug=True)
+```
+
+</Tab>
+<Tab>
+
+```bash
+# In your environment
+export LANGFUSE_DEBUG="true"
+```
+
+</Tab>
+</Tabs>
+
+2. **SDK 버전을 확인**하고 필요하면 업데이트합니다.
+
+<Tabs items={["Python", "JS/TS"]}>
+<Tab>
+
+```bash
+pip install --upgrade langfuse
+```
+
+</Tab>
+<Tab>
+
+```bash
+npm update @langfuse/tracing @langfuse/otel @langfuse/client
+```
+
+</Tab>
+</Tabs>
+
+3. Langfuse 대시보드에서 **트레이스 구조를 확인**합니다.
+   - 트레이스를 열어 관측 트리를 확인합니다
+   - 루트 관측이 하나만 존재하나요?
+   - 개별 관측에 input/output이 있나요?
+
+4. **도움을 요청**하세요: 다음 정보를 포함하여 [GitHub 디스커션](https://github.com/langfuse/langfuse/discussions)을 열어주세요.
+   - 사용 중인 SDK 버전
+   - 트레이스를 생성하는 방법을 보여주는 코드 스니펫
+   - 대시보드의 트레이스 구조 스크린샷

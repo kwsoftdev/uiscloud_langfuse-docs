@@ -1,0 +1,211 @@
+---
+title: "Docker Compose 배포 (셀프 호스팅)"
+description: "Docker Compose를 사용하여 Langfuse를 로컬 또는 VM에 배포하고 실행하는 단계별 가이드입니다. Docker로 Langfuse를 셀프 호스팅하는 가장 간단한 방법입니다."
+label: "Version: v3"
+sidebarTitle: "Local/VM (Docker Compose)"
+sourceRevision: 9c0d419484845ffbd56805fd068677856e5d764c
+translationStatus: machine
+---
+
+# Docker Compose
+
+이 가이드에서는 Docker Compose를 사용하여 Langfuse를 로컬 또는 VM에 배포하는 방법을 안내합니다.
+[`docker-compose.yml`](https://github.com/langfuse/langfuse/blob/main/docker-compose.yml) 파일을 사용합니다.
+이는 Langfuse를 한번 사용해보기 위한 가장 간단한 실행 방법입니다.
+
+AWS, GCP, Azure와 같은 클라우드 제공업체를 사용하는 경우, 가상 머신을 배포할 수 있는 권한이 필요합니다.
+
+고가용성과 높은 처리량이 필요한 경우, Kubernetes를 사용하는 것을 권장합니다 ([배포 가이드](/self-hosting/deployment/kubernetes-helm)).
+Docker Compose 설정은 고가용성, 확장 기능, 백업 기능을 지원하지 않습니다.
+
+<Callout type="info">
+  Docker Compose v2를 사용하고 계셨나요? [docker
+  compose](/self-hosting/upgrade-guides/upgrade-v2-to-v3#docker-compose) 업그레이드 가이드를 확인하세요.
+</Callout>
+
+## Walkthrough
+
+Docker Compose로 Langfuse를 로컬에서 실행하는 단계별 가이드를 담은 2분 15초 분량의 영상을 시청해보세요.
+
+<iframe
+  width="100%"
+  className="aspect-[15.94/9] rounded-lg border mt-6 w-full"
+  src="https://www.youtube-nocookie.com/embed/we52x5-a_Ac?si=2rqAs0LNwqeq767W"
+  title="YouTube video player"
+  frameborder="0"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+  referrerpolicy="strict-origin-when-cross-origin"
+  allowFullScreen
+></iframe>
+
+## Get Started
+
+<Tabs items={["Local", "VM"]}>
+
+<Tab>
+
+<Steps>
+
+### Requirements
+
+- git
+- docker & docker compose -> Mac 또는 Windows에서는 [Docker Desktop](https://www.docker.com/products/docker-desktop/)을 사용하세요
+
+### Clone Langfuse Repository
+
+최신 Langfuse 저장소 사본을 받습니다.
+
+```bash
+git clone https://github.com/langfuse/langfuse.git
+cd langfuse
+```
+
+### Start the application
+
+docker-compose.yml의 시크릿을 업데이트한 후, 다음 명령어로 Langfuse Docker Compose를 실행합니다.
+
+```bash
+docker compose up
+```
+
+컨테이너가 시작되고 로그가 흘러나오는 것을 지켜보세요.
+약 2-3분 후, langfuse-web-1 컨테이너가 "Ready"를 로그로 남길 것입니다.
+이 시점에서 다음 단계로 진행할 수 있습니다.
+
+### Done
+
+이제 준비가 완료되었습니다! 브라우저에서 `http://localhost:3000`을 열어 Langfuse UI에 접속하세요.
+
+</Steps>
+
+</Tab>
+
+<Tab>
+
+<Steps>
+
+### Start a new instance and SSH into it
+
+클라우드 제공업체 인터페이스에 접속하여 VM 인스턴스 섹션으로 이동합니다.
+AWS에서는 EC2, GCP에서는 Compute Engine, Azure에서는 Virtual Machines에 해당합니다.
+새 인스턴스를 생성합니다.
+
+최소 4코어와 16GiB 메모리를 사용하는 것을 권장합니다. 예를 들어 AWS의 t3.xlarge 인스턴스가 있습니다.
+외부 소스에서 트레이스를 전송하려는 경우 공인 IP 주소를 할당하세요.
+관측성 데이터는 용량이 큰 경향이 있으므로 충분한 저장 공간(예: 100GiB)을 선택하세요.
+
+이 가이드의 나머지 부분에서는 VM에 Ubuntu OS가 실행 중이며 SSH로 연결되어 있다고 가정합니다.
+
+### Install Docker and Docker Compose
+
+Docker를 설치합니다 ([공식 가이드](https://docs.docker.com/engine/install/ubuntu/) 참고). Docker의 apt 저장소를 설정합니다.
+
+```bash
+# Add Docker's official GPG key:
+sudo apt-get update
+sudo apt-get install ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+# Add the repository to Apt sources:
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt-get update
+```
+
+Docker 패키지를 설치합니다.
+
+```bash
+sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+```
+
+설치를 확인합니다.
+
+```bash
+sudo docker run hello-world
+```
+
+### Clone Langfuse Repository
+
+최신 Langfuse 저장소 사본을 받습니다.
+
+```bash
+git clone https://github.com/langfuse/langfuse.git
+
+cd langfuse
+```
+
+### Update Secrets
+
+docker-compose 파일의 시크릿을 업데이트할 것을 강력히 권장합니다.
+민감한 정보가 담긴 모든 줄에는 `# CHANGEME` 표시가 되어 있습니다.
+모든 시크릿에 대해 길고 무작위적인 비밀번호를 선택하세요.
+
+### Update network parameters (optional)
+
+인스턴스 외부에서 접근이 필요한 것은 langfuse-web 컨테이너와 minio뿐입니다.
+따라서 인스턴스에 보안 그룹이나 방화벽을 추가하여 수신 트래픽을 3000번과 9090번 포트로 제한하는 것을 권장합니다.
+
+### Start the application
+
+```bash
+docker compose up
+```
+
+컨테이너가 시작되고 로그가 흘러나오는 것을 지켜보세요.
+약 2-3분 후, langfuse-web-1 컨테이너가 "Ready"를 로그로 남길 것입니다.
+이 시점에서 다음 단계로 진행할 수 있습니다.
+
+### Done
+
+이제 준비가 완료되었습니다! 브라우저에서 `http://<instance-ip>:3000`을 열어 Langfuse UI에 접속하세요.
+
+설정에 따라 IP에 접속하기 위해 VM으로의 SSH 터널을 열어야 할 수도 있습니다. 방법은 사용 중인 클라우드 제공업체의 문서를 참고하세요.
+
+</Steps>
+
+</Tab>
+
+</Tabs>
+
+## Features
+
+Langfuse는 다양한 구성 옵션과 셀프 호스팅 기능을 지원합니다.
+자세한 내용은 [구성 가이드](/self-hosting/configuration)를 참고하세요.
+
+import SelfHostFeatures from "@/components-mdx/self-host-features.mdx";
+
+<SelfHostFeatures />
+
+## Scaling
+
+Docker Compose는 추가적인 로드 밸런서 컴포넌트 없이는 수평 확장을 지원하지 않습니다.
+부하가 단일 인스턴스 규모를 초과하거나 고가용성이 필요한 경우, 다른 배포 옵션 중 하나를 사용하는 것을 권장합니다.
+Docker Compose 설정에서 처리량을 늘리려면, 일반적으로 더 큰 가상 머신을 사용하여 수직으로 확장할 수 있습니다.
+
+## Shutdown
+
+터미널에서 `Ctrl+C`를 눌러 컨테이너를 중지할 수 있습니다.
+docker-compose를 백그라운드에서 시작한 경우(`-d` 플래그), 다음 명령어로 모든 인스턴스를 중지할 수 있습니다.
+
+```bash
+docker compose down
+```
+
+`-v` 플래그를 추가하면 볼륨도 함께 제거됩니다.
+
+불필요한 비용을 방지하려면 클라우드 제공업체 인터페이스에서 VM 인스턴스를 중지하세요.
+
+## Troubleshooting
+
+- 멀티모달 트레이싱이 작동하지 않는 경우: 이 Docker Compose 설정은 기본적으로 블롭 스토리지에 MinIO를 사용하는데, 이는 직접 업로드를 위해 Docker 네트워크 외부에서 접근할 수 없습니다. 미디어 업로드를 위한 MinIO 구성 방법에 대한 자세한 내용은 [블롭 스토리지 가이드](/self-hosting/deployment/infrastructure/blobstorage#minio-media-uploads)를 참고하세요.
+- VM에 트레이스가 누적될 수 있도록 충분한 디스크 공간이 있는지 확인하세요.
+
+## How to Upgrade
+
+Langfuse를 업그레이드하려면 컨테이너를 중지한 후 `docker compose up --pull always`를 실행하세요.
+
+업그레이드에 대한 자세한 내용은 [업그레이드 가이드](/self-hosting/upgrade)를 참고하세요.

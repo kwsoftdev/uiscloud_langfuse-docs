@@ -1,0 +1,173 @@
+---
+title: Arize Phoenix에서 Langfuse로 마이그레이션하기
+description: "Arize Phoenix에서 Langfuse로 마이그레이션하는 단계별 가이드입니다: 기존 OpenInference 계측을 그대로 유지하고, OTLP 엔드포인트 하나만 재설정한 뒤, 데이터셋·실험·프롬프트를 매핑합니다."
+tags: [migration, guide]
+sourceRevision: 55e08a72087ec7e326724944b23ba95bcc4cacde
+translationStatus: machine
+---
+
+# Arize Phoenix에서 Langfuse로 마이그레이션하기
+
+이 가이드는 LLM 관측성을 [Arize Phoenix](https://phoenix.arize.com)에서 [Langfuse](/)로
+마이그레이션하는 과정을 다룹니다: 먼저 트레이싱(보통 당일에 끝나는 변경 작업)을 진행한 뒤,
+데이터셋, 실험, 프롬프트 순으로 이어집니다.
+
+**요약:** Phoenix와 Langfuse는 모두 OpenTelemetry 트레이스를 수집하며, Langfuse는
+OpenInference 계측을 네이티브로 인식합니다. 즉, 트레이싱 마이그레이션은 재계측 프로젝트가
+아닙니다: 기존 OpenInference 설정을 그대로 유지한 채 OTLP 엔드포인트와 인증 헤더만 변경하면
+됩니다. 데이터셋, 프롬프트, 평가기는 Langfuse SDK/API를 통해 다시 생성하며, 실험은 마이그레이션된
+데이터셋에 대해 다시 실행합니다.
+
+## 팀들이 마이그레이션하는 이유
+
+팀들이 Phoenix에서 Langfuse로의 전환을 검토하는 데는 몇 가지 반복되는 이유가 있습니다:
+
+- **호스팅 및 라이선스 모델.** Phoenix는 Elastic License 2.0 하에 소스가 공개되어 있으며,
+  셀프 호스팅 이미지와 app.phoenix.arize.com에서의 호스팅 제공(2026년 7월 기준)이 있습니다.
+  Langfuse의 코어는 MIT 라이선스 오픈소스이며, 셀프 호스팅은
+  [1급 배포 모드](/self-hosting)로 트레이싱/평가/프롬프트 관리 기능이 동등하게 제공되고,
+  [Langfuse Cloud](https://cloud.langfuse.com)는 관리형 EU/US 리전을 제공합니다.
+- **팀 및 접근 관리.** 팀이 성장하면서 LLM 데이터를 다루는 사람이 늘어남에 따라 조직/프로젝트
+  분리, [역할 기반 접근 제어(RBAC)](/docs/administration/rbac), SSO 강제 적용을 원하는 경우가
+  많습니다.
+- **전체 루프를 위한 하나의 플랫폼.** Langfuse는 트레이싱, [평가](/docs/evaluation/overview),
+  [프롬프트 관리](/docs/prompt-management), [대시보드](/docs/metrics/features/custom-dashboards)를
+  하나의 데이터 모델 위에서 결합하므로, 프로덕션 트레이스가 별도의 내보내기 단계 없이 데이터셋,
+  실험, 온라인 평가기로 바로 이어집니다.
+
+Phoenix는 특히 노트북 중심의 실험에서 여전히 유용한 도구이며, 현재 팀에 잘 맞고 있다면 굳이
+서둘러 옮길 필요는 없습니다. 이 가이드는 Langfuse로 통합하기로 결정한 팀을 위한 것입니다.
+
+## 개념 매핑
+
+Phoenix와 Langfuse는 대부분의 개념을 공유하므로 마이그레이션에 필요한 사고 전환은 크지 않습니다:
+
+| Phoenix                        | Langfuse                                                                                                                                                   | 비고                                                                    |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Project                        | Project                                                                                                                                                    | Langfuse는 프로젝트 상위에 조직(organization) 개념을 추가로 제공합니다  |
+| Traces / spans (OpenInference) | [Traces / observations](/docs/observability/data-model)                                                                                                    | 동일한 OTel 기반; span은 observation에 매핑됩니다                       |
+| Datasets                       | [Datasets](/docs/evaluation/experiments/datasets)                                                                                                          | 양쪽 모두 버전 관리되는 예시 컬렉션입니다                               |
+| Experiments                    | [Experiments / dataset runs](/docs/evaluation/experiments)                                                                                                 | 데이터셋 항목 및 점수에 연결된 실행(run)입니다                          |
+| Evals (LLM evals)              | [Evaluators / LLM-as-a-judge](/docs/evaluation/evaluation-methods/llm-as-a-judge) + [code evaluators](/docs/evaluation/evaluation-methods/code-evaluators) | Langfuse 평가기는 프로덕션 트레이스에서도 지속적으로 실행할 수 있습니다 |
+| Playground                     | [Playground](/docs/prompt-management/features/playground)                                                                                                  | 트레이싱된 호출을 재생하고 반복 개선합니다                              |
+| Prompt Management              | [Prompt Management](/docs/prompt-management)                                                                                                               | SDK를 통한 버전, 라벨, 배포 관리                                        |
+
+## 1단계: 트레이싱 재설정하기(재계측 불필요)
+
+Phoenix 사용자에게 가장 흔한 경우인 OpenInference로 계측했다면, 이미 span이 OpenTelemetry
+형식이며 Langfuse의 [OTLP 엔드포인트](/integrations/native/opentelemetry)는 알려진 LLM
+계측 스코프 중 하나로 `openinference.*`를 지원합니다. 변경 사항은 코드가 아니라 설정입니다:
+
+```bash
+# 변경 전 (Phoenix)
+PHOENIX_COLLECTOR_ENDPOINT="http://localhost:6006"
+
+# 변경 후 (Langfuse): 표준 OTel exporter 환경 변수
+OTEL_EXPORTER_OTLP_ENDPOINT="https://cloud.langfuse.com/api/public/otel"  # EU region
+OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic ${AUTH_STRING},x-langfuse-ingestion-version=4"
+```
+
+`AUTH_STRING`은 Langfuse 프로젝트 키를 base64로 인코딩한 값입니다
+(`echo -n "pk-lf-...:sk-lf-..." | base64`). exporter가 신호별로 별도 설정을 요구하는 경우,
+트레이스 경로는 `/api/public/otel/v1/traces`입니다. Langfuse는 HTTP를 통한 OTLP를 protobuf와
+JSON 인코딩 모두 지원합니다(gRPC는 지원하지 않음).
+
+프레임워크 자동 계측(LangChain, LlamaIndex, OpenAI SDK 및 기타 OpenInference 계측)은 변경
+없이 그대로 동작합니다: span은 그대로 Langfuse에 도착하고, GenAI/OpenInference 속성이
+Langfuse의 generation, tool observation, 토큰 사용량, 비용 추적으로 매핑됩니다.
+
+첫 한 시간 안에 확인해야 할 두 가지:
+
+1. **트레이스 그룹화**: 여러 span으로 구성된 요청이 예상한 계층 구조로 하나의 트레이스로
+   도착하는지 확인하세요(속성이 예상과 다르게 매핑되는 경우
+   [OTel 속성 매핑](/integrations/native/opentelemetry)을 참고하세요).
+2. **사용자/세션 귀속**: Langfuse는 `user.id`와 `session.id` 속성을 읽습니다; 이전에
+   Phoenix 전용 메타데이터에 의존했던 부분은 이 속성으로 채워주세요.
+
+검증 기간 동안 OTel collector에 exporter 두 개를 설정해 두 백엔드를 병렬로 운영할 수도
+있습니다. 이는 전환 리스크를 줄이는 데 흔히 쓰이는 방식입니다.
+
+## 2단계: 데이터셋 마이그레이션하기
+
+Phoenix의 API/SDK를 통해 데이터셋 예시를 내보낸 뒤 Langfuse SDK로 다시 생성합니다. 구조는
+비슷합니다: 각 예시의 input, expected output, metadata가 그대로 매핑됩니다:
+
+```python
+from langfuse import get_client
+
+langfuse = get_client()
+
+for example in phoenix_examples:  # Phoenix의 데이터셋 내보내기 결과
+    langfuse.create_dataset_item(
+        dataset_name="my-dataset",
+        input=example.input,
+        expected_output=example.output,
+        metadata=example.metadata,
+    )
+```
+
+Langfuse에 직접 대응하는 컬럼이 없는 필드(태그, 스플릿 라벨, 출처 정보)는 `metadata`에
+담아두세요: 비용이 들지 않고 이력을 보존할 수 있습니다.
+
+## 3단계: 프롬프트와 평가기 다시 만들기
+
+- **프롬프트:** [Langfuse 프롬프트 관리](/docs/prompt-management)에서 SDK를 통해 프롬프트
+  버전을 생성하고, Phoenix에서 태그를 사용했던 부분에는 라벨(예: `production`, `staging`)을
+  사용하세요. 애플리케이션 코드는 이후 프롬프트를 임베딩하는 대신 이름+라벨로 가져오게 됩니다.
+- **평가기:** LLM 평가는 [관리형 또는 커스텀 LLM-as-a-judge
+  평가기](/docs/evaluation/evaluation-methods/llm-as-a-judge)로, Python 함수였던 평가는
+  [코드 평가기](/docs/evaluation/evaluation-methods/code-evaluators)로 다시 만드세요.
+  Langfuse의 평가기는 실험 실행뿐 아니라 프로덕션 트레이스를 대상으로 지속적으로 실행할 수
+  있습니다(온라인 평가). 트레이스를 꺼내서 평가하는 루프를 완전히 없애주므로 처음부터
+  설정해 두는 것이 좋습니다.
+- **실험:** [실험 SDK](/docs/evaluation/experiments) 또는 UI를 통해 마이그레이션된
+  데이터셋에 대해 다시 실행하세요. Phoenix의 과거 실험 결과는 가져오기보다는 참고용 아카이브로
+  보관하는 것이 좋습니다: 점수는 현재 데이터셋에서 다시 생성하는 비용이 저렴하고, 도구 간 점수
+  비교 가능성도 어차피 불안정하기 때문입니다.
+
+## 4단계: 과거 트레이스를 어떻게 처리할지 결정하기
+
+대부분의 팀은 깔끔하게 전환합니다: 기존 트레이스는 이전 시스템의 보존 기간 동안 그대로 조회
+가능하게 두고, 전환일부터 Langfuse가 시스템 오브 레코드가 됩니다. ingestion API를 통해 과거
+트레이스를 대량으로 가져오는 것도 가능하지만, 몇 개의 예시용 트레이스를 넘어서는 규모라면
+대개 그럴 가치가 없습니다: 볼륨 기반 과금과 오래된 트레이스의 낮은 가치를 고려하면 권장하지
+않습니다.
+
+## 검증 체크리스트
+
+- [ ] 트레이스가 올바른 계층 구조, 타이밍, 토큰/비용 데이터와 함께 Langfuse에 도착하는지
+- [ ] 사용자 및 세션 귀속이 정상 동작하는지
+- [ ] 프레임워크 자동 계측 span이 일반 span이 아닌 generation으로 표시되는지
+- [ ] 데이터셋이 원본과 동일한 항목 수로 마이그레이션되었는지
+- [ ] 평가기가 새 트레이스 샘플에 대해 점수를 산출하는지
+- [ ] 프롬프트가 애플리케이션 코드에서 이름+라벨로 정상 해석되는지
+- [ ] 팀 접근 권한이 설정되었는지(조직/프로젝트 역할, 해당 시 SSO)
+- [ ] 기존 exporter가 제거되었는지(또는 병렬 운영 기간 종료가 예정되어 있는지)
+
+## FAQ
+
+### 애플리케이션을 다시 계측해야 하나요?
+
+아니요. OpenInference/OpenTelemetry 계측을 사용 중이라면 OTLP 엔드포인트와 인증 헤더만
+변경하면 됩니다. 이후 [Langfuse SDK](/docs/observability/sdk/overview)로 다시 계측하는 것은
+선택 사항이며 SDK 전용 기능을 추가로 제공하지만, 마이그레이션을 위해 반드시 필요한 것은
+아닙니다.
+
+### Langfuse는 Phoenix가 계측했던 프레임워크를 지원하나요?
+
+Langfuse는 주요 프레임워크(LangChain, LlamaIndex, OpenAI, Vercel AI SDK 등)에 대한
+[네이티브 통합](/integrations)을 제공하며, OTLP를 통한 모든 OpenInference 계측을 수용하므로
+프레임워크 커버리지는 초기화되지 않고 그대로 이어집니다.
+
+### Langfuse는 Phoenix처럼 오픈소스인가요?
+
+Langfuse의 코어 플랫폼은 MIT 라이선스이며 Cloud와 동등한 기능으로 셀프 호스팅이 가능합니다;
+Phoenix는 2026년 7월 기준 Elastic License 2.0(소스 공개형) 하에 라이선스됩니다. 두 라이선스
+모두 조직의 컴플라이언스 요구사항에 맞춰 검토해야 합니다: ELv2는 해당 소프트웨어를 관리형
+서비스로 제공하는 것을 제한하므로, 일부 플랫폼 팀에는 중요한 사항일 수 있습니다.
+
+### Phoenix의 과거 트레이스를 Langfuse에서 평가할 수 있나요?
+
+평가기는 Langfuse에 있는 데이터에 대해 실행되므로, 과거 데이터 평가를 위해서는 먼저 해당
+트레이스를 가져와야 합니다(4단계 참고). 실용적인 방법은 전환 시점부터 새 트래픽에 대해
+평가기를 시작하고, 특정 분석이 필요한 경우에만 백필하는 것입니다.

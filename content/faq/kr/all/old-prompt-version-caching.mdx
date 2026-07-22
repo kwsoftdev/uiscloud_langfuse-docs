@@ -1,0 +1,67 @@
+---
+title: 프롬프트의 최신 버전이 보이지 않습니다. 왜 그런가요?
+description: Langfuse에서 이전 버전의 프롬프트가 보이는 이유와 SDK 클라이언트 캐시 및 서버 측 Redis 캐시와 관련된 캐싱 문제를 해결하는 방법을 알아봅니다.
+tags: [prompt-management, prompt-management-get-started]
+sourceRevision: ecc69b1d83e5a0e352ad0c067e6483ce87e579d5
+translationStatus: machine
+---
+
+# 프롬프트의 최신 버전이 보이지 않습니다. 왜 그런가요?
+
+Langfuse에서 프롬프트를 업데이트했는데도 애플리케이션이 여전히 이전 버전을 반환한다면, 이는 **캐싱 동작** 때문일 가능성이 높습니다. Langfuse SDK는 낮은 지연 시간을 보장하고 Langfuse가 일시적으로 사용할 수 없는 경우에도 애플리케이션이 계속 작동하도록 프롬프트를 로컬에 캐싱합니다.
+
+자세한 설명은 [프롬프트 캐싱 문서](/docs/prompt-management/features/caching)를 참고하세요.
+
+## 해결 방법
+
+### 1. 캐시가 재검증될 때까지 대기
+
+SDK 캐시의 TTL은 기본적으로 **60초**입니다. 이 시간이 지나면 캐시된 프롬프트는 오래된 것(stale)으로 표시됩니다. 다음 `get_prompt` 호출 시 오래된 프롬프트가 즉시 반환되는 동시에 SDK가 백그라운드에서 새 버전을 가져옵니다. 즉, **TTL이 만료된 후 업데이트된 프롬프트를 보려면 두 번의 호출이 필요합니다**.
+
+### 2. 개발 중에는 캐싱 비활성화
+
+항상 최신 프롬프트를 가져오려면 `cacheTtlSeconds`를 `0`으로 설정하세요.
+
+> **참고:** 캐싱을 비활성화하면 `get_prompt` 호출마다 네트워크 요청이 추가되어 지연 시간이 늘어납니다. 이는 개발/테스트 환경에서만 사용하는 것을 권장합니다.
+
+<LangTabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab>
+
+```python
+prompt = langfuse.get_prompt("my-prompt", cache_ttl_seconds=0)
+```
+
+</Tab>
+<Tab>
+
+```ts
+const prompt = await langfuse.prompt.get("my-prompt", {
+  cacheTtlSeconds: 0,
+});
+```
+
+</Tab>
+</LangTabs>
+
+### 3. 올바른 레이블 확인
+
+기본적으로 `get_prompt`는 `production` 레이블을 가져옵니다. 변경 사항을 아직 production으로 승격하지 않았다면, 최신 버전을 가져오기 위해 `label="latest"`를 사용하세요:
+
+<LangTabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab>
+
+```python
+prompt = langfuse.get_prompt("my-prompt", label="latest")
+```
+
+</Tab>
+<Tab>
+
+```ts
+const prompt = await langfuse.prompt.get("my-prompt", {
+  label: "latest",
+});
+```
+
+</Tab>
+</LangTabs>

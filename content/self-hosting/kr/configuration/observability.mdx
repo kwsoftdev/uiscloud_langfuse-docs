@@ -1,0 +1,18 @@
+---
+title: OpenTelemetry를 통한 관측성
+description: OpenTelemetry를 사용하여 Langfuse 애플리케이션에 대한 관측성을 확보할 수 있습니다.
+sidebarTitle: "관측성"
+sourceRevision: 9c0d419484845ffbd56805fd068677856e5d764c
+translationStatus: machine
+---
+
+# OpenTelemetry를 통한 관측성
+
+Langfuse는 애플리케이션에 대한 관측성을 제공하기 위해 OpenTelemetry를 사용합니다.
+Langfuse를 자체 트레이싱 설정에 포함하려면 다음 환경 변수를 구성하여 자체 컬렉터로 스팬을 전송할 수 있습니다.
+
+| 변수                          | 필수 여부 / 기본값      | 설명                                                                                                      |
+| ----------------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------- |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4318` | Langfuse가 트레이스를 전송해야 하는 OTLP 컬렉터 엔드포인트입니다. 경로는 /v1/traces입니다.                |
+| `OTEL_SERVICE_NAME`           | `web/worker`            | APM 도구 내에서 사용할 서비스 이름입니다.                                                                 |
+| `OTEL_TRACE_SAMPLING_RATIO`   | `1`                     | 트레이스에 대한 샘플링 비율입니다. 값이 `1`이면 모든 트레이스가 전송됩니다. 0과 1 사이의 값이어야 합니다. |

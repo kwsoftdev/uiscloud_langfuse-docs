@@ -1,0 +1,38 @@
+---
+title: Langfuse 프롬프트에서 Jinja, Liquid 등 외부 템플릿 라이브러리 사용하기
+description: 조건문, 반복문, 필터 같은 고급 템플릿 기능을 위해 Langfuse 프롬프트에서 Jinja2, Liquid 또는 다른 템플릿 라이브러리를 사용하는 방법을 알아보세요.
+tags: [prompt-management]
+sourceRevision: ecc69b1d83e5a0e352ad0c067e6483ce87e579d5
+translationStatus: machine
+---
+
+# Langfuse 프롬프트에서 Jinja, Liquid 등 외부 템플릿 라이브러리를 사용할 수 있나요?
+
+네! Langfuse는 `compile()` 메서드와 함께 사용하는 자체 [변수 문법](/docs/prompt-management/features/variables)(`{{variable}}`)을 제공하지만, 조건문, 반복문, 필터 같은 고급 기능을 위해 Jinja2나 Liquid 같은 외부 템플릿 라이브러리를 대신 사용할 수도 있습니다.
+
+**외부 템플릿 라이브러리가 꼭 필요한가요?** 프롬프트 에디터에서 외부 템플릿 언어를 관리하는 것은 번거로울 수 있습니다. [Langfuse 변수](/faq/all/conditional-prompt-embedding)를 사용하면 더 간단한 방식으로 처리할 수 있을지도 모릅니다.
+
+## 동작 방식
+
+Langfuse 프롬프트는 일반 문자열(텍스트 프롬프트) 또는 메시지 객체 배열(채팅 프롬프트)을 반환합니다. 외부 템플릿 라이브러리를 사용하려면, Jinja2/Liquid 템플릿을 그대로 Langfuse에 저장하고 클라이언트 측에서 템플릿 라이브러리를 적용하면 됩니다.
+
+1. Jinja2/Liquid 템플릿을 Langfuse에 저장합니다(Langfuse의 `{{variable}}` 문법을 사용하지 마세요)
+2. `get_prompt()`를 사용해 Langfuse에서 프롬프트를 가져옵니다
+3. `prompt.prompt`를 통해 원본 프롬프트 문자열에 접근합니다
+4. 템플릿 라이브러리(Jinja2, Liquid 등)를 적용해 최종 프롬프트를 렌더링합니다
+5. 결과를 LLM에 전달합니다
+
+## 제한 사항
+
+Langfuse의 네이티브 변수 문법 대신 외부 템플릿 라이브러리를 사용할 때는 다음과 같은 제한이 있습니다.
+
+- **Playground:** Langfuse [Playground](/docs/prompt-management/features/playground)는 Langfuse의 네이티브 변수 문법을 사용한 자동 렌더링만 지원합니다. Jinja2/Liquid 문법이 포함된 프롬프트는 Prompt Management에서 바로 자동으로 테스트할 수 없습니다. 다만 (컴파일된 프롬프트를 포함하는) 트레이스에서 Playground로 이동하는 것은 여전히 가능합니다.
+- **프롬프트 실험:** UI 내 프롬프트 실험은 Langfuse의 `compile()`에 의존하기 때문에 사용할 수 없습니다. 대신 태스크의 일부로 직접 프롬프트를 컴파일하는 [SDK를 통한 실험](/docs/evaluation/experiments/experiments-via-sdk)을 사용할 수 있습니다.
+- **변수 감지:** Langfuse UI는 `{{variable}}` 문법을 사용하는 변수만 감지합니다. Jinja2/Liquid 변수는 변수 목록에 나타나지 않습니다.
+
+## 관련 자료
+
+- [Langfuse Variables](/docs/prompt-management/features/variables)
+- [Message Placeholders](/docs/prompt-management/features/message-placeholders)
+- [Prompt Composability](/docs/prompt-management/features/composability)
+- [Dynamically selecting sub-prompts at runtime](/faq/all/conditional-prompt-embedding)

@@ -1,0 +1,10 @@
+{
+  "title": "평가 방법",
+  "pages": [
+    "llm-as-a-judge",
+    "code-evaluators",
+    "annotation-queues",
+    "scores-via-ui",
+    "scores-via-sdk"
+  ]
+}

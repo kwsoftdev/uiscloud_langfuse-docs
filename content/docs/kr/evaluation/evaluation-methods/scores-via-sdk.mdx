@@ -1,0 +1,977 @@
+---
+title: API/SDK를 통한 점수 기록
+description: Langfuse SDK 또는 API를 통해 커스텀 점수를 수집합니다.
+sidebarTitle: API/SDK를 통한 점수 기록
+sourceRevision: 3ba6c5050ed1e7341dbdd8e0cef1698e5808cb06
+translationStatus: machine
+---
+
+# API/SDK를 통한 점수 기록
+
+Langfuse SDK 또는 API를 사용하여 트레이스, 관측(observation), 세션, 데이터셋 실행에 [점수](/docs/evaluation/scores/overview)를 추가할 수 있습니다. 이는 커스텀 평가 워크플로우를 구성하고 Langfuse의 채점 기능을 확장할 수 있는 평가 방법입니다. 점수 객체에 대한 전체 세부 정보는 [데이터 모델](/docs/evaluation/scores/data-model#scores)을 참고하세요.
+
+Langfuse가 대신 결정론적(deterministic) Python 또는 TypeScript 로직을 실행하도록 하려면 [코드 평가기(code evaluators)](/docs/evaluation/evaluation-methods/code-evaluators)를 사용하세요. 이 페이지는 여러분의 애플리케이션, 파이프라인 또는 CI 작업이 점수를 계산한 뒤 API나 SDK를 통해 Langfuse로 전송하는 경우에 사용합니다.
+
+## API/SDK를 통한 점수 수집
+
+점수는 트레이스 전체, 트레이스 내의 특정 관측, 또는 세션 전체 등 서로 다른 수준의 세분성으로 연결할 수 있습니다.
+
+점수 및 점수 설정(score config)에 대한 POST, GET 엔드포인트의 전체 세부 정보는 [API 레퍼런스](/docs/api)를 참고하세요.
+
+### 트레이스 또는 관측 수준 점수
+
+Langfuse SDK 또는 API를 통해 점수를 추가할 수 있습니다. 점수는 **Numeric**, **Categorical**, **Boolean**, **Text** 네 가지 데이터 타입 중 하나를 가질 수 있습니다. 자세한 내용은 [점수 타입](/docs/evaluation/scores/overview#score-types)을 참고하세요.
+
+`trace_id`를 사용해 점수를 트레이스에 연결하며 수동으로 점수를 수집하는 경우, 트레이스가 생성될 때까지 기다릴 필요는 없습니다. 동일한 `trace_id`를 가진 트레이스가 생성되면 점수 테이블에 해당 점수가 표시되고 트레이스에 연결됩니다.
+
+다음은 `Score` 데이터 타입별 예시입니다.
+
+트레이스 및 관측 점수의 경우 `trace_id`/`traceId`는 필수이며 `observation_id`/`observationId`는 선택 사항입니다. 관측에 점수를 연결할 때는 항상 관측 ID와 그에 대응하는 트레이스 ID를 함께 제공하세요.
+
+<LangTabs items={["Python SDK", "JS/TS SDK", "API"]}>
+<Tab>
+
+<Tabs items={["Numeric", "Categorical", "Boolean", "Text"]}>
+<Tab>
+Numeric 점수 값은 float 형태로 제공해야 합니다.
+
+```python
+from langfuse import get_client
+langfuse = get_client()
+
+# 방법 1: 저수준(low-level) 메서드로 점수 기록
+langfuse.create_score(
+    name="correctness",
+    value=0.9,
+    trace_id="trace_id_here",
+    observation_id="observation_id_here", # 선택 사항
+    data_type="NUMERIC", # 선택 사항, 제공하지 않으면 추론됨
+    comment="Factually correct", # 선택 사항
+)
+
+# 방법 2: 현재 span/generation에 점수 기록 (컨텍스트 내에서)
+with langfuse.start_as_current_observation(as_type="span", name="my-operation") as span:
+    # 현재 span에 점수 기록
+    span.score(
+        name="correctness",
+        value=0.9,
+        data_type="NUMERIC",
+        comment="Factually correct"
+    )
+
+    # 트레이스에 점수 기록
+    span.score_trace(
+        name="overall_quality",
+        value=0.95,
+        data_type="NUMERIC"
+    )
+
+
+# 방법 3: 현재 컨텍스트를 통해 점수 기록
+with langfuse.start_as_current_observation(as_type="span", name="my-operation"):
+    # 현재 span에 점수 기록
+    langfuse.score_current_span(
+        name="correctness",
+        value=0.9,
+        data_type="NUMERIC",
+        comment="Factually correct"
+    )
+
+    # 트레이스에 점수 기록
+    langfuse.score_current_trace(
+        name="overall_quality",
+        value=0.95,
+        data_type="NUMERIC"
+    )
+```
+
+</Tab>
+<Tab>
+Categorical 점수 값은 문자열로 제공해야 합니다.
+
+```python
+from langfuse import get_client
+langfuse = get_client()
+
+# 방법 1: 저수준(low-level) 메서드로 점수 기록
+langfuse.create_score(
+    name="accuracy",
+    value="partially correct",
+    trace_id="trace_id_here",
+    observation_id="observation_id_here", # 선택 사항
+    data_type="CATEGORICAL", # 선택 사항, 제공하지 않으면 추론됨
+    comment="Some factual errors", # 선택 사항
+)
+
+# 방법 2: 현재 span/generation에 점수 기록 (컨텍스트 내에서)
+with langfuse.start_as_current_observation(as_type="span", name="my-operation") as span:
+    # 현재 span에 점수 기록
+    span.score(
+        name="accuracy",
+        value="partially correct",
+        data_type="CATEGORICAL",
+        comment="Some factual errors"
+    )
+
+    # 트레이스에 점수 기록
+    span.score_trace(
+        name="overall_quality",
+        value="partially correct",
+        data_type="CATEGORICAL"
+    )
+
+# 방법 3: 현재 컨텍스트를 통해 점수 기록
+with langfuse.start_as_current_observation(as_type="span", name="my-operation"):
+    # 현재 span에 점수 기록
+    langfuse.score_current_span(
+        name="accuracy",
+        value="partially correct",
+        data_type="CATEGORICAL",
+        comment="Some factual errors"
+    )
+
+    # 트레이스에 점수 기록
+    langfuse.score_current_trace(
+        name="overall_quality",
+        value="partially correct",
+        data_type="CATEGORICAL"
+    )
+```
+
+</Tab>
+<Tab>
+Boolean 점수는 float 형태로 제공해야 하며, `1`은 참(true), `0`은 거짓(false)을 의미합니다. [v3 scores API](https://api.reference.langfuse.com/#tag/scores/GET/api/public/v3/scores)를 통해 읽을 때는 값이 boolean으로 반환됩니다. POST/GET scores 엔드포인트에 대한 자세한 내용은 [API 레퍼런스](/docs/api)를 참고하세요.
+
+```python
+from langfuse import get_client
+langfuse = get_client()
+
+# 방법 1: 저수준(low-level) 메서드로 점수 기록
+langfuse.create_score(
+    name="helpfulness",
+    value=0, # 0 또는 1
+    trace_id="trace_id_here",
+    observation_id="observation_id_here", # 선택 사항
+    data_type="BOOLEAN", # 필수, 데이터 타입 없이 numeric 값만 제공하면 NUMERIC으로 추론됨
+    comment="Incorrect answer", # 선택 사항
+)
+
+# 방법 2: 현재 span/generation에 점수 기록 (컨텍스트 내에서)
+with langfuse.start_as_current_observation(as_type="span", name="my-operation") as span:
+    # 현재 span에 점수 기록
+    span.score(
+        name="helpfulness",
+        value=1, # 0 또는 1
+        data_type="BOOLEAN",
+        comment="Very helpful response"
+    )
+
+    # 트레이스에 점수 기록
+    span.score_trace(
+        name="overall_quality",
+        value=1, # 0 또는 1
+        data_type="BOOLEAN"
+    )
+# 방법 3: 현재 컨텍스트를 통해 점수 기록
+with langfuse.start_as_current_observation(as_type="span", name="my-operation"):
+    # 현재 span에 점수 기록
+    langfuse.score_current_span(
+        name="helpfulness",
+        value=1, # 0 또는 1
+        data_type="BOOLEAN",
+        comment="Very helpful response"
+    )
+
+    # 트레이스에 점수 기록
+    langfuse.score_current_trace(
+        name="overall_quality",
+        value=1, # 0 또는 1
+        data_type="BOOLEAN"
+    )
+```
+
+</Tab>
+<Tab>
+Text 점수 값은 1자에서 500자 사이의 문자열로 제공해야 합니다.
+
+```python
+from langfuse import get_client
+langfuse = get_client()
+
+# 방법 1: 저수준(low-level) 메서드로 점수 기록
+langfuse.create_score(
+    name="reviewer_notes",
+    value="The response was helpful but could be more concise.",
+    trace_id="trace_id_here",
+    observation_id="observation_id_here", # 선택 사항
+    data_type="TEXT", # 선택 사항, 제공하지 않으면 추론됨
+    comment="Reviewed by QA team", # 선택 사항
+)
+
+# 방법 2: 현재 span/generation에 점수 기록 (컨텍스트 내에서)
+with langfuse.start_as_current_observation(as_type="span", name="my-operation") as span:
+    # 현재 span에 점수 기록
+    span.score(
+        name="reviewer_notes",
+        value="The response was helpful but could be more concise.",
+        data_type="TEXT",
+        comment="Reviewed by QA team"
+    )
+
+    # 트레이스에 점수 기록
+    span.score_trace(
+        name="overall_notes",
+        value="Good quality overall, minor formatting issues.",
+        data_type="TEXT"
+    )
+
+# 방법 3: 현재 컨텍스트를 통해 점수 기록
+with langfuse.start_as_current_observation(as_type="span", name="my-operation"):
+    # 현재 span에 점수 기록
+    langfuse.score_current_span(
+        name="reviewer_notes",
+        value="The response was helpful but could be more concise.",
+        data_type="TEXT",
+        comment="Reviewed by QA team"
+    )
+
+    # 트레이스에 점수 기록
+    langfuse.score_current_trace(
+        name="overall_notes",
+        value="Good quality overall, minor formatting issues.",
+        data_type="TEXT"
+    )
+```
+
+</Tab>
+</Tabs>
+
+</Tab>
+<Tab>
+
+<Tabs items={["Numeric", "Categorical", "Boolean", "Text"]}>
+<Tab>
+Numeric 점수 값은 float 형태로 제공해야 합니다.
+
+```ts
+import { LangfuseClient } from "@langfuse/client";
+
+const langfuse = new LangfuseClient();
+
+langfuse.score.create({
+  id: "unique_id", // 선택 사항, 이후 점수를 업데이트할 때 멱등성 키(idempotency key)로 사용할 수 있음
+  traceId: message.traceId,
+  observationId: message.generationId, // 선택 사항
+  name: "correctness",
+  value: 0.9,
+  dataType: "NUMERIC", // 선택 사항, 제공하지 않으면 추론됨
+  comment: "Factually correct", // 선택 사항
+});
+
+// 짧게 실행되는(short-lived) 환경에서는 점수를 flush 하세요
+await langfuse.flush();
+```
+
+</Tab>
+<Tab>
+Categorical 점수 값은 문자열로 제공해야 합니다.
+
+```ts
+import { LangfuseClient } from "@langfuse/client";
+
+const langfuse = new LangfuseClient();
+
+langfuse.score.create({
+  id: "unique_id", // 선택 사항, 이후 점수를 업데이트할 때 멱등성 키(idempotency key)로 사용할 수 있음
+  traceId: message.traceId,
+  observationId: message.generationId, // 선택 사항
+  name: "accuracy",
+  value: "partially correct",
+  dataType: "CATEGORICAL", // 선택 사항, 제공하지 않으면 추론됨
+  comment: "Factually correct", // 선택 사항
+});
+
+// 짧게 실행되는(short-lived) 환경에서는 점수를 flush 하세요
+await langfuse.flush();
+```
+
+</Tab>
+<Tab>
+Boolean 점수는 float 형태로 제공해야 하며, `1`은 참(true), `0`은 거짓(false)을 의미합니다. [v3 scores API](https://api.reference.langfuse.com/#tag/scores/GET/api/public/v3/scores)를 통해 읽을 때는 값이 boolean으로 반환됩니다. POST/GET scores 엔드포인트에 대한 자세한 내용은 [API 레퍼런스](/docs/api)를 참고하세요.
+
+```ts
+import { LangfuseClient } from "@langfuse/client";
+
+const langfuse = new LangfuseClient();
+
+langfuse.score.create({
+  id: "unique_id", // 선택 사항, 이후 점수를 업데이트할 때 멱등성 키(idempotency key)로 사용할 수 있음
+  traceId: message.traceId,
+  observationId: message.generationId, // 선택 사항
+  name: "helpfulness",
+  value: 0, // 0 또는 1
+  dataType: "BOOLEAN", // 필수, 데이터 타입 없이 numeric 값만 제공하면 NUMERIC으로 추론됨
+  comment: "Incorrect answer", // 선택 사항
+});
+
+// 짧게 실행되는(short-lived) 환경에서는 점수를 flush 하세요
+await langfuse.flush();
+```
+
+</Tab>
+<Tab>
+Text 점수 값은 1자에서 500자 사이의 문자열로 제공해야 합니다.
+
+```ts
+import { LangfuseClient } from "@langfuse/client";
+
+const langfuse = new LangfuseClient();
+
+langfuse.score.create({
+  id: "unique_id", // 선택 사항, 이후 점수를 업데이트할 때 멱등성 키(idempotency key)로 사용할 수 있음
+  traceId: message.traceId,
+  observationId: message.generationId, // 선택 사항
+  name: "reviewer_notes",
+  value: "The response was helpful but could be more concise.",
+  dataType: "TEXT", // 선택 사항, 제공하지 않으면 추론됨
+  comment: "Reviewed by QA team", // 선택 사항
+});
+
+// 짧게 실행되는(short-lived) 환경에서는 점수를 flush 하세요
+await langfuse.flush();
+```
+
+</Tab>
+</Tabs>
+
+</Tab>
+<Tab>
+
+[REST API](https://api.reference.langfuse.com/#tag/legacyscorev1/POST/api/public/scores)를 통해서도 직접 점수를 생성할 수 있습니다. Langfuse Public Key를 사용자 이름으로, Secret Key를 비밀번호로 사용하는 HTTP Basic Auth로 인증합니다.
+
+<Tabs items={["Numeric", "Categorical", "Boolean", "Text"]}>
+<Tab>
+Numeric 점수 값은 float 형태로 제공해야 합니다.
+
+```bash
+curl -X POST https://cloud.langfuse.com/api/public/scores \
+  -u "pk-lf-...":"sk-lf-..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "traceId": "trace_id_here",
+    "observationId": "observation_id_here",
+    "name": "correctness",
+    "value": 0.9,
+    "dataType": "NUMERIC",
+    "comment": "Factually correct"
+  }'
+```
+
+</Tab>
+<Tab>
+Categorical 점수 값은 문자열로 제공해야 합니다.
+
+```bash
+curl -X POST https://cloud.langfuse.com/api/public/scores \
+  -u "pk-lf-...":"sk-lf-..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "traceId": "trace_id_here",
+    "observationId": "observation_id_here",
+    "name": "accuracy",
+    "value": "partially correct",
+    "dataType": "CATEGORICAL",
+    "comment": "Some factual errors"
+  }'
+```
+
+</Tab>
+<Tab>
+Boolean 점수는 float 형태로 제공해야 하며, `1`은 참(true), `0`은 거짓(false)을 의미합니다. [v3 scores API](https://api.reference.langfuse.com/#tag/scores/GET/api/public/v3/scores)를 통해 읽을 때는 값이 boolean으로 반환됩니다.
+
+```bash
+curl -X POST https://cloud.langfuse.com/api/public/scores \
+  -u "pk-lf-...":"sk-lf-..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "traceId": "trace_id_here",
+    "observationId": "observation_id_here",
+    "name": "helpfulness",
+    "value": 0,
+    "dataType": "BOOLEAN",
+    "comment": "Incorrect answer"
+  }'
+```
+
+</Tab>
+<Tab>
+Text 점수 값은 1자에서 500자 사이의 문자열로 제공해야 합니다.
+
+```bash
+curl -X POST https://cloud.langfuse.com/api/public/scores \
+  -u "pk-lf-...":"sk-lf-..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "traceId": "trace_id_here",
+    "observationId": "observation_id_here",
+    "name": "reviewer_notes",
+    "value": "The response was helpful but could be more concise.",
+    "dataType": "TEXT",
+    "comment": "Reviewed by QA team"
+  }'
+```
+
+</Tab>
+</Tabs>
+
+</Tab>
+</LangTabs>
+
+### 브라우저 점수 수집 [#browser-score-ingestion]
+
+프론트엔드 코드에서 점수가 생성되는 경우, 예를 들어 좋아요/싫어요 사용자 피드백, 별점, 또는 클라이언트 측 품질 신호와 같은 경우에는 `@langfuse/browser`를 사용하세요. 브라우저 SDK는 Langfuse public key만 필요하며, 각 점수를 수집 API를 통해 즉시 전송합니다. 브라우저 코드에는 secret key를 노출하지 마세요.
+
+백엔드 서비스, 스크립트, CI 작업, 평가 파이프라인의 경우 위 JS/TS SDK 예시에 나온 것처럼 `@langfuse/client`를 사용하세요.
+
+```bash
+npm install @langfuse/browser
+```
+
+```ts
+import { LangfuseBrowserClient } from "@langfuse/browser";
+
+const langfuse = new LangfuseBrowserClient({
+  publicKey: process.env.NEXT_PUBLIC_LANGFUSE_PUBLIC_KEY!,
+  baseUrl: process.env.NEXT_PUBLIC_LANGFUSE_BASE_URL, // 선택 사항, 기본값은 https://cloud.langfuse.com
+});
+
+await langfuse.score({
+  traceId: message.traceId,
+  observationId: message.generationId, // 선택 사항
+  id: `user-feedback-${message.traceId}`, // 선택 사항, 멱등성 키로 사용
+  name: "user-feedback",
+  value: 1, // 긍정은 1, 부정은 0
+  dataType: "BOOLEAN",
+  comment: "Helpful answer", // 선택 사항
+});
+```
+
+`score()`는 수집이 성공하면 `{ id }`를 반환합니다. `flush()` 호출은 필요하지 않습니다.
+
+### 세션 수준 점수
+
+트레이스나 관측에 연결하지 않고 세션 전체에 점수를 매기려면 `session_id`(Python SDK) 또는 `sessionId`(JS/TS SDK 및 API)만 제공하세요.
+
+<LangTabs items={["Python SDK", "JS/TS SDK", "API"]}>
+<Tab>
+
+```python
+from langfuse import get_client
+langfuse = get_client()
+
+langfuse.create_score(
+    name="session_quality",
+    value=0.85,
+    session_id="session_id_here",
+    data_type="NUMERIC",
+    comment="Overall conversation quality"
+)
+```
+
+</Tab>
+<Tab>
+
+```ts
+import { LangfuseClient } from "@langfuse/client";
+
+const langfuse = new LangfuseClient();
+
+langfuse.score.create({
+  name: "session_quality",
+  value: 0.85,
+  sessionId: "session_id_here",
+  dataType: "NUMERIC",
+  comment: "Overall conversation quality",
+});
+
+await langfuse.flush();
+```
+
+</Tab>
+<Tab>
+
+```bash
+curl -X POST https://cloud.langfuse.com/api/public/scores \
+  -u "pk-lf-...":"sk-lf-..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sessionId": "session_id_here",
+    "name": "session_quality",
+    "value": 0.85,
+    "dataType": "NUMERIC",
+    "comment": "Overall conversation quality"
+  }'
+```
+
+</Tab>
+</LangTabs>
+
+## 고급
+
+### 중복 점수 방지 [#preventing-duplicate-scores]
+
+기본적으로 Langfuse는 동일한 트레이스에 대해 동일한 `name`을 가진 여러 점수를 허용합니다. 이는 시간에 따른 점수 변화를 추적하거나, 예를 들어 동일한 트레이스에 대해 여러 사용자 피드백 점수를 받는 경우에 유용합니다.
+
+경우에 따라 이러한 동작을 막거나 기존 점수를 덮어쓰고 싶을 수 있습니다. 점수는 `id`, `name`, 날짜(`toDate(timestamp)`) 세 가지 필드로 식별되며, 이 세 가지가 모두 일치할 때만 새 점수가 기존 점수를 대체합니다. 이를 위해 **멱등성 키(idempotency key)**를 생성하여 점수를 생성할 때 `id`(JS/TS) / `score_id`(Python)로 전달하고(예: `trace_id-score_name`), 이후 호출에서도 `name`과 `timestamp`를 동일하게 유지하세요. 세 가지 중 하나라도 다르면 — 예를 들어 동일한 `id`에 다른 `name`을 사용하면 — 대체가 아닌 추가 점수가 생성됩니다.
+
+<Callout type="warning">
+변경된 필드만 포함한 부분 점수 업데이트를 전송하고 Langfuse가 이를 기존 레코드에 병합해 줄 것이라고 기대하지 마세요. 이러한 병합은 생성 후 제한된 기간 동안만 일어나며, 이 방식은 지원 중단(deprecated) 예정이고 향후 제거됩니다. 항상 완전한 점수 데이터를 전송하세요.
+</Callout>
+
+Langfuse의 불변(immutable) 데이터 모델에 대한 자세한 내용은 [트레이스, 관측, 점수를 업데이트하는 방법](/faq/all/tracing-data-updates#updating-scores)을 참고하세요.
+
+### 점수 설정(Score Config) 강제 적용
+
+점수 설정(score config)은 향후 분석을 위해 점수를 표준화하고자 할 때 유용합니다.
+
+점수 설정을 강제 적용하려면 점수를 생성할 때 `configId`를 제공하여 이전에 생성한 `ScoreConfig`를 참조할 수 있습니다. `Score Configs`는 Langfuse UI에서 정의하거나 API를 통해 정의할 수 있습니다. [점수 설정을 생성하고 관리하는 방법에 대한 가이드](/faq/all/manage-score-configs)를 참고하세요.
+
+`ScoreConfig`를 제공하면 점수 데이터가 해당 설정에 대해 유효성 검사를 거칩니다. 다음 규칙이 적용됩니다.
+
+- **점수 이름(Score Name)**: 설정의 이름과 일치해야 합니다
+- **점수 데이터 타입(Score Data Type)**: 제공된 경우 설정의 데이터 타입과 일치해야 합니다
+- **타입이 `NUMERIC`일 때의 점수 값**: 값은 설정에 정의된 최소값과 최대값 범위 내에 있어야 합니다(최소값과 최대값은 선택 사항이며, 제공되지 않으면 각각 -∞와 +∞로 간주됩니다)
+- **타입이 `CATEGORICAL`일 때의 점수 값**: 값은 설정에 정의된 카테고리 중 하나에 매핑되어야 합니다
+- **타입이 `BOOLEAN`일 때의 점수 값**: 값은 `0` 또는 `1`이어야 합니다
+- **타입이 `TEXT`일 때의 점수 값**: 값은 최대 500자의 비어 있지 않은 문자열이어야 합니다
+
+<LangTabs items={["Python SDK", "JS/TS SDK", "API"]}>
+
+<Tab>
+
+<Tabs items={["Numeric Scores", "Categorical Scores", "Boolean Scores", "Text Scores"]}>
+<Tab>
+Numeric 점수를 수집할 때는 값을 float로 제공할 수 있습니다. configId를 제공하면 점수 값이 설정에 정의된 numeric 범위(최소값 및/또는 최대값으로 정의될 수 있음)에 대해 검증됩니다.
+
+```python
+from langfuse import get_client
+langfuse = get_client()
+
+# 방법 1: 저수준(low-level) 메서드로 점수 기록
+langfuse.create_score(
+    trace_id="trace_id_here",
+    observation_id="observation_id_here", # 선택 사항
+    session_id="session_id_here", # 선택 사항, 점수와 연관된 세션의 ID
+    name="accuracy",
+    value=0.9,
+    comment="Factually correct", # 선택 사항
+    score_id="unique_id", # 선택 사항, 이후 점수를 업데이트할 때 멱등성 키로 사용할 수 있음
+    config_id="78545-6565-3453654-43543", # 선택 사항, 점수가 특정 최소/최대 값 범위를 따르도록 보장
+    data_type="NUMERIC" # 선택 사항, 추론될 수 있음
+)
+
+# 방법 2: 컨텍스트 내에서 점수 기록
+with langfuse.start_as_current_observation(as_type="span", name="my-operation") as span:
+    span.score(
+        name="accuracy",
+        value=0.9,
+        comment="Factually correct",
+        config_id="78545-6565-3453654-43543",
+        data_type="NUMERIC"
+    )
+```
+
+</Tab>
+<Tab>
+Categorical 점수는 특정 카테고리로 분류되는 데이터를 평가하는 데 사용됩니다. Categorical 점수를 수집할 때는 값을 문자열로 제공할 수 있습니다. configId를 제공하면 점수 값이 설정의 카테고리에 대해 검증됩니다.
+
+```python
+from langfuse import get_client
+langfuse = get_client()
+
+# 방법 1: 저수준(low-level) 메서드로 점수 기록
+langfuse.create_score(
+    trace_id="trace_id_here",
+    observation_id="observation_id_here", # 선택 사항
+    name="correctness",
+    value="correct",
+    comment="Factually correct", # 선택 사항
+    score_id="unique_id", # 선택 사항, 이후 점수를 업데이트할 때 멱등성 키로 사용할 수 있음
+    config_id="12345-6565-3453654-43543", # 선택 사항, 점수가 점수 설정에 정의된 특정 카테고리에 매핑되도록 보장
+    data_type="CATEGORICAL" # 선택 사항, 추론될 수 있음
+)
+
+# 방법 2: 컨텍스트 내에서 점수 기록
+with langfuse.start_as_current_observation(as_type="span", name="my-operation") as span:
+    span.score(
+        name="correctness",
+        value="correct",
+        comment="Factually correct",
+        config_id="12345-6565-3453654-43543",
+        data_type="CATEGORICAL"
+    )
+```
+
+</Tab>
+<Tab>
+Boolean 점수를 수집할 때는 값을 float로 제공할 수 있습니다. configId를 제공하면 점수의 이름과 설정의 이름이 일치해야 하며 데이터 타입도 일치해야 합니다.
+
+```python
+from langfuse import get_client
+langfuse = get_client()
+
+# 방법 1: 저수준(low-level) 메서드로 점수 기록
+langfuse.create_score(
+    trace_id="trace_id_here",
+    observation_id="observation_id_here", # 선택 사항
+    name="helpfulness",
+    value=1,
+    comment="Factually correct", # 선택 사항
+    score_id="unique_id", # 선택 사항, 이후 점수를 업데이트할 때 멱등성 키로 사용할 수 있음
+    config_id="93547-6565-3453654-43543", # 선택 사항, 점수 데이터 타입을 추론하고 점수 값을 검증하는 데 사용할 수 있음
+    data_type="BOOLEAN" # 선택 사항, 추론될 수 있음
+)
+
+# 방법 2: 컨텍스트 내에서 점수 기록
+with langfuse.start_as_current_observation(as_type="span", name="my-operation") as span:
+    span.score(
+        name="helpfulness",
+        value=1,
+        comment="Factually correct",
+        config_id="93547-6565-3453654-43543",
+        data_type="BOOLEAN"
+    )
+```
+
+</Tab>
+<Tab>
+Text 점수를 수집할 때는 값을 1자에서 500자 사이의 문자열로 제공하세요. configId를 제공하면 점수의 이름과 설정의 이름이 일치해야 하며 데이터 타입도 일치해야 합니다.
+
+```python
+from langfuse import get_client
+langfuse = get_client()
+
+# 방법 1: 저수준(low-level) 메서드로 점수 기록
+langfuse.create_score(
+    trace_id="trace_id_here",
+    observation_id="observation_id_here", # 선택 사항
+    name="reviewer_notes",
+    value="The response was helpful but could be more concise.",
+    comment="Reviewed by QA team", # 선택 사항
+    score_id="unique_id", # 선택 사항, 이후 점수를 업데이트할 때 멱등성 키로 사용할 수 있음
+    config_id="24680-6565-3453654-43543", # 선택 사항
+    data_type="TEXT" # 선택 사항, 추론될 수 있음
+)
+
+# 방법 2: 컨텍스트 내에서 점수 기록
+with langfuse.start_as_current_observation(as_type="span", name="my-operation") as span:
+    span.score(
+        name="reviewer_notes",
+        value="The response was helpful but could be more concise.",
+        comment="Reviewed by QA team",
+        config_id="24680-6565-3453654-43543",
+        data_type="TEXT"
+    )
+```
+
+</Tab>
+</Tabs>
+
+</Tab>
+<Tab>
+
+<Tabs items={["Numeric Scores", "Categorical Scores", "Boolean Scores", "Text Scores"]}>
+<Tab>
+Numeric 점수를 수집할 때는 값을 float로 제공할 수 있습니다. configId를 제공하면 점수 값이 설정에 정의된 numeric 범위(최소값 및/또는 최대값으로 정의될 수 있음)에 대해 검증됩니다.
+
+```ts
+import { LangfuseClient } from "@langfuse/client";
+
+const langfuse = new LangfuseClient();
+
+langfuse.score.create({
+  traceId: message.traceId,
+  observationId: message.generationId, // 선택 사항
+  name: "accuracy",
+  value: 0.9,
+  comment: "Factually correct", // 선택 사항
+  id: "unique_id", // 선택 사항, 이후 점수를 업데이트할 때 멱등성 키로 사용할 수 있음
+  configId: "78545-6565-3453654-43543", // 선택 사항, 점수가 특정 최소/최대 값 범위를 따르도록 보장
+  dataType: "NUMERIC", // 선택 사항, 추론될 수 있음
+});
+
+// 짧게 실행되는(short-lived) 환경에서는 점수를 flush 하세요
+await langfuse.flush();
+```
+
+</Tab>
+<Tab>
+Categorical 점수는 특정 카테고리로 분류되는 데이터를 평가하는 데 사용됩니다. Categorical 점수를 수집할 때는 값을 문자열로 제공할 수 있습니다. configId를 제공하면 점수 값이 설정의 카테고리에 대해 검증됩니다.
+
+```ts
+import { LangfuseClient } from "@langfuse/client";
+
+const langfuse = new LangfuseClient();
+
+langfuse.score.create({
+  traceId: message.traceId,
+  observationId: message.generationId, // 선택 사항
+  name: "correctness",
+  value: "correct",
+  comment: "Factually correct", // 선택 사항
+  id: "unique_id", // 선택 사항, 이후 점수를 업데이트할 때 멱등성 키로 사용할 수 있음
+  configId: "12345-6565-3453654-43543", // 선택 사항, 점수가 점수 설정에 정의된 특정 카테고리에 매핑되도록 보장
+  dataType: "CATEGORICAL", // 선택 사항, 추론될 수 있음
+});
+
+// 짧게 실행되는(short-lived) 환경에서는 점수를 flush 하세요
+await langfuse.flush();
+```
+
+</Tab>
+<Tab>
+Boolean 점수를 수집할 때는 값을 float로 제공할 수 있습니다. configId를 제공하면 점수의 이름과 설정의 이름이 일치해야 하며 데이터 타입도 일치해야 합니다.
+
+```ts
+import { LangfuseClient } from "@langfuse/client";
+
+const langfuse = new LangfuseClient();
+
+langfuse.score.create({
+  traceId: message.traceId,
+  observationId: message.generationId, // 선택 사항
+  name: "helpfulness",
+  value: 1,
+  comment: "Factually correct", // 선택 사항
+  id: "unique_id", // 선택 사항, 이후 점수를 업데이트할 때 멱등성 키로 사용할 수 있음
+  configId: "93547-6565-3453654-43543", // 선택 사항, 점수 데이터 타입을 추론하고 점수 값을 검증하는 데 사용할 수 있음
+  dataType: "BOOLEAN", // 선택 사항, 추론될 수 있음
+});
+
+// 짧게 실행되는(short-lived) 환경에서는 점수를 flush 하세요
+await langfuse.flush();
+```
+
+</Tab>
+<Tab>
+Text 점수를 수집할 때는 값을 1자에서 500자 사이의 문자열로 제공하세요. configId를 제공하면 점수의 이름과 설정의 이름이 일치해야 하며 데이터 타입도 일치해야 합니다.
+
+```ts
+import { LangfuseClient } from "@langfuse/client";
+
+const langfuse = new LangfuseClient();
+
+langfuse.score.create({
+  traceId: message.traceId,
+  observationId: message.generationId, // 선택 사항
+  name: "reviewer_notes",
+  value: "The response was helpful but could be more concise.",
+  comment: "Reviewed by QA team", // 선택 사항
+  id: "unique_id", // 선택 사항, 이후 점수를 업데이트할 때 멱등성 키로 사용할 수 있음
+  configId: "24680-6565-3453654-43543", // 선택 사항
+  dataType: "TEXT", // 선택 사항, 추론될 수 있음
+});
+
+// 짧게 실행되는(short-lived) 환경에서는 점수를 flush 하세요
+await langfuse.flush();
+```
+
+</Tab>
+</Tabs>
+
+</Tab>
+<Tab>
+
+`configId`를 제공하여 [REST API](https://api.reference.langfuse.com/#tag/legacyscorev1/POST/api/public/scores)를 통해서도 점수 설정을 강제 적용할 수 있습니다.
+
+<Tabs items={["Numeric Scores", "Categorical Scores", "Boolean Scores", "Text Scores"]}>
+<Tab>
+Numeric 점수를 수집할 때는 값을 float로 제공할 수 있습니다. configId를 제공하면 점수 값이 설정의 numeric 범위에 대해 검증됩니다.
+
+```bash
+curl -X POST https://cloud.langfuse.com/api/public/scores \
+  -u "pk-lf-...":"sk-lf-..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "unique_id",
+    "traceId": "trace_id_here",
+    "observationId": "observation_id_here",
+    "name": "accuracy",
+    "value": 0.9,
+    "dataType": "NUMERIC",
+    "configId": "78545-6565-3453654-43543",
+    "comment": "Factually correct"
+  }'
+```
+
+</Tab>
+<Tab>
+Categorical 점수는 특정 카테고리로 분류되는 데이터를 평가하는 데 사용됩니다. configId를 제공하면 점수 값이 설정의 카테고리에 대해 검증됩니다.
+
+```bash
+curl -X POST https://cloud.langfuse.com/api/public/scores \
+  -u "pk-lf-...":"sk-lf-..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "unique_id",
+    "traceId": "trace_id_here",
+    "observationId": "observation_id_here",
+    "name": "correctness",
+    "value": "correct",
+    "dataType": "CATEGORICAL",
+    "configId": "12345-6565-3453654-43543",
+    "comment": "Factually correct"
+  }'
+```
+
+</Tab>
+<Tab>
+Boolean 점수를 수집할 때는 값을 float로 제공할 수 있습니다. configId를 제공하면 점수의 이름과 설정의 이름이 일치해야 하며 데이터 타입도 일치해야 합니다.
+
+```bash
+curl -X POST https://cloud.langfuse.com/api/public/scores \
+  -u "pk-lf-...":"sk-lf-..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "unique_id",
+    "traceId": "trace_id_here",
+    "observationId": "observation_id_here",
+    "name": "helpfulness",
+    "value": 1,
+    "dataType": "BOOLEAN",
+    "configId": "93547-6565-3453654-43543",
+    "comment": "Factually correct"
+  }'
+```
+
+</Tab>
+<Tab>
+Text 점수를 수집할 때는 값을 1자에서 500자 사이의 문자열로 제공하세요. configId를 제공하면 점수의 이름과 설정의 이름이 일치해야 하며 데이터 타입도 일치해야 합니다.
+
+```bash
+curl -X POST https://cloud.langfuse.com/api/public/scores \
+  -u "pk-lf-...":"sk-lf-..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "unique_id",
+    "traceId": "trace_id_here",
+    "observationId": "observation_id_here",
+    "name": "reviewer_notes",
+    "value": "The response was helpful but could be more concise.",
+    "dataType": "TEXT",
+    "configId": "24680-6565-3453654-43543",
+    "comment": "Reviewed by QA team"
+  }'
+```
+
+</Tab>
+</Tabs>
+
+</Tab>
+
+POST/GET 점수 설정 엔드포인트에 대한 자세한 내용은 [API 레퍼런스](/docs/api)를 참고하세요.
+
+</LangTabs>
+
+### 추론되는 점수 속성
+
+특정 점수 속성은 입력에 따라 추론될 수 있습니다.
+
+- **점수 데이터 타입을 제공하지 않으면** 항상 추론됩니다. 자세한 내용은 아래 표를 참고하세요.
+- **Boolean 및 Categorical 점수의 경우**, 가능하다면 점수 값을 숫자 형식과 문자열 형식 모두로 제공합니다. 입력으로 제공되지 않은, 즉 변환된 값 형식을 아래 표에서 추론된 값(inferred value)이라고 합니다.
+- **[v3 scores API](https://api.reference.langfuse.com/#tag/scores/GET/api/public/v3/scores)를 통해 읽을 때는** Boolean 점수가 단일 boolean `value`로 반환됩니다.
+- **Categorical 점수의 경우**, 문자열 표현은 항상 제공되며, 카테고리의 숫자 매핑은 `ScoreConfig`가 제공된 경우에만 생성됩니다.
+
+상세 예시:
+
+<Tabs items={["Numeric Scores", "Categorical Scores", "Boolean Scores", "Text Scores"]}>
+<Tab>
+예를 들어 **accuracy**를 측정하는 numeric 점수를 수집하려 한다고 가정해 보겠습니다. 가능한 점수 수집 시나리오를 아래 표에 정리했습니다.
+
+| Value   | Data Type | Config Id | Description                                                 | Inferred Data Type | Valid                            |
+| ------- | --------- | --------- | ----------------------------------------------------------- | ------------------ | -------------------------------- |
+| `0.9`   | `Null`    | `Null`    | Data type is inferred                                       | `NUMERIC`          | Yes                              |
+| `0.9`   | `NUMERIC` | `Null`    | No properties inferred                                      |                    | Yes                              |
+| `depth` | `NUMERIC` | `Null`    | Error: data type of value does not match provided data type |                    | No                               |
+| `0.9`   | `NUMERIC` | `78545`   | No properties inferred                                      |                    | Conditional on config validation |
+| `0.9`   | `Null`    | `78545`   | Data type inferred                                          | `NUMERIC`          | Conditional on config validation |
+| `depth` | `NUMERIC` | `78545`   | Error: data type of value does not match provided data type |                    | No                               |
+
+</Tab>
+<Tab>
+예를 들어 **correctness**를 측정하는 categorical 점수를 수집하려 한다고 가정해 보겠습니다. 가능한 점수 수집 시나리오를 아래 표에 정리했습니다.
+
+| Value     | Data Type     | Config Id | Description                                                 | Inferred Data Type | Inferred Value representation       | Valid                            |
+| --------- | ------------- | --------- | ----------------------------------------------------------- | ------------------ | ----------------------------------- | -------------------------------- |
+| `correct` | `Null`        | `Null`    | Data type is inferred                                       | `CATEGORICAL`      |                                     | Yes                              |
+| `correct` | `CATEGORICAL` | `Null`    | No properties inferred                                      |                    |                                     | Yes                              |
+| `1`       | `CATEGORICAL` | `Null`    | Error: data type of value does not match provided data type |                    |                                     | No                               |
+| `correct` | `CATEGORICAL` | `12345`   | Numeric value inferred                                      |                    | `4` numeric config category mapping | Conditional on config validation |
+| `correct` | `NULL`        | `12345`   | Data type inferred                                          | `CATEGORICAL`      |                                     | Conditional on config validation |
+| `1`       | `CATEGORICAL` | `12345`   | Error: data type of value does not match provided data type |                    |                                     | No                               |
+
+</Tab>
+<Tab>
+예를 들어 **helpfulness**를 측정하는 boolean 점수를 수집하려 한다고 가정해 보겠습니다. 가능한 점수 수집 시나리오를 아래 표에 정리했습니다.
+
+| Value   | Data Type | Config Id | Description                                                 | Inferred Data Type | Inferred Value representation | Valid                            |
+| ------- | --------- | --------- | ----------------------------------------------------------- | ------------------ | ----------------------------- | -------------------------------- |
+| `1`     | `BOOLEAN` | `Null`    | Value's string equivalent inferred                          |                    | `True`                        | Yes                              |
+| `true`  | `BOOLEAN` | `Null`    | Error: data type of value does not match provided data type |                    |                               | No                               |
+| `3`     | `BOOLEAN` | `Null`    | Error: boolean data type expects `0` or `1` as input value  |                    |                               | No                               |
+| `0.9`   | `Null`    | `93547`   | Data type and value's string equivalent inferred            | `BOOLEAN`          | `True`                        | Conditional on config validation |
+| `depth` | `BOOLEAN` | `93547`   | Error: data type of value does not match provided data type |                    |                               | No                               |
+
+</Tab>
+<Tab>
+예를 들어 **reviewer notes**를 담기 위한 text 점수를 수집하려 한다고 가정해 보겠습니다. Text 점수는 최대 500자의 비어 있지 않은 문자열이어야 합니다.
+
+| Value             | Data Type | Config Id | Description                                                 | Inferred Data Type | Valid                            |
+| ----------------- | --------- | --------- | ----------------------------------------------------------- | ------------------ | -------------------------------- |
+| `"Good response"` | `Null`    | `Null`    | Data type is inferred                                       | `TEXT`             | Yes                              |
+| `"Good response"` | `TEXT`    | `Null`    | No properties inferred                                      |                    | Yes                              |
+| `0.9`             | `TEXT`    | `Null`    | Error: data type of value does not match provided data type |                    | No                               |
+| `"Good response"` | `TEXT`    | `24680`   | No properties inferred                                      |                    | Conditional on config validation |
+| `"Good response"` | `Null`    | `24680`   | Data type inferred                                          | `TEXT`             | Conditional on config validation |
+| `""`              | `TEXT`    | `Null`    | Error: text scores must be non-empty                        |                    | No                               |
+
+</Tab>
+</Tabs>
+
+## API/SDK를 통해 기존 점수 업데이트하기 [#update]
+
+점수를 생성할 때 선택적으로 `id`(JS/TS) / `score_id`(Python) 파라미터를 제공할 수 있습니다. 다시 수집된 점수는 `id`, `name`, `timestamp`(날짜 단위, `toDate(timestamp)`)가 모두 일치할 때만 기존 점수를 덮어씁니다 — `id`만 일치해서는 충분하지 않으며, 하나라도 다르면 업데이트 대신 중복 항목이 생성됩니다.
+
+기존 점수를 먼저 조회하지 않고 덮어쓰려면, 점수를 처음 생성할 때 안정적인 `id`를 멱등성 키로 설정하고 이후 호출에서도 `name`과 `timestamp`를 동일하게 유지하세요. 자세한 내용은 [중복 점수 방지](#preventing-duplicate-scores)를 참고하세요.
+
+## 관련 가이드
+
+<ManualGuideList
+  guides={[
+    {
+      href: "/guides/user-feedback-loop",
+      topic: "사용자 피드백 수집",
+      lede: "Browser SDK를 통해 전송되는 인앱 평점을 포함하여, 명시적/암묵적 사용자 피드백을 트레이스에 대한 점수로 캡처합니다.",
+    },
+    {
+      href: "/guides/cookbook/example_external_evaluation_pipelines",
+      topic: "커스텀 평가 데이터 파이프라인",
+      lede: "트레이스를 가져오고, 커스텀 평가를 실행하고, 그 점수를 다시 Langfuse에 수집하여 품질을 지속적으로 모니터링합니다.",
+    },
+    {
+      href: "/guides/cookbook/security-and-guardrails",
+      topic: "가드레일 및 보안 검사",
+      lede: "출력에 특정 키워드가 포함되어 있는지, 필요한 구조나 형식과 일치하는지, 길이 제한을 초과하는지 확인합니다.",
+    },
+    {
+      href: "/guides/human-in-the-loop-scoring",
+      topic: "커스텀 내부 워크플로우 툴링",
+      lede: "커스텀 스키마를 따라 점수를 다시 Langfuse에 수집하는, human-in-the-loop 워크플로우를 위한 내부 툴링을 구축합니다.",
+    },
+    {
+      href: "/guides/cookbook/example_evaluating_multi_turn_conversations",
+      topic: "세션 수준 품질 추적",
+      lede: "SDK나 API에서 sessionId를 통해 점수를 연결하여, 지원 채팅이나 에이전트 스레드와 같은 전체 대화에 점수를 매깁니다.",
+    },
+  ]}
+/>

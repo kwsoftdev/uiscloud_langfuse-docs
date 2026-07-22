@@ -1,0 +1,245 @@
+---
+title: "JS/TS v4 → v5"
+description: Langfuse JS/TS SDK를 v4에서 v5로 업그레이드하기 위한 마이그레이션 가이드입니다.
+category: SDKs
+sourceRevision: ecc69b1d83e5a0e352ad0c067e6483ce87e579d5
+translationStatus: machine
+---
+
+# JS/TS v4 → v5
+
+JS/TS SDK v5는 **[관측 단위(observation) 중심 데이터 모델](/docs/observability/data-model)**을 도입합니다. 이 모델에서는 상관관계 속성(`userId`, `sessionId`, `metadata`, `tags`)이 트레이스에만 존재하는 것이 아니라 모든 관측 단위(observation)에 전파됩니다. 이를 통해 비용이 많이 드는 조인 없이 단일 테이블 쿼리가 가능해져 대규모 환경에서 쿼리 성능이 크게 향상됩니다.
+
+이는 트레이스 속성을 설정하는 방식을 변경합니다. 이전에는 `updateActiveTrace()`로 트레이스를 명령형으로 업데이트했지만, 이제는 `propagateAttributes()`를 사용합니다. 이 함수는 콜백을 감싸서, 해당 스코프 내에서 생성된 모든 자식 관측 단위에 속성을 자동으로 적용합니다.
+
+<Callout type="warning">
+  v5는 기본 OpenTelemetry 내보내기(export) 동작을 변경합니다. Langfuse는 이제 스마트 기본 스팬 필터를
+  적용합니다. 이전에 모든 스팬(비 LLM 스팬 포함)이 내보내지길 기대했다면, 아래의 첫 번째 주요 변경 사항을 확인하세요.
+</Callout>
+
+## 주요 변경 사항 (Breaking Changes)
+
+### 스마트 기본 스팬 필터링이 전체 내보내기 동작을 대체합니다
+
+이전 버전에서는 기본적으로 모든 OpenTelemetry 스팬을 내보내면서 인프라 및 비 LLM 계측(HTTP, DB, 큐, 프레임워크 내부 동작 등)으로 인해 트레이스에 노이즈가 많이 발생했습니다. 트레이스를 집중적이고 유용하게 유지하기 위해 v5는 스마트 기본 스팬 필터를 도입합니다.
+
+기본적으로 v5는 다음 중 하나라도 해당하면 스팬을 내보냅니다.
+
+- Langfuse(`langfuse-sdk`)에 의해 생성된 스팬
+- `gen_ai.*` 속성을 가진 스팬
+- 스팬의 계측 스코프(instrumentation scope)가 알려진 LLM 스코프 접두사(예: `openinference`, `langsmith`, `haystack`, `litellm`)와 일치하는 경우
+
+v5 이전에는 커스텀 `shouldExportSpan` 함수를 구현하지 않는 한 모든 스팬이 내보내졌습니다.
+
+#### v5 이전의 "모두 내보내기" 동작 유지하기
+
+```typescript
+import { LangfuseSpanProcessor } from "@langfuse/otel";
+
+const spanProcessor = new LangfuseSpanProcessor({
+  publicKey: process.env.LANGFUSE_PUBLIC_KEY!,
+  secretKey: process.env.LANGFUSE_SECRET_KEY!,
+  shouldExportSpan: () => true,
+});
+```
+
+#### 기본 동작과 커스텀 규칙 조합하기
+
+`shouldExportSpan`은 v5에서 완전한 오버라이드입니다. 기본 필터링을 대체하지 않고 확장하려면 `isDefaultExportSpan`과 조합하세요.
+
+```typescript
+import { LangfuseSpanProcessor, isDefaultExportSpan } from "@langfuse/otel";
+
+const spanProcessor = new LangfuseSpanProcessor({
+  publicKey: process.env.LANGFUSE_PUBLIC_KEY!,
+  secretKey: process.env.LANGFUSE_SECRET_KEY!,
+  shouldExportSpan: ({ otelSpan }) =>
+    isDefaultExportSpan(otelSpan) ||
+    otelSpan.instrumentationScope.name.startsWith("my_framework"),
+});
+```
+
+#### 발생할 수 있는 트레이스 트리 부작용과 디버깅 방법
+
+중간 또는 부모 스팬이 제거되는 동안 자식 스팬은 계속 내보내지면, 필터링으로 인해 트레이스 트리가 끊어질 수 있습니다. 트레이스가 연결되지 않은 것처럼 보이면 SDK 디버그 로깅을 활성화하여 제거된 스팬을 확인한 후, 콜백에서 필요한 스코프를 허용 목록에 추가하세요.
+
+- JS/TS 디버그 모드: `LANGFUSE_DEBUG="true"`(또는 `LANGFUSE_LOG_LEVEL="DEBUG"`)를 설정합니다.
+- [SDK 고급 기능](/docs/observability/sdk/advanced-features) 및 [원치 않는 스팬에 대한 OpenTelemetry 문제 해결](/faq/all/existing-otel-setup#unwanted-spans-in-langfuse)을 참고하세요.
+
+### `updateActiveTrace()`가 3개의 함수로 분리되었습니다
+
+새로운 모델에서는 상관관계 속성(`userId`, `sessionId`, `metadata`, `tags`)이 트레이스뿐만 아니라 모든 관측 단위에 존재해야 합니다. `propagateAttributes()`는 콜백을 감싸며, 콜백 내부에서 생성된 현재 및 모든 자식 스팬이 해당 속성을 자동으로 상속합니다. 콜백 _이전에_ 생성된 스팬은 소급하여 업데이트되지 **않습니다**.
+
+**v4:**
+
+```typescript
+import { updateActiveTrace, startActiveObservation } from "@langfuse/tracing";
+
+await startActiveObservation("my-operation", async (span) => {
+  updateActiveTrace({
+    name: "user-workflow",
+    userId: "user-123",
+    sessionId: "session-456",
+    tags: ["production"],
+    public: true,
+    metadata: { testRun: "server-export" },
+    input: { query: "hello" },
+    output: { response: "world" },
+  });
+});
+```
+
+**v5:**
+
+```typescript
+import {
+  propagateAttributes,
+  startActiveObservation,
+  setActiveTraceIO,
+  setActiveTraceAsPublic,
+} from "@langfuse/tracing";
+
+await propagateAttributes(
+  {
+    traceName: "user-workflow", // 기존의 "name"
+    userId: "user-123",
+    sessionId: "session-456",
+    tags: ["production"],
+    metadata: { testRun: "server-export" },
+  },
+  async () => {
+    await startActiveObservation("my-operation", async (span) => {
+      setActiveTraceIO({
+        input: { query: "hello" },
+        output: { response: "world" },
+      });
+      setActiveTraceAsPublic();
+    });
+  },
+);
+```
+
+**주요 차이점:**
+
+| 속성                                     | v4                                      | v5                                                           |
+| ---------------------------------------- | --------------------------------------- | ------------------------------------------------------------ |
+| `name`                                   | `updateActiveTrace({name: ...})`        | `propagateAttributes({traceName: ...}, cb)`                  |
+| `userId`, `sessionId`, `tags`, `version` | `updateActiveTrace({...})`              | `propagateAttributes({...}, cb)`                             |
+| `metadata`                               | `updateActiveTrace({metadata: any})`    | `propagateAttributes({metadata: Record<string,string>}, cb)` |
+| `input`, `output`                        | `updateActiveTrace({...})`              | `setActiveTraceIO({...})` (지원 종료 예정)                   |
+| `public`                                 | `updateActiveTrace({public: true})`     | `setActiveTraceAsPublic()`                                   |
+| `release`                                | `updateActiveTrace({release: ...})`     | 제거됨 — `LANGFUSE_RELEASE` 환경 변수 사용                   |
+| `environment`                            | `updateActiveTrace({environment: ...})` | 제거됨 — `LANGFUSE_TRACING_ENVIRONMENT` 환경 변수 사용       |
+
+<Callout type="warning">
+  `setActiveTraceIO()`는 지원 종료 예정(deprecated)이며, 트레이스 입력/출력에 의존하는 트레이스 레벨의
+  [LLM-as-a-judge](/docs/evaluation/evaluation-methods/llm-as-a-judge) 평가기와의 하위 호환성을 위해서만
+  존재합니다. 새 코드에서는 루트 관측 단위(observation)에 직접 입력/출력을 설정하세요.
+</Callout>
+
+### `.updateTrace()` → `.setTraceIO()` + `.setTraceAsPublic()`
+
+동일한 분리가 모든 관측 단위 래퍼 클래스(`LangfuseSpan`, `LangfuseGeneration` 등)에도 적용됩니다.
+
+**v4:**
+
+```typescript
+import { startObservation } from "@langfuse/tracing";
+
+const span = startObservation("my-op");
+span.updateTrace({
+  name: "my-trace",
+  userId: "user-123",
+  sessionId: "session-456",
+  tags: ["prod"],
+  public: true,
+  input: { query: "hello" },
+  output: { response: "world" },
+});
+```
+
+**v5:**
+
+```typescript
+import { propagateAttributes, startObservation } from "@langfuse/tracing";
+
+propagateAttributes(
+  {
+    traceName: "my-trace",
+    userId: "user-123",
+    sessionId: "session-456",
+    tags: ["prod"],
+  },
+  () => {
+    const span = startObservation("my-op");
+    span.setTraceIO({
+      input: { query: "hello" },
+      output: { response: "world" },
+    });
+    span.setTraceAsPublic();
+    span.end();
+  },
+);
+```
+
+<Callout type="warning">
+  `.setTraceIO()`는 지원 종료 예정(deprecated)이며, 트레이스 입력/출력에 의존하는 트레이스 레벨의
+  [LLM-as-a-judge](/docs/evaluation/evaluation-methods/llm-as-a-judge) 평가기와의 하위 호환성을 위해서만
+  존재합니다.
+</Callout>
+
+### Public API 네임스페이스 재매핑 (`api.*`)
+
+v5에서는 고성능 Public API 리소스가 이제 기본값입니다. v2 별칭(alias)은 제거되었습니다.
+
+| v4 / 과도기 이름                        | v5 이름                              |
+| --------------------------------------- | ------------------------------------ |
+| `langfuse.api.observationsV2`           | `langfuse.api.observations`          |
+| `langfuse.api.scoreV2`                  | `langfuse.api.scores`                |
+| `langfuse.api.metricsV2`                | `langfuse.api.metrics`               |
+| `langfuse.api.observations` (레거시 v1) | `langfuse.api.legacy.observationsV1` |
+| `langfuse.api.score` (레거시 v1)        | `langfuse.api.legacy.scoreV1`        |
+| `langfuse.api.metrics` (레거시 v1)      | `langfuse.api.legacy.metricsV1`      |
+
+레거시 v1 동작이 여전히 필요하다면, 해당하는 `langfuse.api.legacy.*V1` 네임스페이스로 전환하세요.
+
+<Callout type="warning">
+  셀프 호스팅 Langfuse를 사용하는 경우, 새 기본값인 `langfuse.api.observations` 또는
+  `langfuse.api.metrics` 메서드를 아직 사용하지 마세요. 이들은 이제 Observations v2 및 Metrics v2
+  엔드포인트를 가리키는데, 이는 아직 셀프 호스팅 배포에서 사용할 수 없습니다. 대신
+  `langfuse.api.legacy.observationsV1` 및 `langfuse.api.legacy.metricsV1`을 사용하세요.
+</Callout>
+
+### [`@langfuse/langchain`](/integrations/frameworks/langchain) 내부 변경 사항
+
+`CallbackHandler`는 이제 트레이스 레벨 속성에 `propagateAttributes()`를 사용합니다. 이는 다음에 해당하는 사용자에게 영향을 미칩니다.
+
+- `CallbackHandler`를 서브클래싱하는 경우
+- 내부 스팬 생성 동작에 의존하는 경우
+- `traceMetadata`가 문자열이 아닌 값을 받아들이는 것에 의존하는 경우 — 문자열이 아닌 값은 이제 `propagateAttributes`에 전달되기 전에 `JSON.stringify`로 직렬화되며, 이 함수는 `Record<string, string>`을 요구합니다
+
+### [`@langfuse/openai`](/integrations/model-providers/openai-py) 내부 변경 사항
+
+`traceMethod` 래퍼는 이제 관측 단위(observation)에서 `.updateTrace()`를 호출하는 대신, 트레이싱된 호출을 `propagateAttributes()`로 감싸서 `userId`, `sessionId`, `tags`, `traceName`을 설정합니다. (부모 관측 단위에도 속성이 설정되기를 원한다면, 전체 실행을 `propagateAttributes`로 감싸세요.)
+
+### 제거된 속성
+
+| 제거된 항목   | 대체 방법                                                     |
+| ------------- | ------------------------------------------------------------- |
+| `release`     | `LANGFUSE_RELEASE` 환경 변수로 설정                           |
+| `environment` | `LANGFUSE_TRACING_ENVIRONMENT` 환경 변수로 설정               |
+| `public`      | `setActiveTraceAsPublic()` / `.setTraceAsPublic()`으로 대체됨 |
+
+## 마이그레이션 체크리스트
+
+1. 비 LLM OpenTelemetry 스팬에 의존하던 트레이스/대시보드를 점검하세요. v5의 기본 필터로 인해 더 이상 표시되지 않을 수 있습니다.
+2. 필요하다면 `LangfuseSpanProcessor`에 `shouldExportSpan: () => true`를 설정하여 v5 이전의 "모든 스팬 내보내기" 동작을 유지하세요.
+3. 커스텀 필터링을 사용하는 경우, `isDefaultExportSpan`과 조합하여 LLM 중심의 기본 동작을 유지하세요.
+4. `updateActiveTrace`를 검색하여 `propagateAttributes()` + `setActiveTraceIO()`(레거시 트레이스 레벨 LLM-as-a-judge 구성에 의존하는 경우) + `setActiveTraceAsPublic()`으로 분리하세요.
+5. `.updateTrace(`를 검색하여 `propagateAttributes()` + `.setTraceIO()` + `.setTraceAsPublic()`으로 분리하세요.
+6. 전파되는 메타데이터 값이 `Record<string, string>` 형태이며 값이 200자 이하인지 확인하세요.
+7. `release`/`environment` 속성 사용을 환경 변수(`LANGFUSE_RELEASE`, `LANGFUSE_TRACING_ENVIRONMENT`)로 대체하세요.
+8. `api.observationsV2` / `api.scoreV2` / `api.metricsV2`를 검색하여 `api.observations` / `api.scores` / `api.metrics`로 대체하세요.
+9. `api.observations` / `api.score` / `api.metrics`에서의 레거시 v1 사용을 검색하여 `api.legacy.observationsV1` / `api.legacy.scoreV1` / `api.legacy.metricsV1`로 옮기세요.
+10. 셀프 호스팅 Langfuse를 사용 중이라면, `api.observations` 또는 `api.metrics`를 아직 사용하지 말고 Observations v2 및 Metrics v2가 셀프 호스팅 배포에서 제공될 때까지 `api.legacy.observationsV1` 및 `api.legacy.metricsV1`을 사용하세요.
+11. 남아 있는 `*V2` 별칭에 대한 참조를 모두 제거하세요(v5에서 제거됨).

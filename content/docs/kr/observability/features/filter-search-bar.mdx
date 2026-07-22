@@ -1,0 +1,136 @@
+---
+title: 필터 검색 바
+description: 필드, 연산자, 와일드카드, 별칭, 전문 검색을 하나의 자동완성 쿼리 바에서 타이핑만으로 트레이스와 관찰을 필터링하고 검색합니다.
+sidebarTitle: 필터 검색 바
+sourceRevision: 0daf4bdd1fc5cc755e887f604f6a37a9f711ab07
+translationStatus: machine
+---
+
+# 필터 검색 바
+
+필터 검색 바를 사용하면 사이드바에서 필터를 조합하는 대신 한 줄의 텍스트를 입력하는 것만으로 Observations 및 Traces 테이블을 필터링하고 검색할 수 있습니다. 입력한 쿼리를 사이드바가 생성하는 것과 동일한 필터로 파싱하고, 타이핑하는 동안 필드와 값을 자동완성하며, 전체 쿼리를 URL에 직렬화하므로 링크로 정확한 뷰를 공유할 수 있습니다.
+
+```
+level:ERROR type:TOOL environment:production latency:>2 name:*checkout*
+```
+
+<Callout type="info">
+  필터 검색 바는 Langfuse v4 데이터 모델에서 동작하며 현재 Langfuse Cloud에서
+  사용할 수 있습니다. 사용하려면 Observations 또는 Traces 테이블에서
+  **Fast**를 켜세요. 셀프 호스팅 배포에 대한 오픈소스 지원은 v4 스키마
+  마이그레이션이 준비되는 대로 제공됩니다.
+</Callout>
+
+이 바는 기존 필터 사이드바 및 시간 범위 선택기와 함께 동작합니다. 바와 사이드바는 동일한 필터 상태를 편집하는 두 개의 에디터이므로, 입력한 내용은 사이드바 필터로도 표시되고 그 반대도 마찬가지입니다. 필드 이름을 입력하면 자동완성이 연산자와 관찰된 값을 제안하며, Enter를 눌러 적용합니다.
+
+## 쿼리 문법 [#syntax]
+
+쿼리는 암묵적인 AND로 결합된 `field:value` 필터 목록입니다.
+
+### 필드와 값
+
+`level:ERROR`, `environment:production`, `user:alice`. 필드 이름을 입력하면 바가 해당 필드에서 관찰된 값을 제안하므로 값을 외울 필요가 없습니다.
+
+### 연산자
+
+`latency:>2`, `cost:>=0.01`, `startTime:>2026-06-01` — `>`, `>=`, `<`, `<=`는 숫자 및 datetime 필드에서 동작합니다.
+
+### 와일드카드와 정확한 일치
+
+텍스트 필드에서는 `*`를 와일드카드로 사용합니다.
+
+- `name:*checkout*` — 포함
+- `name:checkout*` — 시작
+- `name:*checkout` — 끝
+- `name:checkout` — 순수 검색어, 기본값은 포함
+- `name:=checkout` — 정확한 일치
+
+### 부정
+
+필터 앞에 `-`를 붙이면 제외합니다: `-environment:production`.
+
+### 어느 하나 일치 및 모두 일치
+
+- `level:(ERROR OR WARNING)` — 하나의 필드에 대해 둘 중 하나의 값과 일치
+- `tags:(billing AND urgent)` — 모든 값과 일치 (배열 필드)
+
+### 메타데이터와 점수
+
+중첩된 필드에는 점(dot) 경로를 사용합니다.
+
+- `metadata.region:eu`
+- `scores.accuracy:>0.8`
+- `scores.is_hallucination:false`
+- `traceScores.helpfulness:positive`
+
+점수 필터는 숫자형, 범주형, 불리언 값을 지원합니다.
+
+공백이나 특수 문자가 포함된 키는 접두사 뒤에 따옴표로 감쌉니다: `scores."Answer Relevance":>=0.9`, `metadata."my key":eu`.
+
+### Null 검사
+
+`has:endTime`는 필드가 설정된 행과 일치하며, `-has:endTime`는 필드가 null인 행과 일치합니다.
+
+### 전문 검색
+
+단어나 구문만 입력하면 id, 이름, input, output 전반에서 검색합니다.
+
+```
+refund failed
+```
+
+`input:` 또는 `output:`을 사용하면 하나의 페이로드로 검색 범위를 좁힐 수 있습니다 (예: `output:"refund failed"`). 매칭은 대소문자를 구분하지 않으며 단어 단위로 동작합니다. 즉, 검색어는 전체 단어와 일치합니다 — `error`는 `error`와는 일치하지만 `errors`와는 일치하지 않습니다 — 그리고 여러 단어로 이루어진 검색어는 연속된 구문으로 매칭됩니다. 이 바는 [전문 검색](/docs/observability/features/full-text-search)에 문서화된 것과 동일한 v4 ClickHouse 전문 검색을 사용합니다.
+
+## 필드 별칭 [#aliases]
+
+대부분의 필드는 더 짧게 입력할 수 있는 별칭을 지원합니다. 정식 필드 이름도 항상 사용할 수 있습니다.
+
+| 별칭         | 필드                |
+| ------------ | ------------------- |
+| `env`        | environment         |
+| `user`       | user id             |
+| `session`    | session id          |
+| `model`      | model name          |
+| `prompt`     | prompt name         |
+| `cost`       | total cost          |
+| `tokens`     | total tokens        |
+| `tags`       | trace tags          |
+| `status`     | status message      |
+| `ttft`       | time to first token |
+| `tps`        | tokens per second   |
+| `dataset`    | experiment dataset  |
+| `experiment` | experiment name     |
+
+## Ask AI [#ask-ai]
+
+프로젝트의 필드 이름을 아직 모른다면 **Ask AI**를 클릭하고 원하는 필터를 자연어로 설명하세요. 그러면 바가 편집 가능한 필(pill) 형태로 쿼리를 만들어줍니다.
+
+<Callout type="info">
+  Ask AI는 베타 기능이며 **Langfuse Cloud에서만** 사용할 수 있습니다.
+  **기본적으로 꺼져 있으며**, 조직 소유자 또는 관리자가 **Organization
+  Settings → General → AI Features**에서 활성화합니다. 이 기능은 AWS
+  Bedrock에서 호스팅되는 모델에서 동작하며 데이터를 보존하지 않습니다(zero
+  data retention). [데이터 프라이버시 및 보안](/security/ai-features)을
+  참고하세요.
+</Callout>
+
+Ask AI는 **프로젝트를 인식합니다**. 요청에는 현재 테이블에 로드된 컬럼, 값, 메타데이터 키에 대한 압축된 클라이언트 측 스냅샷이 포함되므로, 자연어가 일반적인 추측이 아니라 프로젝트의 실제 스키마에 매핑됩니다. 예를 들어 "enterprise customers in the membership-support queue"라는 요청은 트레이스가 실제로 사용하는 `metadata.*` 키로 변환됩니다.
+
+- 바 옆에 있는 버튼이며 항상 사용할 수 있습니다.
+- 바가 비어 있으면 처음부터 쿼리를 만들고, 기존 필터가 있으면 요청에 따라 필터를 **수정**합니다(추가, 변경, 또는 제거).
+- [문법](#syntax)이 지원하는 필터만 생성할 수 있으며, 임의로 만들어낸 컬럼은 쿼리가 적용되기 전에 제거됩니다.
+- 결과는 사이드바와 동일한 경로로 적용되므로 손실이 없으며, 브라우저의 뒤로 가기 버튼으로 실행 취소할 수 있습니다.
+
+## 쿼리 공유 및 저장 [#share]
+
+전체 쿼리는 URL에 직렬화되므로, 링크를 전달하면 정확히 동일한 필터링된 뷰가 재현됩니다. 바는 사이드바와 동일한 필터 표현으로 컴파일되므로, 기존의 저장된 뷰(Saved Views)도 변경 없이 그대로 동작합니다.
+
+## 예약된 토큰
+
+일부 연산자처럼 보이는 토큰은 아직 지원되지 않으며, 텍스트로 처리되는 대신 오류로 표시됩니다: `!`, 그리고 소문자 단어 `and`, `or`, `not`. 제외하려면 `-field:value`를, 하나의 필드에서 여러 값을 매칭하려면 `field:(A OR B)`를 사용하세요. 예약어를 리터럴 텍스트로 검색하려면 따옴표로 감싸세요 (`"or"`).
+
+## GitHub Discussions
+
+import { GhDiscussionsPreview } from "@/components/gh-discussions/GhDiscussionsPreview";
+
+<GhDiscussionsPreview labels={["feat-filter-search-bar"]} />

@@ -1,0 +1,456 @@
+---
+title: "S3 / 블롭 스토리지 구성 (셀프 호스팅)"
+sidebarTitle: 블롭 스토리지 (S3)
+description: "셀프 호스팅 Langfuse를 위한 S3 또는 S3 호환 블롭 스토리지를 구성합니다. AWS S3, MinIO 또는 호환 서비스로 원시 이벤트, 멀티모달 입력, 배치 내보내기를 저장합니다."
+label: "Version: v3"
+sourceRevision: be2934c92550f6242a57a54c24db0b532c9ff9cd
+translationStatus: machine
+---
+
+# S3 / 블롭 스토리지
+
+<Callout type="info">
+
+이 문서는 S3 구성에 대한 심화 가이드입니다. 시작하려면 [배포 가이드](/self-hosting#deployment-options) 중 하나를 따라주세요.
+
+</Callout>
+
+Langfuse는 원시 이벤트, 멀티모달 입력, 배치 내보내기 및 기타 파일을 저장하기 위해 S3 또는 다른 S3 호환 블롭 스토리지(이하 S3로 통칭)를 사용합니다.
+이와 별도로 [Azure Blob Storage](#azure-blob-storage), [Google Cloud Storage](#google-cloud-storage), [OCI Object Storage](#oci-object-storage)를 위한 전용 구현도 제공합니다.
+AWS나 CloudFlare의 관리형 서비스를 사용하거나 MinIO를 이용해 직접 호스팅할 수 있습니다.
+강력한 read-after-write 보장을 제공하는 확장 가능하고 내구성 있는 대용량 파일 저장 솔루션으로 사용됩니다.
+이 가이드는 Langfuse 내에서 S3를 구성하는 방법과 자체 S3 호환 스토리지를 연결하는 방법을 다룹니다.
+
+## 공식 지원 및 커뮤니티 지원 [#support]
+
+Langfuse는 다양한 블롭 스토리지 제공업체와 함께 작동합니다.
+공식적으로 지원되는 옵션과 커뮤니티에서 지원되는 옵션을 구분합니다.
+
+| 옵션                                          | 지원 수준 |
+| --------------------------------------------- | --------- |
+| [Amazon S3](#amazon-s3)                       | 공식      |
+| [Google Cloud Storage](#google-cloud-storage) | 공식      |
+| [Azure Blob Storage](#azure-blob-storage)     | 공식      |
+| [MinIO / AIStor](#minio)                      | 공식      |
+| [Cloudflare R2](#cloudflare-r2)               | 공식      |
+| [OCI Object Storage](#oci-object-storage)     | 커뮤니티  |
+| [Tigris](#tigris)                             | 커뮤니티  |
+| [기타 S3 호환 제공업체](#other-providers)     | 커뮤니티  |
+
+Google Cloud Storage의 경우 [네이티브 통합](#google-cloud-storage)을 권장합니다. [S3 상호 운용성 모드](#google-cloud-storage-compatibility-mode)에는 알려진 제약이 있습니다.
+
+import SelfHostSupportLevels from "@/components-mdx/self-host-support-levels.mdx";
+
+<SelfHostSupportLevels />
+
+## 구성
+
+Langfuse는 S3에 대해 여러 사용 사례를 가지고 있으며, 이를 개별적으로 구성할 수 있습니다.
+이를 통해 각 사례마다 별도의 버킷을 사용하거나, 접두사(prefix)를 이용해 하나의 버킷에 정보를 통합할 수 있습니다.
+
+### 필수 구성
+
+Langfuse는 원시 이벤트 정보를 업로드하기 위한 S3 버킷이 필요합니다.
+다음 환경 변수는 모든 배포에서 필수입니다.
+Langfuse Web 및 Langfuse Worker 컨테이너에 제공되어야 합니다.
+
+| 변수                                         | 필수 여부 / 기본값 | 설명                                                                                                                      |
+| -------------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| `LANGFUSE_S3_EVENT_UPLOAD_BUCKET`            | 필수               | 이벤트 정보가 업로드될 버킷의 이름입니다.                                                                                 |
+| `LANGFUSE_S3_EVENT_UPLOAD_PREFIX`            | `""`               | 버킷의 하위 경로에 이벤트를 저장하기 위한 접두사입니다. 기본값은 버킷 루트입니다. 지정할 경우 반드시 `/`로 끝나야 합니다. |
+| `LANGFUSE_S3_EVENT_UPLOAD_REGION`            |                    | 버킷이 위치한 리전입니다.                                                                                                 |
+| `LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT`          |                    | 이벤트 업로드에 사용할 엔드포인트입니다.                                                                                  |
+| `LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID`     |                    | 버킷에 대한 액세스 키입니다. List, Get, Put 권한이 있어야 합니다.                                                         |
+| `LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY` |                    | 버킷에 대한 시크릿 액세스 키입니다.                                                                                       |
+| `LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE`  |                    | 요청에 대해 경로 스타일(path style)을 강제할지 여부입니다. MinIO에서는 필수입니다.                                        |
+
+### 선택 구성
+
+Langfuse는 배치 내보내기, 멀티모달 트레이싱, 멀티모달 데이터셋에도 S3를 사용합니다.
+이러한 사용 사례는 선택적(opt-in)이며 별도로 구성할 수 있습니다.
+다음 정보를 참고하여 활성화하세요.
+Langfuse는 자격 증명을 사용해 SDK가 미디어 자산을 업로드하거나 배치 내보내기를 다운로드할 수 있도록 단기 사전 서명(pre-signed) URL을 생성합니다.
+
+#### 멀티모달 트레이싱 및 데이터셋
+
+| 변수                                            | 필수 여부 / 기본값 | 설명                                                                                                                      |
+| ----------------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| `LANGFUSE_S3_MEDIA_UPLOAD_BUCKET`               | 필수               | 미디어 파일이 업로드될 버킷의 이름입니다.                                                                                 |
+| `LANGFUSE_S3_MEDIA_UPLOAD_PREFIX`               | `""`               | 버킷의 하위 경로에 미디어를 저장하기 위한 접두사입니다. 기본값은 버킷 루트입니다. 지정할 경우 반드시 `/`로 끝나야 합니다. |
+| `LANGFUSE_S3_MEDIA_UPLOAD_REGION`               |                    | 버킷이 위치한 리전입니다.                                                                                                 |
+| `LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT`             |                    | 미디어 파일 업로드에 사용할 엔드포인트입니다.                                                                             |
+| `LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID`        |                    | 버킷에 대한 액세스 키입니다. List, Get, Put 권한이 있어야 합니다.                                                         |
+| `LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY`    |                    | 버킷에 대한 시크릿 액세스 키입니다.                                                                                       |
+| `LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE`     |                    | 요청에 대해 경로 스타일을 강제할지 여부입니다. MinIO에서는 필수입니다.                                                    |
+| `LANGFUSE_S3_MEDIA_MAX_CONTENT_LENGTH`          | `1_000_000_000`    | 업로드가 허용되는 최대 파일 크기(바이트)입니다. 기본값은 1GB입니다.                                                       |
+| `LANGFUSE_S3_MEDIA_DOWNLOAD_URL_EXPIRY_SECONDS` | `3600`             | 사전 서명된 다운로드 URL의 만료 시간(초)입니다. 기본값은 1시간입니다.                                                     |
+
+#### 배치 내보내기
+
+Langfuse에서는 배치 내보내기를 통해 테이블 데이터를 내보낼 수 있습니다.
+중간 결과를 S3에 업로드하고, 사용자가 CSV 또는 JSON 형식으로 내보내기 결과를 다운로드할 수 있도록 사전 서명된 URL을 제공합니다.
+환경에서 배치 내보내기를 구성하려면 다음 환경 변수를 설정하세요.
+
+| 변수                                         | 필수 여부 / 기본값 | 설명                                                                                                                                                                    |
+| -------------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `LANGFUSE_S3_BATCH_EXPORT_ENABLED`           | `false`            | Langfuse S3 배치 내보내기를 활성화할지 여부입니다. 배치 내보내기를 사용하려면 반드시 `true`로 설정해야 합니다.                                                          |
+| `LANGFUSE_S3_BATCH_EXPORT_BUCKET`            | 필수               | 배치 내보내기가 업로드될 버킷의 이름입니다.                                                                                                                             |
+| `LANGFUSE_S3_BATCH_EXPORT_PREFIX`            | `""`               | 버킷의 하위 경로에 배치 내보내기를 저장하기 위한 접두사입니다. 기본값은 버킷 루트입니다. 지정할 경우 반드시 `/`로 끝나야 합니다.                                        |
+| `LANGFUSE_S3_BATCH_EXPORT_REGION`            |                    | 버킷이 위치한 리전입니다.                                                                                                                                               |
+| `LANGFUSE_S3_BATCH_EXPORT_ENDPOINT`          |                    | 배치 내보내기 업로드에 사용할 엔드포인트입니다.                                                                                                                         |
+| `LANGFUSE_S3_BATCH_EXPORT_ACCESS_KEY_ID`     |                    | 버킷에 대한 액세스 키입니다. List, Get, Put 권한이 있어야 합니다.                                                                                                       |
+| `LANGFUSE_S3_BATCH_EXPORT_SECRET_ACCESS_KEY` |                    | 버킷에 대한 시크릿 액세스 키입니다.                                                                                                                                     |
+| `LANGFUSE_S3_BATCH_EXPORT_FORCE_PATH_STYLE`  |                    | 요청에 대해 경로 스타일을 강제할지 여부입니다. MinIO에서는 필수입니다.                                                                                                  |
+| `LANGFUSE_S3_BATCH_EXPORT_EXTERNAL_ENDPOINT` |                    | 사전 서명된 URL을 생성하기 위한 선택적 외부 엔드포인트입니다. 지정하지 않으면 메인 엔드포인트가 사용됩니다. Langfuse 트래픽이 VPC 내부에 머물러야 하는 경우 유용합니다. |
+| `BATCH_EXPORT_PAGE_SIZE`                     | `500`              | 메모리 문제를 방지하기 위해 S3로 스트리밍 내보내기를 수행할 때 사용하는 선택적 페이지 크기입니다. 성능 최적화를 위해 필요에 따라 조정할 수 있습니다.                    |
+| `BATCH_EXPORT_ROW_LIMIT`                     | `1_500_000`        | 한 번의 배치 내보내기에서 내보낼 수 있는 최대 행(row) 수입니다.                                                                                                         |
+
+#### S3 호환성
+
+다음 설정은 AWS S3 API와 완전히 호환되지 않는 S3 호환 스토어를 지원하기 위한 것으로, 모든 S3 사용 사례(이벤트, 미디어, 배치 내보내기)에 적용됩니다.
+
+| 변수                                            | 필수 여부 / 기본값 | 설명                                                                                                                                                                                                                                                                                              |
+| ----------------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `LANGFUSE_S3_DELETE_OBJECTS_CHECKSUM_ALGORITHM` |                    | S3 DeleteObjects 요청에 사용할 체크섬 알고리즘입니다: `MD5`, `CRC32`, `CRC32C`, `CRC64NVME`, `SHA1`, `SHA256` 중 하나입니다. 설정하지 않으면 AWS SDK 기본값(`CRC32`)이 사용됩니다. 스토리지 제공업체가 삭제 요청을 `MissingContentMD5` 오류로 거부하는 경우(예: 구버전 MinIO) `MD5`로 설정하세요. |
+
+## 배포 옵션
+
+이 섹션에서는 다양한 배포 옵션과 예시 환경 변수를 다룹니다.
+다른 사례들도 유사하므로 EVENT_UPLOAD 사례를 중심으로 설명합니다.
+
+### Amazon S3 [#amazon-s3]
+
+[Amazon S3](https://aws.amazon.com/s3/)는 전 세계적으로 이용 가능한 객체 스토리지입니다.
+대부분의 제공업체가 S3 호환 인터페이스를 제공하기 때문에, Langfuse는 내부적으로 AWS SDK를 사용해 블롭 스토리지에 연결합니다.
+
+Langfuse가 AWS 인스턴스에서 실행 중이라면 Langfuse 컨테이너에 IAM 역할을 사용하는 것을 권장합니다.
+그렇지 않다면 IAM 사용자를 생성하고 Langfuse용 Access Key 쌍을 발급하세요.
+두 엔티티 모두 버킷에 접근하는 데 필요한 권한을 가지고 있는지 확인하세요.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Action": ["s3:PutObject", "s3:ListBucket", "s3:GetObject"],
+      "Effect": "Allow",
+      "Resource": [
+        "arn:aws:s3:::<my-bucket-name>/*",
+        "arn:aws:s3:::<my-bucket-name>"
+      ],
+      "Sid": "EventBucketAccess"
+    }
+  ]
+}
+```
+
+<Callout type="info">
+
+셀프 호스팅 환경에서 [데이터 보존(Data Retention)](/docs/data-retention) 기능을 사용하려면 모든 버킷에 대해 Langfuse IAM 역할에 `s3:DeleteObject` 권한을 부여해야 합니다.
+Langfuse는 API를 통해서만 삭제 문(delete statement)을 발행한다는 점에 유의하세요.
+버전 관리(versioned)가 적용된 버킷을 사용하는 경우, 삭제 마커(delete marker)와 이전 버전은 수동으로 또는 수명 주기 규칙을 통해 제거해야 합니다.
+
+</Callout>
+
+#### AWS KMS 암호화 사용하기
+
+Amazon S3는 저장 데이터를 암호화하기 위한 서버 측 암호화(SSE) 옵션을 제공합니다.
+Langfuse는 다음 환경 변수를 통해 모든 S3 상호작용에서 AWS KMS 암호화를 지원합니다.
+
+| 변수                                      | 필수 여부 / 기본값 | 설명                                                                                                                         |
+| ----------------------------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| `LANGFUSE_S3_EVENT_UPLOAD_SSE`            |                    | 사용할 서버 측 암호화 알고리즘입니다. AWS KMS를 사용하려면 `aws:kms`로, 서버 측 암호화를 사용하려면 `AES256`으로 설정하세요. |
+| `LANGFUSE_S3_EVENT_UPLOAD_SSE_KMS_KEY_ID` |                    | 암호화에 사용할 KMS 키의 ID입니다. `LANGFUSE_S3_EVENT_UPLOAD_SSE`가 `aws:kms`로 설정된 경우 필수입니다.                      |
+| `LANGFUSE_S3_MEDIA_UPLOAD_SSE`            |                    | 사용할 서버 측 암호화 알고리즘입니다. AWS KMS를 사용하려면 `aws:kms`로, 서버 측 암호화를 사용하려면 `AES256`으로 설정하세요. |
+| `LANGFUSE_S3_MEDIA_UPLOAD_SSE_KMS_KEY_ID` |                    | 암호화에 사용할 KMS 키의 ID입니다. `LANGFUSE_S3_MEDIA_UPLOAD_SSE`가 `aws:kms`로 설정된 경우 필수입니다.                      |
+| `LANGFUSE_S3_BATCH_EXPORT_SSE`            |                    | 사용할 서버 측 암호화 알고리즘입니다. AWS KMS를 사용하려면 `aws:kms`로, 서버 측 암호화를 사용하려면 `AES256`으로 설정하세요. |
+| `LANGFUSE_S3_BATCH_EXPORT_SSE_KMS_KEY_ID` |                    | 암호화에 사용할 KMS 키의 ID입니다. `LANGFUSE_S3_BATCH_EXPORT_SSE`가 `aws:kms`로 설정된 경우 필수입니다.                      |
+
+AWS KMS로 암호화할 때는 IAM 역할 또는 사용자가 지정된 KMS 키를 사용하는 데 필요한 권한을 가지고 있는지 확인하세요.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Action": ["kms:GenerateDataKey", "kms:Decrypt"],
+      "Effect": "Allow",
+      "Resource": "arn:aws:kms:region:account-id:key/key-id",
+      "Sid": "AllowUseOfKMSKey"
+    }
+  ]
+}
+```
+
+#### 구성 예시
+
+IAM 역할로 인증하는 경우 다음 환경 변수를 설정하세요.
+
+```yaml
+LANGFUSE_S3_EVENT_UPLOAD_BUCKET=my-bucket-name
+```
+
+Access Key 쌍으로 인증하는 경우:
+
+```yaml
+LANGFUSE_S3_EVENT_UPLOAD_BUCKET=my-bucket-name
+LANGFUSE_S3_EVENT_UPLOAD_REGION=my-bucket-region
+LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+```
+
+### MinIO / AIStor [#minio]
+
+[MinIO](https://min.io/)와 그 상용 배포판인 [AIStor](https://www.min.io/product/aistor)는 S3 API와 호환되는 객체 스토리지 서버입니다.
+온프레미스 배포와 로컬 개발 환경에서 널리 사용됩니다.
+Langfuse는 로컬 개발용, 그리고 [Docker Compose](/self-hosting/deployment/docker-compose) 및 [Kubernetes (Helm)](/self-hosting/deployment/kubernetes-helm) 배포 옵션의 기본값으로 MinIO를 사용합니다.
+
+#### 구성 예시
+
+Docker로 로컬 MinIO 컨테이너를 시작합니다.
+
+```bash
+docker run --name minio \
+  -p 9000:9000 \
+  -p 9001:9001 \
+  -e MINIO_ROOT_USER=minio \
+  -e MINIO_ROOT_PASSWORD=miniosecret \
+  minio/minio server /data --console-address ":9001"
+```
+
+`http://localhost:9001`로 이동하여 MinIO 콘솔에 접속하고 `langfuse`라는 이름의 버킷을 생성하세요.
+이제 다음 환경 변수를 사용해 Langfuse를 시작할 수 있습니다.
+
+```yaml
+LANGFUSE_S3_EVENT_UPLOAD_BUCKET=langfuse
+LANGFUSE_S3_EVENT_UPLOAD_REGION=us-east-1
+LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID=minio
+LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY=miniosecret
+LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT=http://minio:9000
+LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE=true
+LANGFUSE_S3_EVENT_UPLOAD_PREFIX=events/
+```
+
+이 예시 설정은 임시(ephemeral) 볼륨을 사용하므로, 재시작 시 MinIO는 모든 이벤트 데이터를 삭제합니다.
+영구적인 데이터 저장을 위해서는 MinIO 문서를 참고하거나 클라우드 제공업체의 관리형 블롭 스토어를 사용하세요.
+
+<Callout type="info">
+
+`RELEASE.2025-02-03` 이전 버전의 MinIO는 S3 DeleteObjects 요청을 `MissingContentMD5` 오류로 거부하며, 이는 데이터 보존 및 삭제 작업을 중단시킵니다.
+MinIO를 업그레이드할 수 없는 경우, `LANGFUSE_S3_DELETE_OBJECTS_CHECKSUM_ALGORITHM=MD5`로 설정하여 레거시 `Content-MD5` 헤더를 대신 전송하세요.
+
+</Callout>
+
+#### 미디어 업로드를 위한 Minio 구성 [#minio-media-uploads]
+
+멀티모달 트레이싱 및 멀티모달 데이터셋을 활성화하려면, Docker 네트워크 외부의 SDK 클라이언트와 브라우저가 미디어 자산을 직접 업로드하고 다운로드할 수 있도록 사전 서명된 URL이 사용됩니다. 따라서 `LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT`는 Docker 호스트의 주소로 확인(resolve)되어야 합니다.
+
+**개발 환경:** 로컬에서 `docker compose`를 실행할 때는 사전 서명된 URL이 로컬 인스턴스로 올바르게 루프백되도록 `LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT`를 `http://localhost:9090`으로 설정하세요.
+
+**프로덕션 환경:** 프로덕션 환경에서는 SDK 클라이언트와 브라우저가 접근할 수 있는 공개적으로 접근 가능한 호스트 이름 또는 IP 주소로 `LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT`를 구성하세요.
+
+### Cloudflare R2 [#cloudflare-r2]
+
+[Cloudflare R2](https://www.cloudflare.com/developer-platform/products/r2/)는 Cloudflare가 제공하는 전 세계적으로 이용 가능한 S3 호환 객체 스토리지입니다.
+Cloudflare UI에서 새 버킷을 생성하고 Access Key 쌍을 발급하세요.
+Access Key 쌍이 버킷에 접근하는 데 필요한 권한을 가지고 있는지 확인하세요.
+
+#### 구성 예시
+
+Langfuse를 Cloudflare R2 버킷에 연결하려면 다음 환경 변수를 설정하세요.
+
+```yaml
+LANGFUSE_S3_EVENT_UPLOAD_BUCKET=my-bucket-name
+LANGFUSE_S3_EVENT_UPLOAD_REGION=auto
+LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID=<access-key-id>
+LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY=<secret-access-key>
+LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT=https://${ACCOUNT_ID}.r2.cloudflarestorage.com
+```
+
+### Azure Blob Storage [#azure-blob-storage]
+
+[Azure Blob Storage](https://azure.microsoft.com/en-us/products/storage/blobs/)는 Microsoft Azure가 제공하는 전 세계적으로 이용 가능한 객체 스토리지입니다.
+S3 호환 API를 제공하지 않으며, 약간 다른 구성이 필요합니다.
+전용 Azure Blob Storage 설정을 사용하려면 아래 구성 단계를 따르세요.
+
+#### 구성 예시
+
+필요한 권한을 가진 Azure Blob Storage 컨테이너와 정적 계정 키가 필요합니다.
+
+Langfuse를 Azure Blob Storage 컨테이너에 연결하려면 다음 환경 변수를 설정하세요.
+이 예시는 [Azurite](https://github.com/Azure/Azurite)의 샘플 자격 증명을 사용합니다.
+
+```yaml
+# Azure Blob Storage 인터페이스를 활성화하는 특수 플래그
+LANGFUSE_USE_AZURE_BLOB=true
+
+LANGFUSE_S3_EVENT_UPLOAD_BUCKET=langfuse # 컨테이너 이름 - 존재하지 않으면 Langfuse가 생성을 시도합니다
+LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID=devstoreaccount1 # ABS 계정
+LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw== # ABS 계정 키
+LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT=http://localhost:10000/devstoreaccount1 # URL, 예: `https://${account}.blob.core.windows.net`
+```
+
+### Google Cloud Storage (네이티브) [#google-cloud-storage]
+
+[Google Cloud Storage](https://cloud.google.com/storage)는 Google Cloud가 제공하는 전 세계적으로 이용 가능한 객체 스토리지입니다.
+네이티브 Google Cloud Storage 통합을 구성하려면 Google Cloud Storage에서 새 버킷을 생성하세요.
+다음 설정을 구성하여 해당 버킷을 Langfuse와 함께 사용하세요.
+
+#### 구성 예시
+
+Langfuse를 Google Cloud Storage 버킷에 연결하려면 다음 환경 변수를 설정하세요.
+
+```yaml
+LANGFUSE_USE_GOOGLE_CLOUD_STORAGE=true
+
+LANGFUSE_S3_EVENT_UPLOAD_BUCKET=langfuse # 버킷 이름
+LANGFUSE_GOOGLE_CLOUD_STORAGE_CREDENTIALS=<json-credentials OR path-to-credentials.json> # JSON 키 또는 JSON 키 파일 경로입니다. 선택 사항이며, 미지정 시 환경 자격 증명으로 대체됩니다
+LANGFUSE_S3_EVENT_UPLOAD_PREFIX=events/ # 버킷의 하위 경로에 이벤트를 저장하기 위한 선택적 접두사입니다
+GOOGLE_CLOUD_UNIVERSE_DOMAIN=googleapis.com # 선택 사항입니다. Google Cloud 유니버스 도메인이며, 기본값은 `googleapis.com`입니다
+```
+
+<Callout type="info">
+
+기본적으로 네이티브 통합은 공개 Google Cloud 유니버스(`googleapis.com`)에 연결됩니다.
+소버린(sovereign) 또는 프라이빗 Google Cloud 유니버스(예: Google Distributed Cloud 또는 정부 배포 환경)를 대상으로 하려면 `GOOGLE_CLOUD_UNIVERSE_DOMAIN`을 해당 유니버스의 도메인으로 설정하세요.
+이 값은 모든 인증 방식(JSON 자격 증명, 키 파일, 환경 자격 증명)에 공통으로 적용됩니다.
+
+</Callout>
+
+### Google Cloud Storage (호환 모드) [#google-cloud-storage-compatibility-mode]
+
+[Google Cloud Storage](https://cloud.google.com/storage)는 Google Cloud가 제공하는 전 세계적으로 이용 가능한 객체 스토리지입니다.
+상호 운용성(interoperability) 인터페이스를 통해 S3 호환성을 제공합니다.
+시작하려면 Google Cloud Storage에서 새 버킷을 생성하세요.
+`Settings > Interoperability`로 이동하여 서비스 계정 HMAC 키를 생성하세요.
+HMAC 키가 버킷에 접근하는 데 필요한 권한을 가지고 있는지 확인하세요.
+
+<Callout type="warning">
+
+GCS는 S3 API의 모든 기능을 구현하지 않는다는 점에 유의하세요.
+DeleteObject 요청과 관련하여 애플리케이션에서 오류가 발생할 수 있는 문제가 알려져 있습니다.
+이는 Langfuse 내 대부분의 작업에는 영향을 주지 않지만, 데이터 삭제 기능을 제한할 수 있습니다.
+
+</Callout>
+
+#### 구성 예시
+
+Langfuse를 Google Cloud Storage 버킷에 연결하려면 다음 환경 변수를 설정하세요.
+
+```yaml
+LANGFUSE_S3_EVENT_UPLOAD_BUCKET=my-bucket-name
+LANGFUSE_S3_EVENT_UPLOAD_REGION=auto
+LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID=<HMAC Access Key>
+LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY=<HMAC Secret Key>
+LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT=https://storage.googleapis.com
+LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE=true
+LANGFUSE_S3_EVENT_UPLOAD_PREFIX=events/
+```
+
+### OCI Object Storage (네이티브) [#oci-object-storage]
+
+[OCI Object Storage](https://www.oracle.com/cloud/storage/object-storage/)는 Oracle Cloud Infrastructure가 제공하는 전 세계적으로 이용 가능한 객체 스토리지입니다.
+Langfuse는 OCI SDK를 사용하는 네이티브 OCI Object Storage 통합을 제공하며, 다양한 배포 환경에 적합한 여러 IAM 인증 방식을 지원합니다.
+
+네이티브 OCI 통합을 활성화하려면 `LANGFUSE_USE_OCI_NATIVE_OBJECT_STORAGE=true`를 설정하고, `LANGFUSE_OCI_AUTH_TYPE`을 통해 인증 방식을 선택하세요.
+
+| 변수                                     | 필수 여부 / 기본값 | 설명                                                                                                                                  |
+| ---------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `LANGFUSE_USE_OCI_NATIVE_OBJECT_STORAGE` | `false`            | 네이티브 OCI Object Storage 통합을 활성화하려면 `true`로 설정하세요.                                                                  |
+| `LANGFUSE_OCI_AUTH_TYPE`                 | 필수               | 인증 방식입니다. 다음 중 하나입니다: `workload_identity`, `instance_principal`, `resource_principal`, `oci_profile`, `session_token`. |
+| `LANGFUSE_OCI_CONFIG_FILE`               |                    | OCI 구성 파일 경로입니다. `oci_profile` 및 `session_token` 인증 방식에서 필수입니다.                                                  |
+| `LANGFUSE_OCI_CONFIG_PROFILE`            |                    | OCI 구성 프로필 이름입니다. `oci_profile` 및 `session_token` 인증 방식에서 사용됩니다.                                                |
+
+표준 `LANGFUSE_S3_*` 환경 변수(버킷, 리전, 엔드포인트, 접두사, force path style)는 OCI Object Storage에도 그대로 재사용됩니다. 네이티브 OCI 인증 방식을 사용할 때는 `*_ACCESS_KEY_ID` / `*_SECRET_ACCESS_KEY`를 설정하지 마세요.
+
+#### 인증 방식
+
+| 인증 방식            | 사용 사례                                                                                           |
+| -------------------- | --------------------------------------------------------------------------------------------------- |
+| `instance_principal` | IAM 동적 그룹 정책이 적용된 OCI Compute에서 실행되는 경우입니다. OCI 프로덕션 환경에 권장됩니다.    |
+| `workload_identity`  | OCI Workload Identity가 구성된 OKE(Oracle Kubernetes Engine)에서 실행되는 경우입니다.               |
+| `resource_principal` | Resource Principal 환경 변수를 주입하는 OCI 관리형 서비스 또는 런타임 내부에서 실행되는 경우입니다. |
+| `oci_profile`        | 이름이 지정된 프로필을 사용하는 OCI 구성 파일을 이용한 로컬 개발 환경입니다.                        |
+| `session_token`      | `oci session authenticate`를 통한 단기 사용자 인증입니다. 대화형/개발 환경 사용에 적합합니다.       |
+
+#### 구성 예시 (Instance Principal)
+
+IAM 동적 그룹 정책이 적용된 OCI Compute 프로덕션 배포의 경우:
+
+```yaml
+LANGFUSE_USE_OCI_NATIVE_OBJECT_STORAGE=true
+LANGFUSE_OCI_AUTH_TYPE=instance_principal
+
+LANGFUSE_S3_EVENT_UPLOAD_BUCKET=langfuse-bucket
+LANGFUSE_S3_EVENT_UPLOAD_REGION=us-chicago-1
+LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT=https://objectstorage.us-chicago-1.oraclecloud.com
+LANGFUSE_S3_EVENT_UPLOAD_PREFIX=events/
+```
+
+### Tigris [#tigris]
+
+[Tigris](https://www.tigrisdata.com/)는 이그레스(egress) 비용이 없고 무료 요금제(5GB)를 제공하는 S3 호환 객체 스토리지입니다.
+[Tigris Dashboard](https://console.tigris.dev/)에서 버킷과 Access Key 쌍을 생성하세요.
+액세스 키는 `tid_` 접두사가, 시크릿 키는 `tsec_` 접두사가 붙습니다.
+
+#### 구성 예시
+
+Langfuse를 Tigris 버킷에 연결하려면 다음 환경 변수를 설정하세요.
+
+```yaml
+LANGFUSE_S3_EVENT_UPLOAD_BUCKET=langfuse
+LANGFUSE_S3_EVENT_UPLOAD_REGION=auto
+LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID=tid_YOUR_ACCESS_KEY
+LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY=tsec_YOUR_SECRET_KEY
+LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT=https://t3.storage.dev
+```
+
+<Callout type="info">
+
+Tigris는 기본적으로 virtual-hosted-style 주소 지정 방식을 사용합니다. `LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE`을 `true`로 설정하지 마세요.
+
+</Callout>
+
+### 기타 제공업체 [#other-providers]
+
+Langfuse는 모든 S3 호환 스토리지 제공업체를 지원합니다.
+버킷을 생성하고 Access Key 쌍을 발급하는 방법은 각 제공업체의 문서를 참고하세요.
+Access Key 쌍이 버킷에 접근하는 데 필요한 권한을 가지고 있는지 확인하세요.
+여기에 문서화되어야 할 다른 제공업체가 있다고 생각되면 이 문서에 기여하기 위해 [issue](https://github.com/langfuse/langfuse-docs/issues)
+또는 [pull request](https://github.com/langfuse/langfuse-docs/pulls)를 열어주세요.
+
+## 버킷 수명 주기 정책
+
+Langfuse는 모든 수집(ingestion) 요청마다 원시 이벤트 데이터를 이벤트 업로드 버킷에 업로드합니다.
+시간이 지남에 따라 이 데이터가 누적되어 스토리지 비용이 증가합니다.
+정해진 일수가 지나면 객체를 자동으로 삭제하는 버킷 수명 주기(만료) 정책을 구성하는 것을 권장합니다.
+
+<Callout type="warning">
+Langfuse는 실패한 수집 작업을 재시도하거나, 재생(replay)/재해 복구를 수행하거나, 레거시 `/api/public/ingestion` 경로에서 동일 레코드에 대해 전송된 증분(incremental) 이벤트를 결합하기 위해 버킷에서 원시 이벤트를 다시 읽습니다. 이러한 요구 사항을 충족하도록 수명 주기 만료 기간을 설정하세요(Langfuse Cloud에서는 30일). OpenTelemetry 수집은 자체 완결적(각 스팬이 하나의 완전한 이벤트)이므로, 레코드를 조합하기 위해 이 보존 기간에 의존하지 않습니다.
+
+이 보존 기간은 데이터를 업데이트하는 수단이 아닙니다. 트레이스와 관측(observation)은 수집된 이후 불변(immutable)입니다. 자세한 내용은 [트레이스, 관측, 점수를 업데이트하는 방법은?](/faq/all/tracing-data-updates)을 참고하세요.
+
+</Callout>
+
+사용 중인 스토리지 제공업체에 맞게 수명 주기 만료 규칙을 구성하세요.
+
+- **Amazon S3** — N일 후 객체를 삭제하는 S3 수명 주기 만료 규칙을 생성하세요. [객체 수명 주기 관리](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lifecycle-mgmt.html)를 참고하세요.
+- **MinIO** — `mc ilm rule add --expire-days`를 사용해 만료 규칙을 설정하세요. [mc ilm rule add](https://min.io/docs/minio/linux/reference/minio-mc/mc-ilm-rule-add.html)를 참고하세요.
+- **Cloudflare R2** — R2 대시보드 또는 API를 통해 객체 수명 주기 만료 규칙을 구성하세요. [객체 수명 주기](https://developers.cloudflare.com/r2/buckets/object-lifecycles/)를 참고하세요.
+- **Tigris** — Tigris Dashboard 또는 AWS CLI를 통해 객체 수명 주기 만료 규칙을 구성하세요. [객체 수명 주기](https://www.tigrisdata.com/docs/objects/object-lifecycle/)를 참고하세요.
+- **Azure Blob Storage** — 삭제 작업이 포함된 수명 주기 관리 정책을 생성하세요. [수명 주기 관리 정책 구성](https://learn.microsoft.com/en-us/azure/storage/blobs/lifecycle-management-policy-configure)을 참고하세요.
+- **Google Cloud Storage** — Delete 작업과 age 조건을 사용하는 Object Lifecycle Management를 사용하세요. [Object Lifecycle Management](https://cloud.google.com/storage/docs/lifecycle)를 참고하세요.
+- **OCI Object Storage** — 객체 age 기반 삭제 작업이 포함된 수명 주기 정책 규칙을 생성하세요. [Using Object Lifecycle Management](https://docs.oracle.com/en-us/iaas/Content/Object/Tasks/usinglifecyclepolicies.htm)를 참고하세요.
+
+<Callout type="info">
+
+Langfuse는 업로드된 이벤트 파일을 `blob_storage_file_log`라는 ClickHouse 테이블에 기록합니다.
+버킷 수명 주기 정책을 구성했다면, 이 테이블을 작게 유지하고 처리 속도를 높이기 위해 동일한 TTL을 이 테이블에도 설정하는 것이 좋습니다.
+
+```sql
+ALTER TABLE blob_storage_file_log MODIFY TTL created_at + INTERVAL <DAYS> DAY DELETE;
+```
+
+`<DAYS>`는 구성한 버킷 수명 주기 만료 기간과 일치해야 합니다.
+
+</Callout>

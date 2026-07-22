@@ -1,0 +1,33 @@
+---
+title: 암호화
+description: Langfuse Cloud가 전송 중 및 저장 중인 데이터를 어떻게 암호화하는지에 대한 세부 정보입니다.
+sourceRevision: f4e5e1edb9fa4c33680b0a37ca039a86a341cde0
+translationStatus: machine
+---
+
+# 암호화
+
+Langfuse는 데이터가 전송되는 동안과 저장되는 동안 모두 보호하기 위해 강력한 암호화 방법을 사용합니다.
+
+이 페이지는 Langfuse Cloud의 암호화 관행을 설명합니다. 셀프 호스팅 배포의 경우 [셀프 호스팅 가이드](/self-hosting/configuration/encryption)를 참조하세요.
+
+## 전송 중 암호화
+
+사용자의 애플리케이션, Langfuse SDK, Langfuse 서버 간에 전송되는 모든 데이터는 **TLS 1.2(Transport Layer Security)**를 사용하여 암호화됩니다. 이를 통해 전송 중 도청이나 변조로부터 데이터를 보호합니다.
+
+## 저장 중 암호화
+
+Langfuse 인프라 내에 저장된 데이터는 강력한 업계 표준 암호화 알고리즘인 **AES-256**을 사용하여 저장 중 암호화됩니다.
+
+이는 다음에 저장된 데이터에 적용됩니다.
+
+| 서비스              | 암호화 표준 |
+| ------------------- | ----------- |
+| Elasticache (Redis) | AES-256     |
+| Aurora (Postgres)   | AES-256     |
+| Clickhouse          | AES-256     |
+| S3 / Blob Storage   | AES-256     |
+
+## 문의
+
+암호화 관행에 대한 질문이 있으시면 [저희에게 문의하세요](/talk-to-us).

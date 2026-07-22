@@ -18,6 +18,7 @@ import { NotebookBanner } from "./NotebookBanner";
 import { COOKBOOK_ROUTE_MAPPING } from "@/lib/cookbook_route_mapping";
 import { cn } from "@/lib/utils";
 import { Image } from "./ui/image";
+import { getStrings } from "@/lib/i18n/strings";
 import { Dialog, DialogContent } from "./ui/dialog";
 import {
   DropdownMenu,
@@ -69,8 +70,9 @@ const pathsWithCopyAsMarkdownButton = [
 ];
 const isCustomerStory = (pathname: string) => pathname.startsWith("/users/");
 
-export const CopyMarkdownButton = () => {
+export const CopyMarkdownButton = ({ lang }: { lang?: string } = {}) => {
   const pathname = usePathname();
+  const strings = getStrings(lang);
   const capture = usePostHogClientCapture();
   const [copyState, setCopyState] = useState<
     "idle" | "loading" | "copied" | "error"
@@ -188,9 +190,9 @@ export const CopyMarkdownButton = () => {
   );
   if (!shouldShow) return null;
 
-  let buttonText = "Copy page";
+  let buttonText = strings.copyPage;
   if (copyState === "loading") {
-    buttonText = "Copying...";
+    buttonText = strings.copying;
   } else if (copyState === "copied") {
     buttonText = "Copied!";
   } else if (copyState === "error") {

@@ -1,0 +1,46 @@
+---
+title: 관리 개요 (셀프 호스팅)
+description: 셀프 호스팅 Langfuse 배포를 위한 관리 기능의 종합 개요입니다.
+label: "Version: v3"
+sidebarTitle: 개요
+sourceRevision: 9c0d419484845ffbd56805fd068677856e5d764c
+translationStatus: machine
+---
+
+# 관리 개요 (셀프 호스팅)
+
+셀프 호스팅 Langfuse는 배포, 사용자, 조직, 데이터를 관리하기 위한 종합적인 관리 기능을 제공합니다.
+
+<Callout type="info">
+
+다음 기능을 사용하기 전에 [RBAC](/docs/administration/rbac) 문서를 먼저 숙지하시기 바랍니다.
+
+</Callout>
+
+이 기능 중 일부는 [Enterprise Edition](/pricing-self-host)에서만 사용할 수 있으며 `(EE)`로 표시되어 있습니다.
+
+## 사용자 및 접근 관리
+
+- **[자동 접근 프로비저닝](/self-hosting/administration/automated-access-provisioning)**: 신규 사용자를 기본 조직/프로젝트에 자동으로 할당
+- **[조직 생성자](/self-hosting/administration/organization-creators)** (EE): 조직을 생성할 수 있는 사용자를 제한
+- **[관리자 API (SCIM)](/docs/administration/scim-and-org-api)**: 엔터프라이즈 사용자 프로비저닝 및 대량 작업
+
+## 조직 및 프로젝트 관리
+
+- **[헤드리스 초기화](/self-hosting/administration/headless-initialization)**: 환경 변수를 통해 리소스 생성(단일 조직, 프로젝트, 사용자, API 키)을 자동화(예: CI/CD 용도)
+- **[인스턴스 관리 API](/self-hosting/administration/instance-management-api)** (EE): 프로그래밍 방식의 조직 관리를 위한 REST API
+- **[관리자 API](/docs/administration/scim-and-org-api)**: 조직 범위의 관리자 API를 통해 프로젝트 관리
+
+## 인터페이스 및 브랜딩
+
+- **[UI 커스터마이징](/self-hosting/administration/ui-customization)** (EE): 공동 브랜딩, 커스텀 링크, 모듈 가시성, LLM API 기본값
+
+## 데이터 및 보안
+
+- **[감사 로그](/docs/administration/audit-logs)** (EE): 컴플라이언스를 위한 종합적인 활동 추적
+- **[데이터 삭제](/docs/administration/data-deletion)**: 유연한 데이터 제거(트레이스, 프로젝트, 조직, 사용자)
+- **[데이터 보존](/docs/administration/data-retention)**: 설정 가능한 정책을 통한 자동화된 라이프사이클 관리
+
+## API 및 모니터링
+
+- **[LLM 연결](/docs/administration/llm-connection)**: OpenAI, Anthropic, Azure 등과의 연결을 관리합니다. UI 또는 API를 통해 가능합니다.

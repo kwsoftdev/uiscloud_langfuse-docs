@@ -1,0 +1,33 @@
+---
+title: AI 기능
+description: Langfuse 내 AI 기반 기능과 데이터 관련 영향에 대한 안내입니다.
+sourceRevision: 610922eefd6ca5e56a43821c2baf4799625fcef9
+translationStatus: machine
+---
+
+# Langfuse 내 AI 기반 기능 (베타)
+
+Langfuse는 제품 내에서 워크플로우를 간소화하고 속도를 높이기 위한 AI 기반 기능을 제공합니다. 이 기능들은 현재 베타 단계이며 Langfuse Cloud에서만 사용할 수 있습니다.
+
+## 옵트인
+
+모든 AI 기반 기능은 옵트인이 필요하며, 기본적으로 활성화되어 있지 않습니다. 옵트인은 조직 수준에서 관리되며 [관리자 또는 소유자](/docs/administration/rbac)가 변경할 수 있습니다.
+관리자와 소유자는 제품 및 서비스 개선을 위한 AI 기능 트레이싱을 별도로 활성화하거나 비활성화할 수도 있습니다. 이는 AI 기능 자체를 비활성화하지는 않습니다.
+
+이 설정은 조직 내 모든 사용자와 프로젝트에 적용됩니다.
+
+## 사용 가능한 AI 기능
+
+Langfuse에서 사용 가능한 AI 기능의 (전체가 아닌) 예시 목록입니다:
+
+- 트레이스, 관찰(observation), 메트릭에 대해 자연어로 질문할 수 있는 [Langfuse Assistant](/docs/langfuse-assistant)
+- 테이블용 자연어 기반 필터 빌더
+
+## 데이터 프라이버시
+
+Langfuse의 AI 기능은 AWS Bedrock에서 호스팅되는 모델로 구동됩니다:
+
+- 사용자의 [Langfuse 데이터 리전](/security/data-regions)과 동일한 AWS 리전의 모델을 사용합니다.
+- Amazon Bedrock은 데이터를 보관하지 않는(zero data retention) 정책을 적용하며, 로깅을 하지 않고, 프로바이더 간 격리를 제공하며, 사용자의 데이터로 학습하지 않습니다. 자세한 내용은 [Bedrock 데이터 보호](https://docs.aws.amazon.com/bedrock/latest/userguide/data-protection.html)를 참고하세요.
+- 데이터는 모델 개발사와 같은 제3자와 절대 공유되지 않습니다.
+- AWS Bedrock은 HIPAA, SOC2, ISO 27001을 완전히 준수합니다. 자세한 내용은 [Bedrock 보안 및 컴플라이언스](https://aws.amazon.com/bedrock/security-compliance/)와 [컴플라이언스 개요](/security)를 참고하세요.

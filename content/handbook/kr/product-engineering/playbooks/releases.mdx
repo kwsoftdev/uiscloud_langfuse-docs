@@ -1,0 +1,35 @@
+---
+title: 릴리스
+sourceRevision: ecc69b1d83e5a0e352ad0c067e6483ce87e579d5
+translationStatus: machine
+---
+
+# 릴리스
+
+## Langfuse Cloud 릴리스
+
+우리는 하루에도 여러 번 Langfuse Cloud 프로덕션에 점진적인 변경 사항을 배포합니다.
+
+변경 사항을 릴리스하는 방법:
+
+- Langfuse Cloud: `production` 브랜치는 모든 Langfuse Cloud 리전에 배포됩니다. OSS 릴리스를 진행하기 전에 잠재적인 장애를 모니터링하기 위해, 이 방식으로 변경 사항을 Langfuse Cloud에 먼저 릴리스하는 경우가 많습니다.
+- OSS: (아래 참고)
+
+## OSS 릴리스
+
+우리는 매주 여러 번 새로운 릴리스를 만듭니다. 시맨틱 버저닝(semantic versioning)을 따릅니다.
+
+1. `main` 브랜치에 있는지 확인합니다. `git status`를 실행하여 `origin:main`을 추적하고 있는지 확인합니다.
+2. `pnpm run release`를 실행합니다. 이 명령은 다음을 수행합니다:
+   1. 패키지 전반의 버전 번호를 올립니다
+   2. 커밋을 main에 푸시합니다
+   3. GitHub에 릴리스 노트를 트리거합니다 (컨벤셔널 커밋 타입에 따라 변경 사항을 그룹화해 주세요. 이전 릴리스를 참고하세요)
+3. GitHub Actions가 이 커밋을 `production` 브랜치로 자동으로 force push하여 Langfuse Cloud에 배포합니다(위 참고). 추가 작업은 필요하지 않습니다.
+
+## 새로운 기능
+
+새로운 기능을 릴리스할 때:
+
+- 이 기능을 요청했거나 피드백을 공유해 준 고객에게 알립니다. Pylon 스레드를 Linear 이슈에 연결해 두면, Linear에서 이슈가 완료로 표시될 때 `close the loop` 상태로 자동 변경됩니다([product ops](/handbook/product-engineering/how-we-work/product-ops) 참고)
+- 문서를 업데이트합니다
+- 체인지로그 게시물을 작성합니다

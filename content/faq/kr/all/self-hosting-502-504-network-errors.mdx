@@ -1,0 +1,16 @@
+---
+title: 셀프 호스팅 Langfuse에서 발생하는 간헐적인 502, 504 네트워크 오류
+tags: [self-hosting]
+sourceRevision: 9c0d419484845ffbd56805fd068677856e5d764c
+translationStatus: machine
+---
+
+# 셀프 호스팅 Langfuse에서 발생하는 간헐적인 502, 504 네트워크 오류
+
+간헐적으로 502 및 504 네트워크 오류가 발생하고 있다면, 이는 로드밸런서(Loadbalancer)와 keep-alive 설정과 관련이 있을 가능성이 높습니다.
+서버의 keep-alive 값을 로드밸런서의 idle timeout보다 높게 설정하는 것을 권장합니다.
+
+예를 들어, AWS Application Loadbalancer의 기본 idle timeout은 60초입니다.
+서비스가 45초 후에 연결을 종료하면, 로드밸런서는 여전히 살아있다고 판단하는 해당 연결을 재사용하려고 시도하며, 그 결과 502 오류가 발생하게 됩니다.
+
+따라서 Langfuse Web 컨테이너의 `KEEP_ALIVE_TIMEOUT`을 로드밸런서의 idle timeout보다 최소 5초 이상 높게 설정할 것을 권장합니다.

@@ -1,0 +1,145 @@
+---
+title: 사용자 피드백
+description: LLM 또는 에이전트 출력에 대한 사용자 피드백을 수집하여 모델 성능과 사용자 만족도를 개선하세요.
+sidebarTitle: 사용자 피드백
+sourceRevision: 98a52a142cc86af597f5a71c5aa9829d84ec33c9
+translationStatus: machine
+---
+
+# 사용자 피드백
+
+사용자 피드백은 여러분의 AI가 실제로 사용자에게 도움이 되었는지를 측정합니다. 이를 활용해 품질 문제를 찾고, 더 나은 평가 데이터셋을 구축하며, 실제 사용자 경험을 바탕으로 개선 우선순위를 정할 수 있습니다. Langfuse에서 피드백은 [점수](/docs/scores)로 기록되어 트레이스와 연결됩니다.
+
+<div className="flex gap-4 flex-col md:flex-row">
+  <Frame className="flex-1">![User Feedback Example](/images/docs/observability/user-feedback-example.png)</Frame>
+  <Frame className="flex-1">![Feedback Analysis](/images/docs/observability/user-feedback-score.png)</Frame>
+</div>
+
+## 피드백 유형
+
+### 명시적 피드백
+
+사용자가 좋아요/싫어요, 별점, 또는 댓글을 통해 직접 응답을 평가합니다.
+| 장점 | 단점 |
+|------|------|
+| 만족도에 대한 명확한 신호 | 낮은 응답률 |
+| 구현이 간단함 | 불만족한 사용자가 응답할 가능성이 더 높음 |
+| 조치하기 쉬움 | 사용자의 행동이 필요함 |
+
+### 암묵적 피드백
+
+읽는 데 소요된 시간, 출력 복사, 제안 수락, 쿼리 재시도 등 사용자 행동에서 도출됩니다.
+
+| 장점                            | 단점             |
+| ------------------------------- | ---------------- |
+| 모든 상호작용에서 대량으로 발생 | 구현이 더 어려움 |
+| 사용자의 노력이 필요 없음       | 모호한 신호      |
+| 실제 사용 현황을 반영           | 해석이 필요함    |
+
+두 유형 모두 Langfuse에서 [점수](/docs/evaluation/core-concepts)로 동작합니다. 점수로 트레이스를 필터링하거나, [주석 큐](/docs/evaluation/evaluation-methods/annotation-queues)를 구축하거나, 자동화된 평가를 위한 정답 데이터로 피드백을 활용할 수 있습니다.
+
+## 빠른 시작
+
+이 예제는 Next.js와 AI SDK로 만든 챗봇에서 명시적 사용자 피드백을 수집하는 방법을 보여줍니다. 전체 구현은 [Langfuse Example](https://github.com/langfuse/langfuse-examples/tree/main/applications/user-feedback) 저장소에서 확인할 수 있습니다.
+
+### 1. 프런트엔드로 트레이스 ID 반환
+
+백엔드에서 트레이스 ID를 전송하면 프런트엔드가 피드백을 해당 트레이스와 연결할 수 있습니다.
+
+```typescript
+// app/api/chat/route.ts
+import { getActiveTraceId } from "@langfuse/tracing";
+
+export const POST = observe(async (req: Request) => {
+  const result = streamText({
+    model: openai('gpt-4o-mini'),
+    messages: convertToModelMessages(messages),
+  });
+  return result.toUIMessageStreamResponse({
+    generateMessageId: () => getActiveTraceId() || "",
+  });
+});
+```
+
+### 2. 프런트엔드에서 피드백 수집
+
+Langfuse Browser SDK를 사용해 피드백을 점수로 전송합니다. Browser SDK는 공개 키(public key)만 필요하며, 프런트엔드 코드에는 절대 Langfuse 비밀 키(secret key)를 노출하지 마세요.
+
+```typescript
+import { LangfuseBrowserClient } from "@langfuse/browser";
+
+const langfuse = new LangfuseBrowserClient({
+  publicKey: process.env.NEXT_PUBLIC_LANGFUSE_PUBLIC_KEY!,
+  baseUrl: process.env.NEXT_PUBLIC_LANGFUSE_BASE_URL,
+});
+function FeedbackButtons({ messageId }: { messageId: string }) {
+  const handleFeedback = async (value: number, comment?: string) => {
+    await langfuse.score({
+      traceId: messageId,
+      id: `user-feedback-${messageId}`,
+      name: "user-feedback",
+      value: value, // 긍정이면 1, 부정이면 0
+      dataType: "BOOLEAN",
+      comment: comment,
+    });
+  };
+  return (
+    <div>
+      <button onClick={() => handleFeedback(1)}>:+1:</button>
+      <button onClick={() => handleFeedback(0)}>:-1:</button>
+    </div>
+  );
+}
+```
+
+### 3. Langfuse에서 피드백 확인
+
+피드백은 트레이스에 대한 점수로 표시됩니다. `user-feedback < 1`로 필터링해 낮은 평가를 받은 응답을 찾을 수 있습니다.
+
+<Frame className="flex-1">![Feedback Analysis](/images/docs/observability/user-feedback-score.png)</Frame>
+
+## 서버 사이드 피드백
+
+사용자 설문조사나 후속 상호작용 이후 등 필요한 시점에 백엔드에서 피드백을 기록할 수 있습니다. 티켓 종료나 작업 성공 완료와 같은 암묵적 피드백 신호를 기록하는 데에도 활용할 수 있습니다.
+
+```python
+from langfuse import get_client
+langfuse = get_client()
+
+# 고객 지원 티켓이 성공적으로 해결되었는지 확인
+ticket_status = checkIfTicketClosed(ticket_id="ticket-456")
+if ticket_status.is_closed:
+    langfuse.create_score(
+        trace_id=ticket_status.trace_id,
+        name="ticket-resolution",
+        value=1,
+        comment=f"Ticket closed successfully after {ticket_status.resolution_time}"
+    )
+else:
+    langfuse.create_score(
+        trace_id=ticket_status.trace_id,
+        name="ticket-resolution",
+        value=0,
+        comment=f"Ticket escalated to human agent"
+    )
+```
+
+## LLM-as-a-Judge를 활용한 암묵적 피드백
+
+LLM을 평가기로 활용해 사용자 감정, 만족도, 참여도와 같은 특성을 모든 응답에 대해 자동으로 평가할 수 있습니다. 이를 통해 사용자의 개입 없이도 대규모로 피드백을 수집할 수 있습니다.
+
+<Frame>![LLM-as-a-Judge evaluating tone](/images/docs/observability/llm-as-a-judge-feedback.png)</Frame>
+
+구현 패턴과 예제는 [LLM-as-a-Judge 평가기](/docs/evaluation/evaluation-methods/llm-as-a-judge)를 참고하세요.
+
+## 예제 앱
+
+[user-feedback 예제](https://github.com/langfuse/langfuse-examples/tree/main/applications/user-feedback)는 다음을 포함한 완전한 Next.js 구현을 보여줍니다.
+
+- OpenTelemetry 트레이싱
+- 선택적 댓글을 포함한 좋아요/싫어요
+- 대화 전반에 걸친 세션 추적
+
+## 관련 자료
+
+신호 선택부터 실제 조치까지 전체 과정을 다루는 엔드투엔드 가이드는 [사용자 피드백 루프 구축 방법](/guides/user-feedback-loop)을 참고하세요.

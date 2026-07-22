@@ -1,0 +1,25 @@
+---
+title: Langfuse를 설정했는데 대시보드에 트레이스가 보이지 않습니다. 어떻게 해결하나요?
+tags: [evaluation, observability, observability-get-started]
+sourceRevision: 9c0d419484845ffbd56805fd068677856e5d764c
+translationStatus: machine
+---
+
+# Langfuse에서 트레이스가 보이지 않습니다("Tracing Pending"). 어떻게 해결하나요?
+
+Langfuse는 모든 트레이싱 통합을 비동기적으로 실행합니다([자세히 알아보기](/docs/tracing#queuing-batching)). 이 문제를 해결하기 위한 몇 가지 단계는 다음과 같습니다.
+
+1. **통합 확인**: 애플리케이션이 Langfuse와 올바르게 통합되어 있는지 확인합니다. 설정을 확인하려면 [퀵스타트 가이드](/docs/observability/get-started)를 따라 진행하세요.
+2. **API 자격 증명 확인**: 애플리케이션에서 사용하는 API 자격 증명이 Langfuse 프로젝트 설정에 구성된 자격 증명과 일치하는지 확인합니다. Langfuse SDK를 임포트하거나 인스턴스화하기 전에 자격 증명을 설정하세요. Jupyter Notebook을 사용하는 경우 커널이나 세션을 재시작해 보세요.
+3. **트레이싱 설정 점검**: 트레이싱 설정이 올바르게 구성되어 있는지 확인합니다. 예를 들어 `LANGFUSE_BASE_URL`(Python 및 JS/TS)이 올바른 엔드포인트로 설정되어 있는지 확인하세요.
+4. **로그 검토**: 애플리케이션의 로그를 확인하여 Langfuse와 관련된 오류가 있는지 확인합니다. 이를 통해 통합 문제나 네트워크 연결 문제를 파악하는 데 도움이 됩니다. 필요하다면 [디버그 모드](/docs/observability/sdk/advanced-features#logging--debugging)를 활성화하여 더 자세한 정보를 확인할 수 있습니다.
+5. **수동 플러시**: 서버리스 함수, 로컬 배치 스크립트, Jupyter Notebook과 같이 짧게 실행되고 종료되는 애플리케이션을 사용하는 경우, 애플리케이션이 종료되기 전에 이벤트를 수동으로 플러시하고 있는지 확인하세요. 이는 이벤트 손실을 방지하기 위해 중요합니다. 자세한 내용은 [여기](/docs/observability/features/queuing-batching)에서 확인할 수 있습니다.
+6. **네트워크 문제**: 애플리케이션이 Langfuse로 데이터를 전송하는 것을 막을 수 있는 네트워크 문제가 없는지 확인합니다. 방화벽이나 네트워크 설정이 Langfuse 엔드포인트로의 아웃바운드 연결을 허용하는지 확인하세요.
+7. **배치 처리 설정**: 처리량이 많은 애플리케이션의 경우 이벤트가 적시에 전송되도록 배치 처리 설정을 확인하세요. `flushAt` 및 `flushInterval` 설정을 필요에 맞게 조정할 수 있습니다.
+8. **기존 OpenTelemetry 설정과의 충돌**: Sentry, Datadog, Honeycomb, Pydantic Logfire 등 OpenTelemetry를 함께 사용하는 다른 관측성 도구를 사용하는 경우, Langfuse의 트레이싱과 충돌할 수 있습니다. 이러한 충돌을 해결하려면 [기존 OpenTelemetry 설정과 함께 Langfuse 사용하기](/faq/all/existing-otel-setup)를 참고하세요.
+
+위 단계를 따라가면 Langfuse 대시보드에 트레이스가 표시되지 않는 문제를 파악하고 해결할 수 있을 것입니다. 문제가 계속되면 [문의해 주세요](/support). 기꺼이 도와드리겠습니다.
+
+import GitHubStarCTA from "@/components-mdx/github-cta.mdx";
+
+<GitHubStarCTA />

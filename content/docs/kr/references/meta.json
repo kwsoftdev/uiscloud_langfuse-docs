@@ -1,0 +1,10 @@
+{
+  "title": "SDK 및 API 레퍼런스",
+  "pages": [
+    "external:[API 레퍼런스 ↗](https://api.reference.langfuse.com)",
+    "external:[MCP 레퍼런스 ↗](https://mcp.reference.langfuse.com)",
+    "external:[Python SDK ↗](https://python.reference.langfuse.com)",
+    "external:[JS SDK ↗](https://js.reference.langfuse.com)",
+    "external:[Java SDK ↗](https://github.com/langfuse/langfuse-java)"
+  ]
+}

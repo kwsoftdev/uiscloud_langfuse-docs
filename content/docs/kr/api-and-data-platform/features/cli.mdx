@@ -1,0 +1,63 @@
+---
+title: CLI
+sidebarTitle: CLI
+description: 커맨드라인에서 Langfuse API 전체를 사용할 수 있습니다. AI 에이전트와 파워 유저를 위해 만들어졌습니다.
+sourceRevision: ffe0f2fd1a2580c9f3dbec9055371593e4e721bd
+translationStatus: machine
+---
+
+# Langfuse CLI
+
+Langfuse CLI는 [Langfuse API](/docs/api-and-data-platform/features/public-api) 전체를 감싸고 있어, 터미널에서 바로 Langfuse와 상호작용할 수 있습니다. AI 코딩 에이전트와 커맨드라인을 선호하는 파워 유저를 위해 만들어졌습니다.
+
+<Frame fullWidth>
+  ![Langfuse CLI](/images/changelog/2026-02-17-langfuse-cli.jpg)
+</Frame>
+
+전체 문서는 별도의 [CLI GitHub 저장소](https://github.com/langfuse/langfuse-cli)에서 확인할 수 있습니다.
+
+다음 명령어로 시작하세요.
+
+```bash
+npx langfuse-cli api <resource> <action>
+```
+
+아니면 코딩 에이전트에게 대신 설치해달라고 요청해도 됩니다.
+
+```markdown
+please install langfuse-cli
+```
+
+## 인증 [#authentication]
+
+CLI는 Langfuse SDK 및 공개 API에서 사용하는 것과 동일한 프로젝트 API 키 쌍으로 인증합니다. Langfuse UI의 **Project settings → API Keys**에서 키 쌍을 생성한 다음, CLI 명령을 실행하기 전에 자격 증명을 환경 변수로 노출하세요.
+
+```bash
+export LANGFUSE_PUBLIC_KEY="pk-lf-..."
+export LANGFUSE_SECRET_KEY="sk-lf-..."
+
+# 리전별 호스트입니다. 기본값은 https://cloud.langfuse.com (EU)입니다.
+# US:    https://us.cloud.langfuse.com
+# Japan: https://jp.cloud.langfuse.com
+# HIPAA: https://hipaa.cloud.langfuse.com
+# Self-hosted: your own deployment URL.
+export LANGFUSE_BASE_URL="https://cloud.langfuse.com"
+```
+
+CLI는 이 값들을 자동으로 인식하므로 별도의 `login` 단계가 필요하지 않습니다. 키는 단일 프로젝트로 범위가 지정되므로, 상호작용하려는 프로젝트마다 다른 키 쌍을 사용하세요.
+
+## 할 수 있는 일
+
+CLI는 [Langfuse API](/docs/api-and-data-platform/features/public-api)가 할 수 있는 모든 작업을 수행할 수 있습니다.
+
+전체 OpenAPI 스펙을 동적으로 감싸기 때문에, 모든 엔드포인트(트레이스, 프롬프트, 데이터셋, 점수, 세션, 메트릭 등)를 CLI 명령으로 사용할 수 있습니다. 자세한 내용은 전체 [API Reference](https://api.reference.langfuse.com)를 참고하세요.
+
+## 사용하는 이유
+
+- **코딩 에이전트가 Langfuse를 대신 관리하도록 할 수 있습니다.** Cursor, Claude Code, Windsurf 등이 CLI를 사용해 데이터셋을 생성하고, 트레이스를 가져오고, 프롬프트를 업데이트하는 등의 작업을 에디터를 벗어나지 않고 수행할 수 있습니다.
+- **워크플로우를 스크립트화할 수 있습니다.** 트레이스 내보내기, 배치 스코어링, 환경 간 프롬프트 동기화 같은 반복 작업을 CI/CD나 bash 스크립트에서 자동화할 수 있습니다.
+- **간단한 조회는 UI보다 빠릅니다.** 최근 트레이스 5개를 가져오거나, 프롬프트 버전을 확인하거나, 점수 목록을 조회하는 작업을 몇 초 만에 처리할 수 있습니다.
+
+## Agent Skills와 함께 사용하기
+
+CLI는 [Agent Skills](/docs/api-and-data-platform/features/agent-skill)와 함께 작동하도록 설계되었습니다. 이 스킬은 에이전트가 엔드포인트를 탐색하고, 일반적인 워크플로우를 따르고, 문서에 접근하는 방법을 모두 CLI를 통해 알려줍니다. 스킬, CLI, MCP 서버가 어떻게 맞물려 동작하는지 전체 그림을 보려면 [Langfuse for Agents](/agents)를 참고하거나, [블로그 게시물](/blog/2026-02-13-will-you-be-my-cli)을 읽어보세요.

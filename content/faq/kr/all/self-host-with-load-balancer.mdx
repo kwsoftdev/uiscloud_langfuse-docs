@@ -1,0 +1,10 @@
+---
+title: 로드 밸런서 뒤에 여러 개의 Langfuse 인스턴스를 배포할 수 있나요?
+tags: [self-hosting]
+sourceRevision: 9c0d419484845ffbd56805fd068677856e5d764c
+translationStatus: machine
+---
+
+# 로드 밸런서 뒤에 여러 개의 Langfuse 인스턴스를 배포할 수 있나요?
+
+네, Langfuse 애플리케이션 자체는 완전히 상태를 저장하지 않으며(stateless) 단일 데이터베이스에만 의존하므로 로드 밸런서 뒤에 여러 인스턴스를 배포할 수 있습니다. 데이터베이스가 연결 수를 충분히 처리할 수 있도록 구성되어 있는지 확인하세요.

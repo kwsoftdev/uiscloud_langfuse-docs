@@ -1,0 +1,326 @@
+---
+title: "Python v3 → v4"
+description: Langfuse Python SDK를 v3에서 v4로 업그레이드하기 위한 마이그레이션 가이드입니다.
+category: SDKs
+sourceRevision: dfca55f698615475291f342e672b94973b699339
+translationStatus: machine
+---
+
+# Python v3 → v4
+
+Python SDK v4는 **[관측 단위 중심 데이터 모델(observation-centric data model)](/docs/observability/data-model)**을 도입합니다. 이 모델에서는 상관관계 속성(`user_id`, `session_id`, `metadata`, `tags`)이 트레이스에만 존재하는 것이 아니라 모든 관측 단위(observation)로 전파됩니다. 이를 통해 비용이 많이 드는 조인 없이 단일 테이블 쿼리가 가능해져 대규모 환경에서 쿼리 성능이 크게 향상됩니다.
+
+이는 트레이스 속성을 설정하는 방식도 바꿉니다. 이제 `update_current_trace()`로 트레이스 객체를 명령형으로 업데이트하는 대신, 현재 스코프 내에서 생성된 현재 및 모든 하위 관측 단위에 속성을 자동으로 적용하는 컨텍스트 매니저인 `propagate_attributes()`를 사용합니다.
+
+<Callout type="warning">
+  v4는 기본 OpenTelemetry 내보내기(export) 동작을 변경합니다. Langfuse는 더 이상
+  기본적으로 모든 스팬을 내보내지 않습니다. 이전에 비-LLM 스팬(HTTP, DB, 큐,
+  프레임워크 내부 동작)이 전달되는 것에 의존하고 있었다면, 업그레이드 전에
+  아래의 첫 번째 호환성 깨짐(breaking change) 항목을 확인하세요.
+</Callout>
+
+## 호환성이 깨지는 변경 사항 (Breaking Changes)
+
+### 스마트 기본 스팬 필터링이 전체 내보내기 동작을 대체
+
+이전 버전에서는 기본적으로 모든 OpenTelemetry 스팬을 내보내면서 인프라 및 비-LLM 계측(HTTP, DB, 큐, 프레임워크 내부 동작)으로 인해 트레이스 노이즈가 증가했습니다. 트레이스를 더 집중적이고 유용하게 유지하기 위해 v4는 스마트 기본 스팬 필터를 도입합니다.
+
+기본적으로 v4는 다음 중 하나라도 해당하면 스팬을 내보냅니다.
+
+- 스팬이 Langfuse(`langfuse-sdk`)에 의해 생성된 경우
+- 스팬에 `gen_ai.*` 속성이 있는 경우
+- 스팬 계측 스코프(instrumentation scope)가 알려진 LLM 스코프 접두사(예: `openinference`, `langsmith`, `haystack`, `litellm`)와 일치하는 경우
+
+v4 이전에는 차단되지 않은 계측 스코프가 기본적으로 내보내졌습니다.
+
+#### v4 이전의 "전체 내보내기" 동작 유지하기
+
+```python
+from langfuse import Langfuse
+
+langfuse = Langfuse(should_export_span=lambda span: True)
+```
+
+#### 기본 동작과 커스텀 필터 조합하기
+
+```python
+from langfuse import Langfuse
+from langfuse.span_filter import is_default_export_span
+
+langfuse = Langfuse(
+    should_export_span=lambda span: (
+        is_default_export_span(span)
+        or (
+            span.instrumentation_scope is not None
+            and span.instrumentation_scope.name.startswith("my_framework")
+        )
+    )
+)
+```
+
+#### Python 호환성 참고: `blocked_instrumentation_scopes`는 지원 중단(deprecated) 예정
+
+`blocked_instrumentation_scopes`는 v4에서도 계속 동작하지만 지원이 중단되었으며 향후 버전에서 제거될 예정입니다. `should_export_span`으로 마이그레이션하세요.
+
+`should_export_span`을 사용한 동등한 차단 목록(denylist) 동작:
+
+```python
+from langfuse import Langfuse
+from langfuse.span_filter import is_default_export_span
+
+blocked = {"sqlite", "requests"}
+
+langfuse = Langfuse(
+    should_export_span=lambda span: (
+        is_default_export_span(span)
+        and (
+            span.instrumentation_scope is None
+            or span.instrumentation_scope.name not in blocked
+        )
+    )
+)
+```
+
+`blocked_instrumentation_scopes`와 `should_export_span`이 모두 설정된 경우, 차단된 스코프가 여전히 우선합니다(강제 거부).
+
+#### 트레이스 트리에 발생할 수 있는 부작용과 디버깅 방법
+
+필터링으로 인해 중간 스팬이나 상위 스팬이 제외되는 동안 하위 스팬은 계속 내보내지는 경우, 트레이스 트리가 끊어질 수 있습니다. 트레이스가 끊어져 보인다면 SDK 디버그 로깅을 활성화하여 제외된 스팬을 확인한 뒤, 콜백에서 필요한 스코프를 허용 목록(allowlist)에 추가하세요.
+
+- Python 디버그 모드: `Langfuse(debug=True)`를 사용하거나 `LANGFUSE_DEBUG="True"`를 설정하세요.
+- [SDK 고급 기능](/docs/observability/sdk/advanced-features) 및 [원치 않는 스팬에 대한 OpenTelemetry 문제 해결](/faq/all/existing-otel-setup#unwanted-spans-in-langfuse)을 참고하세요.
+
+### `update_current_trace()`가 3개의 메서드로 분리됨
+
+새로운 모델에서는 상관관계 속성(`user_id`, `session_id`, `metadata`, `tags`, 그리고 요청 단위의 `environment`)이 트레이스뿐 아니라 모든 관측 단위에 존재해야 합니다. 이 때문에 이러한 속성은 현재 스코프 내에서 생성된 현재 및 모든 하위 관측 단위에 자동으로 이 속성들을 적용하는 컨텍스트 매니저인 `propagate_attributes()`로 이동했습니다.
+
+**v3:**
+
+```python
+langfuse.update_current_trace(
+    name="trace-name",
+    user_id="user-123",
+    session_id="session-abc",
+    version="1.0",
+    input={"query": "hello"},
+    output={"result": "world"},
+    metadata={"key": "value"},
+    tags=["tag1"],
+    public=True,
+)
+```
+
+**v4 (분리됨):**
+
+```python
+from langfuse import observe, propagate_attributes, get_client
+
+langfuse = get_client()
+
+@observe()
+def my_function():
+    # (a) 상관관계 속성 → propagate_attributes() 컨텍스트 매니저
+    with propagate_attributes(
+        trace_name="trace-name",  # 참고: 'name'이 이제 'trace_name'으로 변경됨
+        user_id="user-123",
+        session_id="session-abc",
+        version="1.0",
+        metadata={"key": "value"},
+        tags=["tag1"],
+        environment="staging",
+    ):
+        result = call_llm("hello")
+
+    # (b) 트레이스 입출력 (지원 중단됨, 레거시 트레이스 레벨 LLM-as-a-judge 구성에만 사용)
+    langfuse.set_current_trace_io(input={"query": "hello"}, output={"result": result})
+
+    # (c) 공개(public) 플래그
+    langfuse.set_current_trace_as_public()
+```
+
+**주요 차이점:**
+
+| 속성                                       | v3                                      | v4                                                                                                                                                                            |
+| ------------------------------------------ | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`                                     | `update_current_trace(name=...)`        | `propagate_attributes(trace_name=...)`                                                                                                                                        |
+| `user_id`, `session_id`, `tags`, `version` | `update_current_trace(...)`             | `propagate_attributes(...)`                                                                                                                                                   |
+| `metadata`                                 | `update_current_trace(metadata=any)`    | `propagate_attributes(metadata=dict[str,str])`                                                                                                                                |
+| `input`, `output`                          | `update_current_trace(...)`             | `set_current_trace_io(...)` (지원 중단됨)                                                                                                                                     |
+| `public`                                   | `update_current_trace(public=True)`     | `set_current_trace_as_public()`                                                                                                                                               |
+| `release`                                  | `update_current_trace(release=...)`     | 제거됨 — `LANGFUSE_RELEASE` 환경 변수를 사용하세요                                                                                                                            |
+| `environment`                              | `update_current_trace(environment=...)` | 프로세스 단위 환경에는 `LANGFUSE_TRACING_ENVIRONMENT` 또는 `Langfuse(environment=...)`를 사용하세요. 요청 단위 환경에는 `propagate_attributes(environment=...)`를 사용하세요. |
+
+<Callout type="warning">
+  `set_current_trace_io()`는 지원이 중단되었으며, 트레이스 입출력에 의존하는
+  트레이스 레벨 [LLM-as-a-judge](/docs/evaluation/evaluation-methods/llm-as-a-judge)
+  평가기와의 하위 호환성을 위해서만 존재합니다. 새 코드에서는 루트 관측 단위에
+  직접 입출력을 설정하세요.
+</Callout>
+
+### `span.update_trace()`가 3개의 메서드로 분리됨
+
+동일한 분리가 관측 단위 레벨의 `update_trace()` 메서드에도 적용됩니다.
+
+**v3:**
+
+```python
+span.update_trace(
+    name="trace-name",
+    user_id="user-123",
+    session_id="session-abc",
+    input={"query": "hello"},
+    output={"result": "world"},
+    public=True,
+)
+```
+
+**v4:**
+
+```python
+from langfuse import get_client, propagate_attributes
+
+langfuse = get_client()
+
+with langfuse.start_as_current_observation(as_type="span", name="my-operation") as span:
+    with propagate_attributes(trace_name="trace-name", user_id="user-123", session_id="session-abc"):
+        result = call_llm("hello")
+
+    span.set_trace_io(input={"query": "hello"}, output={"result": result})  # 지원 중단됨
+    span.set_trace_as_public()
+```
+
+<Callout type="info">
+  통합([LangChain](/integrations/frameworks/langchain),
+  [OpenAI](/integrations/model-providers/openai-py))의 경우, 전달된 트레이스
+  속성은 이제 하위 요소로만 전파되며 트레이스로는 전파되지 않습니다.
+</Callout>
+
+### Public API 네임스페이스 재매핑 (`api.*`)
+
+v4에서는 고성능 Public API 리소스가 기본값이 되었습니다. v2 별칭(alias)은 제거되었습니다.
+
+| v3 / 과도기 이름                        | v4 이름                               |
+| --------------------------------------- | ------------------------------------- |
+| `langfuse.api.observations_v_2`         | `langfuse.api.observations`           |
+| `langfuse.api.score_v_2`                | `langfuse.api.scores`                 |
+| `langfuse.api.metrics_v_2`              | `langfuse.api.metrics`                |
+| `langfuse.api.observations` (레거시 v1) | `langfuse.api.legacy.observations_v1` |
+| `langfuse.api.score` (레거시 v1)        | `langfuse.api.legacy.score_v1`        |
+| `langfuse.api.metrics` (레거시 v1)      | `langfuse.api.legacy.metrics_v1`      |
+
+레거시 v1 동작이 여전히 필요한 경우, 해당하는 `langfuse.api.legacy.<resource>_v1` 네임스페이스로 전환하세요.
+
+<Callout type="warning">
+  셀프 호스팅 Langfuse를 사용하는 경우, 새로운 기본
+  `langfuse.api.observations` 또는 `langfuse.api.metrics` 메서드를 아직
+  사용하지 마세요. 이제 이 메서드들은 Observations v2 및 Metrics v2
+  엔드포인트를 가리키는데, 이는 아직 셀프 호스팅 배포에서 사용할 수 없습니다.
+  대신 `langfuse.api.legacy.observations_v1` 및
+  `langfuse.api.legacy.metrics_v1`을 사용하세요.
+</Callout>
+
+### `start_span()` / `start_generation()` → `start_observation()`
+
+새로운 모델에서는 관측 단위(observation)가 핵심 개념입니다. `as_type` 매개변수를 갖는 통합 `start_observation()` API가 별도의 메서드들을 대체합니다.
+
+| v3                                                              | v4                                                                                     |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `langfuse.start_span(name="x")`                                 | `langfuse.start_observation(name="x")`                                                 |
+| `langfuse.start_as_current_span(name="x")`                      | `langfuse.start_as_current_observation(name="x")`                                      |
+| `langfuse.start_generation(name="x", model="gpt-4")`            | `langfuse.start_observation(name="x", as_type="generation", model="gpt-4")`            |
+| `langfuse.start_as_current_generation(name="x", model="gpt-4")` | `langfuse.start_as_current_observation(name="x", as_type="generation", model="gpt-4")` |
+| `span.start_span(name="x")`                                     | `span.start_observation(name="x")`                                                     |
+| `span.start_as_current_span(name="x")`                          | `span.start_as_current_observation(name="x")`                                          |
+| `span.start_generation(name="x")`                               | `span.start_observation(name="x", as_type="generation")`                               |
+| `span.start_as_current_generation(name="x")`                    | `span.start_as_current_observation(name="x", as_type="generation")`                    |
+
+### `DatasetItemClient.run()` 제거 → [Experiment SDK](/docs/evaluation/experiments/experiments-via-sdk) 사용
+
+[Experiment SDK](/docs/evaluation/experiments/experiments-via-sdk)(`dataset.run_experiment()`)는 실험 속성(실행 메타데이터, 데이터셋 항목 연결)의 전파를 내부적으로 처리합니다.
+
+**v3:**
+
+```python
+for item in dataset.items:
+    with item.run(run_name="my-run", run_metadata={...}) as span:
+        result = my_llm(item.input)
+        span.update(output=result)
+```
+
+**v4:**
+
+```python
+from langfuse import get_client
+
+dataset = get_client().get_dataset("my-dataset")
+
+def my_task(*, item, **kwargs):
+    return my_llm(item.input)
+
+dataset.run_experiment(name="my-run", task=my_task)
+```
+
+`DatasetItem` 객체는 동일한 데이터 속성(`id`, `input`, `expected_output`, `metadata` 등)을 여전히 가지고 있지만 `run()` 메서드는 제거되었습니다.
+
+### [LangChain](/integrations/frameworks/langchain) `CallbackHandler`: `update_trace` 매개변수 제거
+
+핸들러는 이제 내부적으로 `propagate_attributes()`를 사용합니다. `update_trace` 매개변수는 더 이상 존재하지 않으며, 전달하면 `TypeError`가 발생합니다.
+
+**v3:**
+
+```python
+from langfuse.langchain import CallbackHandler
+
+handler = CallbackHandler(update_trace=True, trace_context={...})
+```
+
+**v4:**
+
+```python
+handler = CallbackHandler(trace_context={...})
+```
+
+<Callout type="info">
+  LangChain 호출을 `propagate_attributes()`를 사용하는 감싸는(enclosing)
+  스팬으로 래핑하면 트레이스 속성(`user_id`, `session_id`, `tags` 등)을 여전히
+  설정할 수 있습니다. v2 → v3 마이그레이션 가이드의 [LangChain 통합
+  예제](/docs/observability/sdk/upgrade-path/python-v2-to-v3#langchain-integration)나
+  [커스텀 트레이스 속성](/docs/observability/sdk/instrumentation#add-attributes)
+  문서를 참고하세요.
+</Callout>
+
+### 제거된 타입
+
+다음 타입들이 `langfuse.types`에서 제거되었습니다.
+
+| 제거된 타입                              | 설명                                                                                                  |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `TraceMetadata`                          | `name`, `user_id`, `session_id`, `version`, `release`, `metadata`, `tags`, `public`을 갖는 TypedDict  |
+| `ObservationParams`                      | 관측 단위 필드로 `TraceMetadata`를 확장한 TypedDict                                                   |
+| `MapValue`, `ModelUsage`, `PromptClient` | 더 이상 `langfuse.types`에서 재내보내기(re-export)되지 않으며, 대신 `langfuse.model`에서 임포트하세요 |
+
+### Pydantic v1 지원 중단
+
+SDK는 이제 Pydantic v2를 요구합니다. 애플리케이션이 여전히 Pydantic v1을 사용하는 경우, `pydantic.v1` [호환성 shim](https://docs.pydantic.dev/latest/migration/#continue-using-pydantic-v1-features)을 사용해야 합니다.
+
+### 유효성 검사(validation) 변경 사항
+
+- 전파되는 `metadata`: 이제 값이 200자로 제한된 `dict[str, str]`입니다(이전에는 `Any`였습니다). 문자열이 아닌 값은 문자열로 강제 변환됩니다. 제한을 초과하는 값은 경고와 함께 삭제됩니다.
+- `user_id`, `session_id`: 최대 200자 길이의 문자열로 검증됩니다. 제한을 초과하는 값은 경고와 함께 삭제됩니다.
+
+## 마이그레이션 체크리스트
+
+1. 비-LLM OpenTelemetry 스팬에 의존하던 트레이스/대시보드를 점검하세요. v4의 기본 필터로 인해 더 이상 나타나지 않을 수 있습니다.
+2. 필요하다면 `should_export_span=lambda span: True`를 설정하여 v4 이전의 "전체 스팬 내보내기" 동작을 유지하세요.
+3. `blocked_instrumentation_scopes`를 여전히 사용 중이라면, 지원 중단이 제거되기 전에 `should_export_span` 조합으로 마이그레이션하세요.
+4. `update_current_trace`를 검색하여 `propagate_attributes()` + `set_current_trace_io()`(레거시 트레이스 레벨 LLM-as-a-judge 구성에 의존하는 경우에만) + `set_current_trace_as_public()`으로 분리하세요.
+5. `.update_trace(`를 검색하여 관측 단위 객체에도 동일하게 분리하세요.
+6. `start_span` / `start_generation`을 검색하여 `start_observation`으로 교체하세요.
+7. `item.run(`을 검색하여 `dataset.run_experiment()`로 교체하세요.
+8. `CallbackHandler(update_trace=`를 검색하여 매개변수를 제거하세요.
+9. metadata 값이 값 길이 200자 이하의 `dict[str, str]`인지 확인하세요.
+10. 여전히 v1을 사용 중이라면 Pydantic을 v2로 업그레이드하세요.
+11. `api.observations_v_2` / `api.score_v_2` / `api.metrics_v_2`를 검색하여 `api.observations` / `api.scores` / `api.metrics`로 교체하세요.
+12. `api.observations` / `api.score` / `api.metrics`에 대한 레거시 v1 사용을 검색하여 `api.legacy.observations_v1` / `api.legacy.score_v1` / `api.legacy.metrics_v1`로 이동하세요.
+13. Langfuse를 셀프 호스팅하는 경우, `api.observations` 또는 `api.metrics`를 아직 사용하지 마세요. Observations v2 및 Metrics v2가 셀프 호스팅 배포에서 사용 가능해질 때까지 `api.legacy.observations_v1` 및 `api.legacy.metrics_v1`을 사용하세요.
+14. `*_v_2` 별칭(alias)에 대한 남은 참조를 모두 제거하세요(v4에서 제거되었습니다).

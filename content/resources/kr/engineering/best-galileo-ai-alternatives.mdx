@@ -1,0 +1,105 @@
+---
+title: Galileo AI 대안? 최고의 LLMOps 플랫폼은?
+description: 이 글은 LLM 관측성, 분석, 평가, 테스트, 주석 작업 측면에서 Langfuse와 Galileo AI를 비교합니다.
+tags: [comparison]
+sourceRevision: 4a702ece53852a6af86b3883f434adf3f5cae421
+translationStatus: machine
+---
+
+# Galileo AI 대안? Langfuse vs. Galileo AI
+
+이 글은 LLM 기반 애플리케이션을 평가하고 모니터링하는 데 도움을 주는 두 플랫폼, Langfuse와 Galileo AI를 비교합니다.
+
+두 플랫폼 모두 LLM의 신뢰성을 높이는 것을 목표로 하지만, 접근 철학은 다릅니다. **Galileo AI**는 실시간 개입과 자동화된 메트릭에 초점을 맞춘 독점(proprietary) 올인원 플랫폼입니다. **Langfuse**는 유연성, 데이터 통제권, 심층적인 관측성에 초점을 맞춘 오픈소스, 엔지니어링 중심 플랫폼입니다.
+
+## 한눈에 보기
+
+|                 | 🪢 Langfuse                                                                                                                                                                       | Galileo AI                                                                       |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| **오픈소스**    | **예** (MIT 라이선스, 완전히 공개된 코드베이스)                                                                                                                                   | **아니오** (폐쇄형 소스 상용 플랫폼)                                             |
+| **배포 유연성** | 최대한의 유연성: 클라우드 또는 셀프 호스팅                                                                                                                                        | 클라우드 전용, VPC 또는 온프레미스는 엔터프라이즈에만 제공                       |
+| **통합**        | OpenTelemetry를 통해 OpenAI, LangChain 등을 지원하는 100개 이상의 [SDK/통합](/integrations). 최대한의 상호운용성을 위한 [OpenTelemetry](/integrations/native/opentelemetry) 지원. | OpenAI, Anthropic 등 주요 프로바이더에 대해 약 10개의 통합 및 자동 계측 지원     |
+| **개방성**      | 특정 방식에 구애받지 않으며, SDK/API를 통해 모든 워크플로우와 평가 방식을 아우를 수 있도록 유연하게 설계됨                                                                        | 독점 모델을 사용하는 템플릿화된 가드레일 평가기를 중심으로 한 방식이 정해진 접근 |
+| **확장성**      | 확장을 염두에 두고 구축됨 (ClickHouse 기반 아키텍처로 월 50억 건 이상의 이벤트 처리)                                                                                              | 공개된 정보 없음                                                                 |
+
+## Galileo AI
+
+<Frame fullWidth>
+  ![Galileo AI example trace](/images/faq/galileo-ai/galileo-ai-example-trace.png)
+</Frame>
+
+Galileo AI는 엔터프라이즈급 평가 및 거버넌스 솔루션을 표방합니다. 핵심 가치 제안은 **신뢰성**과 **안전성**을 중심으로 합니다.
+
+- **실시간 보호:** Galileo의 대표 기능은 자체 개발한 Luna-2 모델을 사용해 환각(hallucination)이나 유해한 출력이 사용자에게 도달하기 전에 실시간으로 가로채고 차단하는 내장 "Protect" 시스템입니다.
+- **자동화된 평가:** 사전 패키징된 메트릭을 갖춘 방식이 정해진 워크플로우를 제공하여, 데이터 사이언스 팀이 커스텀 평가기(judge)를 직접 만들지 않고도 즉시 점수를 얻을 수 있습니다.
+
+## Langfuse
+
+<Video
+  src="https://static.langfuse.com/docs-videos/trace-new-ui.mp4"
+  aspectRatio={16 / 9}
+  gifStyle
+/>
+
+Langfuse는 LLM 관측성을 위한 오픈소스 표준입니다. LLM 트레이스를 다른 애플리케이션 로그와 동일하게 다루면서도 벤더의 블랙박스 없이 완전한 가시성을 제공하고자 하는 엔지니어링 팀을 위해 설계되었습니다.
+
+- **관측성:** Langfuse는 프롬프트, 모델 응답, 도구 호출, 지연 시간 등 LLM 상호작용의 전체 라이프사이클을 캡처합니다.
+- **엔지니어링 우선 워크플로우:** 복잡한 디버깅(사고 사슬 트레이싱), 프롬프트 관리, 그리고 다양한 평가 방식(사람의 피드백, SDK 메서드, 또는 모든 형태의 LLM-as-a-Judge)을 지원합니다.
+- **확장성:** 고성능 아키텍처(ClickHouse) 위에 구축된 Langfuse는 최소한의 지연 시간으로 수백만 건의 이벤트를 처리하여 프로덕션 트래픽에 맞춰 확장됨을 보장합니다.
+
+<Callout type="info">
+사용자들이 왜 Langfuse를 선택했는지에 대한 상세한 요약은 [여기](/handbook/chapters/why)에서 확인할 수 있습니다.
+</Callout>
+
+## 배포 지표
+
+|             | pypi 다운로드                                                                                                                                                         | npm 다운로드                                                                                                                                                            | docker pulls                                                                                                                                                                              |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 🪢 Langfuse | [![Langfuse pypi downloads](https://img.shields.io/pypi/dm/langfuse?style=for-the-badge&label=%20&labelColor=black&color=orange)](https://pypi.org/project/langfuse/) | [![Langfuse npm downloads](https://img.shields.io/npm/dm/langfuse?style=for-the-badge&label=%20&labelColor=black&color=orange)](https://www.npmjs.com/package/langfuse) | [![Langfuse Docker Pulls](https://img.shields.io/docker/pulls/langfuse/langfuse?style=for-the-badge&label=%20&labelColor=black&color=orange)](https://hub.docker.com/r/langfuse/langfuse) |
+| Galileo AI  | [![Galileo AI pypi downloads](https://img.shields.io/pypi/dm/galileo?style=for-the-badge&label=%20&labelColor=black&color=grey)](https://pypi.org/project/galileo)    | [![Galileo AI npm downloads](https://img.shields.io/npm/dm/galileo?style=for-the-badge&label=%20&labelColor=black&color=grey)](https://www.npmjs.com/package/galileo)   | 해당 없음                                                                                                                                                                                 |
+
+## 기능 비교
+
+다음 표는 LLM 엔지니어링 라이프사이클의 세 가지 핵심 축인 관측성(Observability), 평가(Evaluation), 주석(Annotation)에 대해 Langfuse와 Galileo AI가 각각 어떻게 접근하는지 정리한 것입니다.
+
+### 관측성
+
+|                   | 🪢 Langfuse                                                                                                                                                                                                              | Galileo AI                                                                                                                                                           |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 비용 추적         | ✅ 추론(reasoning) 토큰과 캐시된 토큰을 포함해 [모든 토큰 유형의 세밀한 트레이싱](/docs/observability/features/token-and-cost-tracking)이 가능합니다. 프라이빗 LLM이나 협상된 요율에 맞춘 커스텀 비용 설정도 지원합니다. | ⚠️ 토큰과 비용에 대한 설정 가능 범위가 제한적입니다.                                                                                                                 |
+| 전체 텍스트 검색  | ✅ 입력, 출력, 메타데이터 전반에 걸친 전체 텍스트 검색을 지원합니다.                                                                                                                                                     | ❌ 전체 텍스트 검색을 지원하지 않습니다.                                                                                                                             |
+| 분산 트레이싱     | ✅ (OpenTelemetry 및 네이티브 SDK를 통한) [분산 트레이싱](/docs/observability/features/trace-ids-and-distributed-tracing)을 지원하고 문서화되어 있습니다.                                                                | ⚠️ [분산 트레이싱](https://v2docs.galileo.ai/sdk-api/logging/distributed-tracing)이 베타 단계이며, 완전한 OpenTelemetry 지원은 부족합니다.                           |
+| 도구 호출         | ✅ 도구 사용과 동작을 분석하기 위한 전용 UI 뷰와 [에이전트 그래프](/docs/observability/features/agent-graphs)를 제공합니다.                                                                                              | ❌ 도구 호출이나 에이전트 단계 시각화를 위한 전용 뷰가 없습니다.                                                                                                     |
+| 트레이스 재실행   | ✅ [Langfuse Playground](/docs/prompt-management/features/playground)에서 생성 결과를 열어 프롬프트를 반복 개선하고 문제를 디버깅할 수 있습니다.                                                                         | ⚠️ [플레이그라운드](https://v2docs.galileo.ai/concepts/experiments/running-experiments-in-console)에 메시지를 수동으로 복사해야 합니다.                              |
+| 트레이스 내보내기 | ✅ 코딩 에이전트로 처리하거나 디버깅할 수 있도록 모든 관찰값(observation)을 포함해 [트레이스 전체를 JSON으로 내보낼](/docs/api-and-data-platform/features/export-from-ui) 수 있습니다.                                   | ⚠️ 트레이스 상세 정보를 직접 내보내는 기능은 없지만, Galileo는 [MCP 서버](https://v2docs.galileo.ai/getting-started/mcp/setup-galileo-mcp)를 통해 로그를 노출합니다. |
+| 커스텀 대시보드   | ✅ 다양한 메트릭을 세부적으로 파고들 수 있는 [커스텀 대시보드](/docs/metrics/features/custom-dashboards) 위젯을 만들 수 있습니다.                                                                                        | ❌ UI에서 대시보드 기능을 지원하지 않습니다.                                                                                                                         |
+
+### 평가
+
+|                   | 🪢 Langfuse                                                                                                                                                                                                                                                                     | Galileo AI                                                                                                                                                                                                             |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 데이터셋          | ✅ 두 도구 모두 [데이터셋](/docs/evaluation/experiments/datasets)과 데이터셋 버전 관리를 지원합니다. Langfuse는 합성 데이터셋을 생성하는 노트북을 제공하지만 UI 기능은 없습니다.                                                                                                | ✅ 두 도구 모두 [데이터셋](https://v2docs.galileo.ai/sdk-api/experiments/datasets)과 데이터셋 버전 관리를 지원합니다. Galileo AI는 AI를 사용해 테스트 데이터셋을 생성할 수 있습니다.                                   |
+| 실험              | ✅ [실험](/docs/evaluation/experiments/experiments-via-ui)은 데이터셋 뷰에서 트리거할 수 있습니다. 두 도구 모두 데이터셋을 사용해 프롬프트를 실험하는 UI 내 플로우를 지원합니다. 두 도구 모두 [SDK를 통한 실험](/docs/evaluation/experiments/experiments-via-sdk)도 지원합니다. | ✅ [플레이그라운드에서 실험](https://v2docs.galileo.ai/concepts/experiments/running-experiments-in-console)을 트리거할 수 있습니다. 이를 통해 사용자는 프롬프트, 데이터셋 항목, 실험 결과를 한눈에 확인할 수 있습니다. |
+| 출력 수정         | ✅ Langfuse 사용자는 향후 평가 및 파인튜닝을 위해 [트레이스 상세 뷰](/docs/evaluation/evaluation-methods/scores-via-ui)에서 바로 모델 출력을 수정할 수 있습니다.                                                                                                                | ❌ 모델 출력 수정이 불가능합니다.                                                                                                                                                                                      |
+| 댓글              | ✅ Langfuse는 사용자가 트레이스, 관찰값, 프롬프트, 실험 결과에 댓글을 달 수 있는 네이티브 [댓글 기능](/docs/observability/features/comments)을 제공합니다. 이 기능은 입출력의 특정 부분에만 댓글을 달거나 다른 사용자를 @멘션하는 것도 지원합니다.                              | ❌ 댓글 기능이 없습니다. ([주석](https://v2docs.galileo.ai/concepts/annotations/overview) 기능만 제공)                                                                                                                 |
+| LLM-as-a-Judge    | ✅ 사용자가 설정한 모든 모델과 평가 프롬프트를 사용해 [라이브 트레이싱 데이터에 점수를 매기고](/docs/evaluation/evaluation-methods/llm-as-a-judge) 실험 실행을 평가하는 것을 표준으로 지원합니다.                                                                               | ✅ 범주형 [LLM-as-a-Judge](https://v2docs.galileo.ai/concepts/metrics/custom-metrics/custom-metrics-ui-llm) 점수를 지원합니다. 하나의 평가 작업에 여러 평가 모델을 사용할 수 있습니다.                                 |
+| UI 내 코드 평가기 | ✅ [코드 평가기](/docs/evaluation/evaluation-methods/code-evaluators)를 통해 사용자는 Langfuse UI 안에서 직접 Python 또는 TypeScript 평가기를 작성해 결정론적(deterministic) 검사를 수행할 수 있습니다.                                                                         | ✅ UI 내 [커스텀 메트릭](https://v2docs.galileo.ai/concepts/metrics/custom-metrics/custom-metrics-ui-code)을 통해 지원됩니다.                                                                                          |
+| 가드레일          | ⚠️ 내장되어 있지 않음 ([외부 도구](/docs/security-and-guardrails)와 연동; Langfuse는 설계상 크리티컬 패스에 위치하지 않음)                                                                                                                                                      | ✅ 자체 개발한 [Luna-2](https://v2docs.galileo.ai/concepts/luna/luna) 모델을 사용해 출력에 대한 내장 [실시간 가드레일/보호](https://v2docs.galileo.ai/concepts/protect/overview) 기능을 제공합니다.                    |
+
+### 주석
+
+|                    | 🪢 Langfuse                                                                                                                                                                              | Galileo AI                                                                                                                                                                                                                       |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 주석 큐            | ✅ 도메인 전문가가 필터링된 트레이스를 검토할 수 있도록 통합된 [주석 큐](/docs/evaluation/evaluation-methods/annotation-queues)를 제공합니다 (예: "부정적 피드백 트레이스를 모두 확인"). | ❌ 도메인 전문가가 트레이스의 일부를 주석 처리할 수 있는 전용 뷰가 없습니다.                                                                                                                                                     |
+| 트레이스 뷰의 주석 | ✅ Langfuse는 트레이스 상세 뷰를 통해 [트레이스와 관찰값에 주석을 달 수 있도록](/docs/evaluation/evaluation-methods/scores-via-ui) 지원합니다.                                           | ✅ [주석 기능](https://v2docs.galileo.ai/concepts/annotations/overview)을 통해 이용할 수 있으며, Langfuse와 달리 텍스트 주석, 좋아요/싫어요, 별점도 지원합니다. (Langfuse는 텍스트 주석을 위한 네이티브 댓글 기능을 제공합니다.) |
+| 실험 주석          | ✅ [데이터셋 실험 비교 뷰](/docs/evaluation/experiments/experiments-via-ui)에서 사람이 직접 평가한 주석 점수를 추가할 수 있습니다.                                                       | ⚠️ 사용자는 주석 점수를 추가하기 위해 [실험](https://v2docs.galileo.ai/sdk-api/experiments/experiments)의 트레이스로 이동해야 합니다.                                                                                            |
+
+## 요약
+
+**Galileo AI를 선택해야 하는 경우:** 안전성을 위한 "즉시 사용 가능한(turnkey)" 솔루션이 필요한 데이터 사이언스 팀이라면 적합합니다. 잘못된 응답을 차단하기 위한 실시간 가드레일이 필요하고 관리형이면서도 방식이 정해진 평가 메트릭 세트를 즉시 사용하는 것을 선호한다면, 거버넌스에 특화된 Galileo의 강점이 잘 맞을 것입니다.
+
+**Langfuse를 선택해야 하는 경우:** 프로덕션 애플리케이션을 구축하는 엔지니어링 팀이라면 적합합니다. 오픈소스 소프트웨어를 중요하게 여기고, 유연하며 방식에 구애받지 않는 워크플로우가 필요하며, 트래픽 증가에 맞춰 무리 없이 확장되면서도 자체적인 평가 로직을 정의할 수 있는 플랫폼이 필요하다면, Langfuse가 견고하고 개발자 중심적인 선택지입니다.
+
+## 이 비교 내용이 오래되었나요?
+
+최신 정보로 [풀 리퀘스트를 제출해](https://github.com/langfuse/langfuse-docs/tree/main/content/resources/engineering) 주세요.

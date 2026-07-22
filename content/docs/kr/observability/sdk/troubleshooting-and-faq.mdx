@@ -1,0 +1,45 @@
+---
+title: 문제 해결 & FAQ
+description: Python 및 JS/TS SDK에서 발생하는 일반적인 문제를 나란히 비교하여 해결합니다.
+category: SDKs
+sourceRevision: 094f047d7c40227e3ee6c38b7aa1908b70fa20e8
+translationStatus: machine
+---
+
+# 문제 해결 & FAQ
+
+아래에서 원하는 문제를 찾을 수 없다면 [Ask AI](/docs/ask-ai)를 이용하거나, [GitHub issue](/issues)를 열거나, [지원팀](/support)에 문의하세요.
+
+## 인증 문제
+
+- `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL`이 환경 변수로 설정되어 있거나 `Langfuse()` 생성자 인자로 전달되었는지 확인하세요.
+- 설정 과정에서(프로덕션 환경이 아닌 곳에서) `langfuse.auth_check()`를 사용하여 연결 상태를 확인하세요.
+
+## 트레이스가 나타나지 않음
+
+- 일반적인 원인과 해결 방법은 [Missing traces](/faq/all/missing-traces)를 참고하세요.
+- `tracing_enabled`가 `True`이고 `sample_rate`가 `0.0`이 아닌지 확인하세요.
+- 대기 중인 데이터가 내보내지도록 `langfuse.shutdown()`(짧게 실행되는 작업에서는 `langfuse.flush()`)을 호출하세요.
+- 익스포터의 출력을 확인하려면 디버그 로깅을 활성화하세요(Python에서는 `debug=True` 또는 `LANGFUSE_DEBUG="True"`, JS/TS에서는 `LANGFUSE_DEBUG="true"` 또는 `LANGFUSE_LOG_LEVEL="DEBUG"`).
+
+## 중첩이 잘못되거나 스팬이 누락됨
+
+- 셀프 호스팅 사용자는 OTel 기반 SDK를 사용하려면 Langfuse 플랫폼 **>= 3.63.0**이 필요합니다.
+- OTEL 컨텍스트를 유지하려면 수동 스팬보다 컨텍스트 매니저(`with langfuse.start_as_current_observation(...)`)를 사용하는 것이 좋습니다.
+- 수동 스팬(`langfuse.start_observation()`)을 사용하는 경우 반드시 `.end()`를 호출하세요.
+- 비동기 코드에서는 `await` 경계를 넘나들며 컨텍스트를 잃지 않도록 Langfuse 헬퍼를 활용하세요.
+- 관찰(observation)이 Langfuse가 받지 못한 부모를 참조하는 경우, 원래 의도된 부모 아래가 아니라 트레이스 루트에 표시됩니다. 이는 부모가 필터링되었거나, 누락되었거나, 전송되지 않은 경우에 발생할 수 있으므로 참조된 모든 부모 관찰이 실제로 내보내지고 있는지 확인하세요.
+
+## LangChain/OpenAI 통합 문제
+
+- Langfuse 래퍼(`from langfuse.openai import openai` 또는 `LangfuseCallbackHandler`)가 API 호출 전에 인스턴스화되었는지 확인하세요.
+- Langfuse, LangChain, 모델 SDK 간의 버전 호환성을 확인하세요.
+
+## 미디어가 표시되지 않음
+
+- 오디오/이미지 페이로드에는 `LangfuseMedia` 객체를 사용하고, 업로드 오류를 확인하려면 디버그 로그를 확인하세요(업로드는 백그라운드 스레드에서 실행됩니다).
+
+## `@vercel/otel` 사용 시 트레이스가 누락됨
+
+- `@vercel/otel` v2 이상을 사용하고 있는지 확인하세요. v2 이전 버전은 OpenTelemetry JS SDK v1을 기반으로 빌드되어 있어 OpenTelemetry JS SDK v2를 기반으로 하는 `LangfuseSpanProcessor`를 인식하지 못했습니다([vercel/otel#154](https://github.com/vercel/otel/issues/154)). `@vercel/otel` v2 이상에서는 `registerOTel({ spanProcessors: [new LangfuseSpanProcessor()] })`가 예상대로 트레이스를 내보냅니다.
+- 또는 `NodeSDK`를 통한 수동 OpenTelemetry 설정을 사용하고 `LangfuseSpanProcessor`를 등록할 수도 있습니다. 전체 예제는 [TypeScript 계측 문서](/docs/observability/sdk/instrumentation#framework-third-party-telemetry)를 참고하세요.

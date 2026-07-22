@@ -1,0 +1,54 @@
+---
+title: 개요
+seoTitle: "LLM 애플리케이션 평가"
+description: Langfuse를 사용하면 모든 LLM 평가를 한곳에서 기록할 수 있습니다. 모델 기반 평가(LLM-as-a-Judge), 사람이 직접 수행하는 주석, API/SDK를 통한 완전히 커스텀한 평가 워크플로우 등 다양한 평가 메트릭을 조합할 수 있습니다. 이를 통해 LLM 애플리케이션의 품질, 어조, 사실 정확성, 완전성 및 기타 다양한 측면을 측정할 수 있습니다.
+sourceRevision: 98a52a142cc86af597f5a71c5aa9829d84ec33c9
+translationStatus: machine
+---
+
+import { LoopDiagram } from "@/components/academy/LoopDiagram";
+
+# 평가 개요
+
+평가(Evals)는 LLM 애플리케이션의 동작을 반복적으로 확인할 수 있는 방법을 제공합니다. 추측 대신 데이터를 활용해 변경 사항을 배포하기 전에 회귀(regression)를 미리 발견할 수 있습니다.
+
+<Frame fullWidth>
+  <img src="/images/docs/score-analytics-full-dashboard.png" alt="Score Analytics dashboard in Langfuse showing evaluation scores trended over time across multiple evaluators." />
+</Frame>
+
+평가는 [AI 엔지니어링 루프](/academy/ai-engineering-loop)의 대부분에 걸쳐 이루어집니다. 프로덕션 환경의 실시간 트레이스에 점수를 매기고, 흥미로운 예시를 데이터셋으로 전환하며, 변경 사항을 비교하기 위한 실험을 실행하고, 수동 또는 자동화된 평가기로 결과를 판단합니다. 이는 프로덕션의 실시간 트레이스에서 이루어지는 **온라인** 평가와, 변경 사항을 배포하기 전에 이루어지는 **오프라인** 평가 두 가지 방식 모두에서 이루어집니다.
+
+<LoopDiagram />
+
+<Callout type="info" emoji="🎥">
+
+Langfuse 평가와 이를 활용해 LLM 애플리케이션을 개선하는 방법에 대한 [**이 워크스루 영상을 시청**](/watch-demo?tab=evaluation)해 보세요.
+
+</Callout>
+
+## 시작하기
+
+먼저 [핵심 개념](/docs/evaluation/core-concepts) 페이지부터 확인하세요. 이 페이지에서는 Langfuse에서 평가기, 점수, 데이터셋, 실험이 어떻게 서로 맞물려 동작하는지 설명하며, 이를 이해하면 나머지 문서를 훨씬 쉽게 탐색할 수 있습니다.
+
+이러한 맥락을 파악했다면, 아래 표를 참고해 알맞은 기능 페이지를 찾아보세요.
+
+| 하고 싶은 작업                                    | 사용할 Langfuse 기능                                                                                                                                   |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 트레이스를 수동으로 검토하고 평가하기             | [주석 큐](/docs/evaluation/evaluation-methods/annotation-queues), [UI를 통한 점수 매기기](/docs/evaluation/evaluation-methods/scores-via-ui)           |
+| 최종 사용자로부터 피드백 수집하기                 | [사용자 피드백](/docs/observability/features/user-feedback)                                                                                            |
+| 트레이스에 자유 형식의 메모 남기기                | [텍스트 점수](/docs/evaluation/scores/overview#score-types), [주석 큐](/docs/evaluation/evaluation-methods/annotation-queues)                          |
+| 반복되는 실패 유형 추적하기                       | [점수 설정](/faq/all/manage-score-configs), [점수](/docs/evaluation/scores/overview#score-types)                                                       |
+| 재사용 가능한 테스트 케이스 세트 구축하기         | [데이터셋](/docs/evaluation/experiments/datasets)                                                                                                      |
+| 프롬프트, 모델, 코드 변경 사항을 나란히 비교하기  | [UI를 통한 실험](/docs/evaluation/experiments/experiments-via-ui), [SDK를 통한 실험](/docs/evaluation/experiments/experiments-via-sdk)                 |
+| 회귀가 발생하면 배포 차단하기                     | [CI/CD 실험](/docs/evaluation/experiments/experiments-ci-cd)                                                                                           |
+| 결정론적 검사 실행하기                            | [코드 평가기](/docs/evaluation/evaluation-methods/code-evaluators)                                                                                     |
+| 프로덕션의 실시간 트레이스에 자동으로 점수 매기기 | [LLM-as-a-Judge](/docs/evaluation/evaluation-methods/llm-as-a-judge), [API/SDK를 통한 점수 매기기](/docs/evaluation/evaluation-methods/scores-via-sdk) |
+| 점수가 시간에 따라 어떻게 변화하는지 확인하기     | [점수 분석](/docs/evaluation/scores/score-analytics), [커스텀 대시보드](/docs/metrics/features/custom-dashboards)                                      |
+
+무엇을 찾는지 이미 알고 있다면, 사이드바에서 _평가 방법(Evaluation Methods)_ 과 _실험(Experiments)_ 항목을 살펴보세요.
+
+## GitHub 토론
+
+import { GhDiscussionsPreview } from "@/components/gh-discussions/GhDiscussionsPreview";
+
+<GhDiscussionsPreview labels={["feat-scores"]} />

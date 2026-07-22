@@ -1,0 +1,85 @@
+---
+title: UI를 통한 점수 매기기
+description: Langfuse UI에서 트레이스와 관찰(observation)에 점수를 매겨 사람이 직접 참여하는(human-in-the-loop) 평가를 기록합니다.
+sidebarTitle: UI를 통한 점수 매기기
+sourceRevision: 49fcba21fa0b24bd84c4953d9f5ec1756f15023b
+translationStatus: machine
+---
+
+# UI를 통한 수동 점수 매기기
+
+UI를 통해 [점수](/docs/evaluation/scores/overview)를 추가하는 것은 수동 [평가 방법](/docs/evaluation/core-concepts#evaluation-methods)입니다. 이는 트레이스, 세션, 관찰에 평가 점수를 협업하여 주석으로 다는 데 사용됩니다.
+
+<Video
+  src="https://static.langfuse.com/docs-videos/2025-12-19-manual-scoring.mp4"
+  aspectRatio={16 / 9}
+  gifStyle
+/>
+
+<Callout type="info">
+대량의 트레이스, 세션, 관찰을 검토하는 작업을 간소화하려면 [주석 큐(Annotation Queues)](/docs/evaluation/evaluation-methods/annotation-queues)를 사용할 수도 있습니다.
+</Callout>
+
+## 왜 UI에서 수동으로 점수를 추가할까요?
+
+- 여러 팀원이 데이터를 수동으로 검토할 수 있게 하여 다양한 전문성을 통해 정확도를 높입니다.
+- 표준화된 점수 설정과 기준을 통해 다양한 워크플로와 점수 유형 전반에서 일관된 데이터 라벨링을 보장합니다.
+- 사람이 매긴 기준값(human baseline)은 다른 점수를 벤치마킹하고 프로덕션 로그에서 고품질 데이터셋을 큐레이션하는 데 참고 기준을 제공합니다.
+
+## 단계별 설정 방법
+
+<Steps>
+### 점수 설정(Score Config) 만들기
+
+UI에서 점수를 추가하려면 최소 하나의 점수 설정(Score Config)이 필요합니다. 자세한 내용은 [점수 설정을 만들고 관리하는 방법](/faq/all/manage-score-configs)을 참고하세요.
+
+### 점수 추가하기
+
+트레이스, 세션 또는 관찰 상세 보기에서 `Annotate`를 클릭하여 주석 폼을 엽니다.
+
+<Frame fullWidth>![Annotate](/images/docs/trigger_annotation.png)</Frame>
+
+### 사용할 점수 설정 선택하기
+
+<Frame fullWidth>![Annotate](/images/docs/select_score_configs.png)</Frame>
+
+### 점수 값 설정하기
+
+<Frame fullWidth>![Annotate](/images/docs/set_score_values.png)</Frame>
+
+### 점수 코멘트 추가하기(선택 사항)
+
+<Frame fullWidth>![Annotate](/images/docs/scores_comment.png)</Frame>
+
+### 점수 확인하기
+
+새로 추가한 점수를 트레이스나 관찰에서 확인하려면 트레이스 또는 관찰 상세 보기에서 `Scores` 탭을 **클릭**하세요.
+
+<Frame fullWidth>
+  ![Detail scores table](/images/docs/see_created_scores.png)
+</Frame>
+
+</Steps>
+
+## 실험에 점수 추가하기
+
+[UI를 통한 실험](/docs/evaluation/experiments/experiments-via-ui) 또는 [SDK를 통한 실험](/docs/evaluation/experiments/experiments-via-sdk)을 실행할 때, 실험 비교 보기에서 결과에 직접 주석을 달 수 있습니다.
+
+<Callout type="info">
+**사전 준비 사항:**
+- 평가하려는 항목에 대해 [점수 설정](/faq/all/manage-score-configs)을 구성하세요
+- 검토할 결과를 생성하기 위해 [UI를 통한 실험](/docs/evaluation/experiments/experiments-via-ui) 또는 [SDK를 통한 실험](/docs/evaluation/experiments/experiments-via-sdk)을 실행하세요
+
+</Callout>
+
+<Frame fullWidth>
+  ![Annotate from compare view](/images/changelog/2025-10-23-annotate-compare-view-overview.png)
+</Frame>
+
+비교 보기는 각 항목을 검토하는 동안 입력, 출력, 자동 점수를 포함한 전체 실험 컨텍스트를 유지합니다. 주석 점수를 추가하면 요약 메트릭이 업데이트되어 실험 전반의 진행 상황을 추적할 수 있습니다.
+
+## GitHub Discussions
+
+import { GhDiscussionsPreview } from "@/components/gh-discussions/GhDiscussionsPreview";
+
+<GhDiscussionsPreview labels={["feat-annotation"]} />

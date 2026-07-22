@@ -1,0 +1,128 @@
+---
+title: "JS/TS v3 → v4"
+description: Langfuse JS/TS SDK를 v3에서 v4로 업그레이드하기 위한 마이그레이션 가이드입니다.
+category: SDKs
+sourceRevision: 9c0d419484845ffbd56805fd068677856e5d764c
+translationStatus: machine
+---
+
+# JS/TS v3 → v4
+
+<Callout type="info">
+JS/TS SDK v3을 사용 중이라면 최신 메이저 버전인 v5로 바로 업그레이드하는 것을 권장합니다. [JS/TS v4 → v5 마이그레이션 가이드](/docs/observability/sdk/upgrade-path/js-v4-to-v5)를 참고하세요. 아래의 v3 → v4 변경 사항은 여전히 적용되므로, 먼저 이를 완료한 후 v4 → v5 가이드를 따라주세요.
+</Callout>
+
+아래 각 섹션을 따라 애플리케이션을 v3에서 v4로 업그레이드하세요.
+
+업그레이드 중 질문이나 문제가 발생하면 GitHub에 [이슈](/issues)를 등록해 주세요.
+
+## 초기화
+
+Langfuse 기본 URL 환경 변수는 이제 `LANGFUSE_BASEURL`이 아닌 `LANGFUSE_BASE_URL`입니다. 다만 하위 호환성을 위해 v4에서는 이전 변수명도 계속 동작하지만, 이후 버전에서는 지원되지 않습니다.
+
+## 트레이싱
+
+v4 SDK의 트레이싱은 OpenTelemetry를 기반으로 하는 대규모 재작성이며, 여러 가지 호환성이 깨지는 변경 사항을 도입합니다.
+
+1.  **OTEL 기반 아키텍처**: SDK는 이제 OpenTelemetry 위에 구축됩니다. 이제 OpenTelemetry 설정이 필요하며, OpenTelemetry `NodeSDK`에 [`LangfuseSpanProcessor`](https://langfuse-js-git-main-langfuse.vercel.app/classes/_langfuse_otel.LangfuseSpanProcessor.html)를 등록하여 수행합니다.
+2.  **새로운 트레이싱 함수**: `langfuse.trace()`, `langfuse.span()`, `langfuse.generation()` 메서드는 `@langfuse/tracing` 패키지의 [`startObservation`](https://langfuse-js-git-main-langfuse.vercel.app/functions/_langfuse_tracing.startObservation.html), [`startActiveObservation`](https://langfuse-js-git-main-langfuse.vercel.app/functions/_langfuse_tracing.startActiveObservation.html) 등으로 대체되었습니다.
+3.  **관심사 분리**:
+    - **`@langfuse/tracing`** 및 **`@langfuse/otel`** 패키지는 트레이싱을 위한 것입니다.
+    - **`@langfuse/client`** 패키지와 [`LangfuseClient`](https://langfuse-js-git-main-langfuse.vercel.app/classes/_langfuse_client.LangfuseClient.html) 클래스는 이제 점수 매기기, 프롬프트 관리, 데이터셋과 같은 트레이싱과 무관한 기능만을 위해 사용됩니다.
+
+각 항목에 대한 자세한 내용은 [SDK v4 문서](/docs/observability/sdk/overview)를 참고하세요.
+
+## [프롬프트 관리](/docs/prompt-management/overview)
+
+- **Import**: Langfuse 클라이언트의 import 방식은 이제 다음과 같습니다.
+
+  ```typescript
+  import { LangfuseClient } from "@langfuse/client";
+  ```
+
+- **사용법**: Langfuse 클라이언트의 사용법은 이제 다음과 같습니다.
+
+  ```typescript
+  const langfuse = new LangfuseClient();
+
+  const prompt = await langfuse.prompt.get("my-prompt");
+
+  const compiledPrompt = prompt.compile({ topic: "developers" });
+
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [{ role: "user", content: compiledPrompt }],
+  });
+  ```
+
+- `version`은 이제 위치 인수(positional argument)가 아니라 `langfuse.prompt.get()`의 옵션 객체에서 선택적으로 지정하는 속성입니다.
+
+  ```typescript
+  const prompt = await langfuse.prompt.get("my-prompt", { version: "1.0" });
+  ```
+
+## OpenAI 통합
+
+- **Import**: OpenAI 통합의 import 방식은 이제 다음과 같습니다.
+
+  ```typescript
+  import { observeOpenAI } from "@langfuse/openai";
+  ```
+
+- 이제 `environment`와 `release`는 `LANGFUSE_TRACING_ENVIRONMENT`와 `LANGFUSE_TRACING_RELEASE` 환경 변수를 통해 설정할 수 있습니다.
+
+## Vercel AI SDK
+
+v3와 매우 유사하게 동작하지만, `langfuse-vercel`의 `LangfuseExporter`가 `@langfuse/otel`의 일반 `LangfuseSpanProcessor`로 대체되었습니다.
+
+자세한 내용은 [AI SDK 사용에 관한 전체 예제](/docs/observability/sdk/instrumentation#framework-third-party-telemetry)를 참고하세요.
+
+<Callout>
+
+LLM에 제공된 도구 정의(tool definitions)는 더 이상 `input.tools`가 아니라 `metadata.tools`에 매핑된다는 점에 유의하세요. 이는 생성(generation)에 대해 평가를 실행하는 경우 관련이 있습니다.
+
+</Callout>
+
+## [Langchain 통합](/integrations/frameworks/langchain)
+
+- **Import**: Langchain 통합의 import 방식은 이제 다음과 같습니다.
+
+  ```typescript
+  import { CallbackHandler } from "@langfuse/langchain";
+  ```
+
+- 이제 `environment`와 `release`는 `LANGFUSE_TRACING_ENVIRONMENT`와 `LANGFUSE_TRACING_RELEASE` 환경 변수를 통해 설정할 수 있습니다.
+
+## `langfuseClient.getTraceUrl`
+
+- 이 메서드는 이제 비동기이며 프로미스(promise)를 반환합니다.
+
+  ```typescript
+  const traceUrl = await langfuseClient.getTraceUrl(traceId);
+  ```
+
+## 점수 매기기
+
+- **Import**: Langfuse 클라이언트의 import 방식은 이제 다음과 같습니다.
+
+  ```typescript
+  import { LangfuseClient } from "@langfuse/client";
+  ```
+
+- **사용법**: Langfuse 클라이언트의 사용법은 이제 다음과 같습니다.
+
+  ```typescript
+  const langfuse = new LangfuseClient();
+
+  await langfuse.score.create({
+    traceId: "trace_id_here",
+    name: "accuracy",
+    value: 0.9,
+  });
+  ```
+
+새로운 점수 매기기 방법에 대해서는 [사용자 정의 점수 문서](/docs/evaluation/evaluation-methods/custom-scores)를 참고하세요.
+
+## 데이터셋
+
+새로운 데이터셋 관련 방법에 대해서는 [데이터셋 문서](/docs/evaluation/dataset-runs/remote-run#setup--run-via-sdk)를 참고하세요.

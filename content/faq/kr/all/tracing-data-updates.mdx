@@ -1,0 +1,49 @@
+---
+title: 트레이스, 관측(observation), 점수는 어떻게 업데이트하나요?
+tags: [observability]
+sourceRevision: 9b3a36933d424ad04a0f37b62378c5dcb84a5d0f
+translationStatus: machine
+---
+
+# 트레이스, 관측(observation), 점수는 어떻게 업데이트하나요?
+
+Langfuse는 [트레이스와 관측(observation)](/docs/observability/data-model)을 **불변(immutable)** 데이터로 취급합니다. 한 번 수집되면 해당 데이터는 최종 상태가 되며, 안정적으로 업데이트할 수 없습니다.
+
+수집된 트레이스나 관측에 평가나 주석을 통해 정보를 추가하고 싶다면 [점수](/docs/evaluation/evaluation-methods/custom-scores)를 사용하세요. 점수는 트레이스, 관측, 세션, 데이터셋 실행(dataset run)에 언제든지 추가할 수 있습니다.
+
+## 트레이스와 관측은 불변입니다 [#traces-and-observations]
+
+<Callout type="warning">
+동일한 `id`로 이벤트를 다시 전송하여 수집 이후 트레이스나 관측을 업데이트하려고 시도하지 마세요.
+
+Langfuse v4에서는 수집된 데이터가 **읽기 경로에서 중복 제거되지 않으며**, 기반 스토리지는 동일한 `id`를 공유하는 레코드 간에 일관성을 보장하지 않습니다(최종적 일관성조차 보장하지 않습니다). 따라서 데이터를 재삽입하면 원본을 대체하는 것이 아니라 **중복 레코드**가 생성됩니다. 중복 레코드는 메트릭을 부풀리고(예를 들어 Metrics API의 `sum(totalCost)`는 모든 버전을 합산합니다), 대시보드, 필터링, 내보내기에서 일관성 없는 결과를 초래합니다.
+
+</Callout>
+
+이러한 불변성은 이미 수집된 데이터에 적용됩니다. 요청이 처리되는 동안 트레이스를 점진적으로 구성하는 것 — 예를 들어 SDK가 트레이스를 플러시하기 전에 스팬의 출력값을 업데이트하는 것 — 은 정상적으로 지원되는 사용 방식입니다. 이 제약은 Langfuse가 이미 영속화한 데이터를 다시 수집하는 경우에만 해당됩니다.
+
+데이터를 수정하거나 재처리해야 하는 경우, 원본 레코드를 변경하는 대신 수정된 정보를 [점수](/docs/evaluation/evaluation-methods/custom-scores)로 추가하는 방식을 권장합니다.
+
+## 수집 이후 데이터 보강하기 [#enriching-data]
+
+기존 트레이스와 관측을 다시 수집하지 않고 정보를 추가할 수 있는 지원되는 방법은 두 가지입니다.
+
+**점수를 통한 방법**
+
+[점수](/docs/evaluation/evaluation-methods/custom-scores)를 사용하면 트레이스, 관측, 세션, 데이터셋 실행에 평가, 주석, 기타 메타데이터를 언제든지 첨부할 수 있습니다. 이는 수집 이후 데이터를 보강하는 데 권장되는 방법입니다.
+
+**Langfuse UI를 통한 방법**
+
+UI 기반 업데이트 — 북마크와 [게시(publishing)](/docs/observability/features/url) — 는 트레이스와 점수에 언제든지 적용할 수 있습니다. [태그](/docs/observability/features/tags)는 생성 시점에 설정되며 불변 데이터 모델을 따르므로, 이후에는 UI에서 편집할 수 없습니다.
+
+## 점수 업데이트하기 [#updating-scores]
+
+트레이스 및 관측과 달리 점수는 덮어쓸 수 있습니다. 점수는 `id`, `name`, 그리고 날짜 단위(`toDate(timestamp)`)의 `timestamp`라는 세 가지 필드로 식별됩니다. 재수집된 점수는 **세 가지 모두 일치할 때만** 기존 점수를 덮어씁니다. 셋 중 하나라도 다르면 업데이트가 아니라 **별도의** 점수가 생성됩니다.
+
+이 부분은 실수하기 쉽습니다. 동일한 `id`이지만 다른 `name`을 사용하거나, 다른 달력 날짜에 해당하는 `timestamp`로 점수를 전송하면 원본을 덮어쓰는 대신 중복 레코드가 생성됩니다. 점수를 안정적으로 덮어쓰려면 항상 동일한 `id`(예: `trace_id-score_name`과 같은 안정적인 idempotency 키), `name`, `timestamp`를 전송하고, 변경된 필드만이 아니라 전체 점수 페이로드를 포함해야 합니다.
+
+<Callout type="warning">
+**지원 종료(Deprecated):** 점수가 생성된 후 최대 30일 동안, Langfuse는 동일한 `id`를 공유하는 재수집된 점수를 기존 레코드에 병합하여, 설정되지 않은 필드를 채워 넣을 수 있습니다. 이 부분 업데이트 동작은 지원 종료(deprecated) 예정이며 향후 버전에서 제거될 예정이므로 이에 의존하지 마세요. 항상 일치하는 `id`, `name`, `timestamp`와 함께 완전한 점수를 전송하세요.
+</Callout>
+
+자세한 내용은 [SDK/API를 통한 점수](/docs/evaluation/evaluation-methods/scores-via-sdk#preventing-duplicate-scores)를 참고하세요.

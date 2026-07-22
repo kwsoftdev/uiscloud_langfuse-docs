@@ -1,0 +1,54 @@
+---
+title: 버전 관리
+label: "Version: v3"
+sidebarTitle: "버전 관리"
+sourceRevision: 051050d1fb1be21711325b67d7f9a85780e8aa37
+translationStatus: machine
+---
+
+# 버전 관리
+
+버전 관리는 Langfuse Server, SDK, 그리고 Public API를 통한 사용자 정의 통합 간의 호환성을 보장하는 데 핵심적인 역할을 합니다. 이러한 이유로 우리는 [시맨틱 버저닝(semantic versioning)](https://semver.org/)을 중요하게 다룹니다.
+
+## 시맨틱 버저닝의 적용 범위
+
+다음과 같은 변경 사항은 호환성을 깨뜨리는 것으로 간주되어 **메이저 버전이 상승**합니다:
+
+- 인프라 변경
+- 기존 Public API의 제거, 또는 기존 Public API 파라미터의 제거/변경
+
+다음과 같은 변경 사항은 내부 구현 세부 사항으로 간주되어 **메이저 버전이 상승하지 않습니다**:
+
+- 데이터베이스 스키마
+- 프론트엔드 API
+
+## Langfuse Server와 SDK 간의 호환성
+
+Langfuse Server와 SDK는 구성 요소를 더 유연하게 업그레이드할 수 있도록 서로 독립적으로 버전이 관리됩니다:
+
+- **Server**: 릴리스 노트에 명시적으로 언급되지 않는 한, SDK 버전과 무관하게 독립적으로 업그레이드할 수 있습니다
+- **SDK**: 더 최신 버전의 서버를 실행하는 동안에도 이전 버전을 그대로 유지할 수 있습니다
+- **호환성**: 새로운 SDK 기능은 최신 서버 버전을 필요로 할 수 있습니다
+
+모든 기능과 보안 업데이트에 접근할 수 있도록 Langfuse Server를 항상 최신 상태로 유지하는 것을 권장합니다.
+
+## 릴리스 노트
+
+릴리스 노트는 GitHub에 게시됩니다:
+
+- [Langfuse Server](https://github.com/langfuse/langfuse/releases)
+- [Langfuse Python SDK](https://github.com/langfuse/langfuse-python/releases)
+- [Langfuse JS/TS SDK](https://github.com/langfuse/langfuse-js/releases)
+
+GitHub 릴리스를 watch하면 새로운 릴리스에 대한 알림을 받을 수 있습니다:
+
+<Frame className="max-w-md block">
+  ![Langfuse
+  releases](https://static.langfuse.com/docs-legacy-gifs/github-watch-changelog.gif)
+</Frame>
+
+또한 메일링 리스트를 구독하면 새로운 릴리스와 새로운 메이저 버전에 대한 알림을 받을 수 있습니다:
+
+import { ProductUpdateSignup } from "@/components/ProductUpdateSignup";
+
+<ProductUpdateSignup source="self-host versioning" className="my-3 max-w-sm" />

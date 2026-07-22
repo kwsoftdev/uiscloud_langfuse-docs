@@ -1,0 +1,47 @@
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+import { source, docsKrSource } from "@/lib/source";
+import { DocsChromePage } from "@/components/DocsChromePage";
+import { buildSectionMetadata } from "@/lib/mdx-page";
+import { buildLocalizedAlternates } from "@/lib/localization";
+import type { LocaleLink } from "@/components/LocaleSwitcher";
+
+type PageProps = {
+  params: Promise<{ slug?: string[] }>;
+};
+
+export default async function DocPage({ params }: PageProps) {
+  const { slug = [] } = await params;
+  const page = source.getPage(slug);
+  if (!page) notFound();
+
+  const localeLinks: LocaleLink[] = [{ lang: "en", href: "/docs" }];
+  if (docsKrSource.getPage(slug)) {
+    const slugPath = slug.length > 0 ? `/${slug.join("/")}` : "";
+    localeLinks.push({ lang: "ko", href: `/docs/kr${slugPath}` });
+  }
+
+  return <DocsChromePage page={page} bodyChromeProps={{ localeLinks }} />;
+}
+
+export async function generateMetadata({
+  params,
+}: PageProps): Promise<Metadata> {
+  const { slug = [] } = await params;
+  const page = source.getPage(slug);
+  if (!page) return { title: "Not Found" };
+
+  const languages = docsKrSource.getPage(slug)
+    ? buildLocalizedAlternates({
+        slug,
+        defaultLocale: "en",
+        routes: { en: "/docs", "ko-KR": "/docs/kr" },
+      })
+    : undefined;
+
+  return buildSectionMetadata(page, "docs", "Docs", slug, { languages });
+}
+
+export function generateStaticParams() {
+  return source.generateParams();
+}

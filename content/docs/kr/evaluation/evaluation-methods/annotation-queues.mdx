@@ -1,0 +1,97 @@
+---
+title: 주석 큐
+description: 새로운 워크플로 도구를 사용하여 주석 작업을 쉽게 관리하세요. 큐를 생성하고 트레이스를 추가한 뒤, 간단한 UI로 Langfuse에서 LLM 애플리케이션 트레이스를 검토하고 라벨링할 수 있습니다.
+sourceRevision: 5be622514ee5d22a845de565371c639173b5e5c9
+translationStatus: machine
+---
+
+# 주석 큐 [#annotation-queues]
+
+주석 큐(Annotation Queues)는 도메인 전문가가 트레이스, 관측(observation) 또는 세션에 [점수](/docs/evaluation/scores/overview)와 코멘트를 추가할 수 있도록 만들어진 수동 [평가 방법](/docs/evaluation/core-concepts#evaluation-methods)입니다.
+
+<Video
+  src="https://static.langfuse.com/docs-videos/2025-12-19-annotation-queues.mp4"
+  aspectRatio={16 / 9}
+  gifStyle
+/>
+
+## 왜 주석 큐를 사용해야 하나요?
+
+- 애플리케이션 결과를 수동으로 탐색하고 점수와 코멘트를 추가할 수 있습니다
+- 도메인 전문가가 일부 트레이스에 점수와 코멘트를 추가할 수 있도록 허용합니다
+- [수정된 출력](/docs/observability/features/corrections)을 추가하여 모델이 생성했어야 할 결과를 기록할 수 있습니다
+- LLM-as-a-Judge 평가를 사람이 직접 수행하는 주석과 정렬할 수 있습니다
+
+## 단계별 설정
+
+<Steps>
+
+### 새 주석 큐 생성
+
+- `New Queue`를 클릭하여 새 큐를 생성합니다.
+- 이 큐에서 사용할 [`Score Configs`](/docs/evaluation/scores/data-model#score-config)를 선택합니다.
+- `Queue name`과 `Description`(선택 사항)을 설정합니다.
+- 큐에 사용자를 할당합니다(선택 사항).
+
+<Callout type="info">
+주석 큐를 사용하려면 주석 작업의 채점 기준을 정의하는 score config가 필요합니다. 자세한 내용은 [Score Config 생성 및 관리 방법](/faq/all/manage-score-configs#create-a-score-config)을 참고하세요.
+</Callout>
+
+### 큐에 트레이스, 관측 또는 세션 추가
+
+주석 큐를 생성한 후에는 트레이스, 관측 또는 세션을 큐에 할당할 수 있습니다.
+
+<Tabs items={["Bulk Selection", "Single Item"]}>
+<Tab>
+여러 트레이스, 세션 또는 관측을 큐에 추가하려면:
+
+1. 체크박스를 통해 트레이스, 관측 또는 세션을 선택합니다.
+2. "Actions" 드롭다운 메뉴를 클릭합니다
+3. `Add to queue`를 클릭하여 선택한 트레이스, 세션 또는 관측을 큐에 추가합니다.
+4. 트레이스, 세션 또는 관측을 추가할 큐를 선택합니다.
+
+<Frame fullWidth>
+  ![Annotate](/images/docs/add_multiple_items_to_queue.png)
+</Frame>
+
+</Tab>
+<Tab>
+
+단일 트레이스, 세션 또는 관측을 추가하려면:
+
+1. `Annotate` 드롭다운을 클릭합니다
+2. 트레이스, 세션 또는 관측을 추가할 큐를 선택합니다
+
+<Frame fullWidth>![Annotate](/images/docs/add_to_queue.png)</Frame>
+
+</Tab>
+</Tabs>
+
+### 주석 큐 처리
+
+큐에 있는 각 항목마다 하나의 주석 작업이 표시됩니다.
+
+1. `Annotate` 카드에서 정의된 채점 기준에 대해 점수를 추가합니다
+2. `Complete + next`를 클릭하여 다음 주석 작업으로 이동하거나 큐를 종료합니다
+
+</Steps>
+
+## 키보드 단축키 [#keyboard-shortcuts]
+
+큐 처리는 완전히 키보드로 동작하도록 설계되어 있어 마우스 없이도 항목에 점수를 매길 수 있습니다. 단축키는 탐색 후 편집(navigate-then-edit) 방식을 따르며, 텍스트 필드에 입력 중이거나 다이얼로그 또는 드롭다운이 열려 있는 동안에는 비활성화됩니다. 큐 화면에서 `?`를 누르면 인앱 치트시트를 열 수 있습니다.
+
+| 키                     | 동작                                          |
+| ---------------------- | --------------------------------------------- |
+| `→` / `←`              | 큐의 다음 / 이전 항목으로 이동                |
+| `↑` / `↓`              | 점수 필드 간 이동(끝에서 순환)                |
+| `1`–`9`                | 카테고리형 또는 불리언 필드의 N번째 옵션 선택 |
+| `Enter`                | 현재 값을 확정하거나 드롭다운 열기            |
+| `Esc`                  | 텍스트 필드를 벗어나 필드 탐색으로 돌아가기   |
+| `Cmd`/`Ctrl` + `Enter` | 항목을 완료하고 다음으로 이동                 |
+| `?`                    | 키보드 단축키 치트시트 열기                   |
+
+필드에 포커스가 있을 때 카테고리형 옵션에는 숫자 배지가 표시되며, **Mark Completed** 버튼에는 `⌘↵` / `Ctrl↵` 힌트가 표시됩니다. 점수 필드 단축키(`↑`/`↓`, `1`–`9`, `Enter`, `Esc`)는 트레이스, 관측, 세션 페이지의 인라인 **Annotate** 드로어에서도 동작합니다. 큐 탐색 단축키(`→`/`←`, `Cmd`/`Ctrl` + `Enter`)는 큐를 처리할 때 적용됩니다.
+
+## API를 통한 주석 큐 관리
+
+[API](https://api.reference.langfuse.com/#tag/annotationqueues/GET/api/public/annotation-queues)를 통해 주석 큐를 관리할 수 있습니다. 이를 활용하면 주석 워크플로를 확장하고 자동화하거나, Langfuse를 [바이브 코딩으로 만든 커스텀 주석 도구](/blog/2025-11-25-vibe-coding-custom-annotation-ui)의 백엔드로 사용할 수 있습니다.

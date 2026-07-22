@@ -1,0 +1,58 @@
+---
+title: 텔레메트리 (셀프 호스팅)
+sidebarTitle: 텔레메트리
+description: 셀프 호스팅 배포에서 Langfuse가 전송하는 텔레메트리가 무엇인지, 왜 수집되는지, 언제 비활성화할 수 있는지 알아보세요.
+label: "Version: v3"
+sourceRevision: a5b0436c20b23836f6c8e54904de4660a34137cc
+translationStatus: machine
+---
+
+# 텔레메트리
+
+Langfuse 셀프 호스팅은 소량의 배포 텔레메트리를 Langfuse로 전송합니다.
+
+Langfuse Enterprise(셀프 호스팅)의 경우, 이 텔레메트리는 라이선스 준수 확인과 라이선스 사용량을 대략적으로 파악하는 데 사용됩니다.
+Langfuse OSS의 경우, 동일한 텔레메트리가 채택 현황을 파악하고 개선 사항 및 로드맵 항목의 우선순위를 정하는 데 도움이 됩니다.
+
+<Callout type="info">
+  Langfuse는 셀프 호스팅 배포에서 원본 트레이스, 프롬프트, 관측(observation), 점수, 데이터셋
+  콘텐츠를 전송하지 않습니다. 오직 상위 수준으로 집계된 사용량 메트릭만 공유됩니다.
+</Callout>
+
+## 텔레메트리 전송 위치
+
+텔레메트리는 PostHog Cloud를 통해 Langfuse의 텔레메트리 파이프라인으로 전송됩니다.
+
+구현 참고: [Telemetry job](https://github.com/langfuse/langfuse/blob/main/web/src/features/telemetry/index.ts)
+
+## 전송되는 항목
+
+Langfuse는 이러한 값을 로컬에서 계산하여 단일 텔레메트리 이벤트로 전송합니다.
+모든 메트릭은 전송 전에 해당 인스턴스의 모든 프로젝트에 걸쳐 집계됩니다.
+Langfuse는 원본 ClickHouse 행이나 프로젝트별 세부 내역을 전송하지 않습니다.
+
+| 필드                              | 의미                                                                                                                           | 출처                    |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ----------------------- |
+| `langfuseVersion`                 | 실행 중인 Langfuse 버전                                                                                                        | 애플리케이션 메타데이터 |
+| `eeLicenseKey`                    | 설정된 `LANGFUSE_EE_LICENSE_KEY` (존재하는 경우)                                                                               | 환경 변수               |
+| `userDomains`                     | 로컬 `users` 테이블 기준 최대 30개의 이메일 도메인과 사용자 수. 원본 이메일 주소는 개인정보(PII)로 간주되어 전송되지 않습니다. | Postgres                |
+| `totalProjects`                   | 현재 삭제되지 않은 프로젝트 수                                                                                                 | Postgres                |
+| `traces`                          | 보고 기간 내 생성된 총 트레이스 수                                                                                             | 로컬 ClickHouse 집계    |
+| `scores`                          | 보고 기간 내 생성된 총 점수 수                                                                                                 | 로컬 ClickHouse 집계    |
+| `observations`                    | 보고 기간 내 생성된 총 관측(observation) 수                                                                                    | 로컬 ClickHouse 집계    |
+| `datasets`                        | 보고 기간 내 생성된 총 데이터셋 수                                                                                             | Postgres                |
+| `datasetItems`                    | 보고 기간 내 생성된 총 데이터셋 아이템 수                                                                                      | Postgres                |
+| `datasetRuns`                     | 보고 기간 내 생성된 총 데이터셋 실행 수                                                                                        | Postgres                |
+| `datasetRunItems`                 | 보고 기간 내 생성된 총 데이터셋 실행 아이템 수                                                                                 | 로컬 ClickHouse 집계    |
+| `startTimeframe` / `endTimeframe` | 위 항목들의 집계에 사용된 보고 기간                                                                                            | 애플리케이션 메타데이터 |
+
+## 텔레메트리를 비활성화할 수 있나요?
+
+### Langfuse OSS
+
+가능합니다. 모든 Langfuse 애플리케이션 컨테이너에 `TELEMETRY_ENABLED=false`를 설정하세요.
+
+### Langfuse Enterprise (셀프 호스팅)
+
+Enterprise 셀프 호스팅 텔레메트리는 라이선스 준수 확인에 사용되며 비활성화할 수 없습니다.
+조달, 네트워크 또는 개인정보 보호 관련 문의가 있으시면 [문의하기](/support)를 이용해 주세요.

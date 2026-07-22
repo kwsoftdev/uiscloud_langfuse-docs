@@ -1,0 +1,206 @@
+---
+title: 트레이스에 HTTP 요청이나 데이터베이스 쿼리가 표시되는 이유는 무엇인가요?
+description: Langfuse 대시보드에 LLM 호출과 함께 HTTP GET, SQL 쿼리, 헬스 체크 같은 스팬이 표시된다면, 그 이유와 해결 방법을 알려드립니다.
+tags: [observability, integration, observability-get-started]
+sourceRevision: ebd88776f7a2585db353a96b9309ff06a258a8fa
+translationStatus: machine
+---
+
+# 트레이스에 HTTP 요청이나 데이터베이스 쿼리가 표시되는 이유는 무엇인가요?
+
+애플리케이션이 다른 OpenTelemetry 계측 라이브러리를 사용하는 경우, AI 관련 모니터링이나 개선과 관련 없는 [관측값(observations)](/docs/observability/data-model#observations-traces-and-sessions)이 Langfuse에 나타날 수 있습니다. 이러한 관측값도 [빌링 단위(billable units)](/docs/administration/billable-units)에 포함되므로, Langfuse 설정에서 제거하는 것이 좋습니다.
+
+이러한 스팬은 이름으로 쉽게 알아볼 수 있습니다: `GET /api/...`, `sql`, `put_with_retries`, `/ping` 등입니다.
+
+<Frame>
+  ![원하지 않는 GET 스팬이 표시된 Langfuse 트레이스 목록](/images/docs/faq-unwanted-http-database-spans.png)
+</Frame>
+
+## 발생 이유
+
+Langfuse SDK는 [OpenTelemetry(OTEL)](https://opentelemetry.io/)를 기반으로 구축되었습니다. SDK는 [**전역 TracerProvider**](/faq/all/existing-otel-setup#global-tracer-provider)에 연결되는데, 이는 애플리케이션 내 모든 OTEL 계측 라이브러리가 공유하는 단일 허브입니다. 모든 라이브러리의 모든 스팬은 해당 provider에 연결된 모든 프로세서를 거쳐 흐릅니다.
+
+Python v3 및 JS/TS v4 SDK에는 자동 필터링 기능이 없어, Langfuse는 HTTP 요청, 데이터베이스 쿼리, 프레임워크 내부 스팬을 포함해 수신하는 모든 스팬을 내보냅니다. 이 문제는 Python v4+ 및 JS/TS v5+ SDK에서 해결되었으며, 이 버전들은 LLM과 무관한 스팬을 자동으로 제외하는 [기본 스팬 필터](/docs/observability/sdk/advanced-features#filtering-by-instrumentation-scope)를 적용합니다.
+
+```
+┌────────────────────────────────────────────────┐
+│            Global TracerProvider               │
+│                                                │
+│  All spans from all libraries:                 │
+│  ├── LLM calls (OpenAI, Anthropic, ...)    ✅  │
+│  ├── HTTP requests (axios, fetch, ...)     ❌  │
+│  ├── Database queries (SQL, Redis, ...)    ❌  │
+│  └── Framework spans (FastAPI, Express)    ❌  │
+│                                                │
+│  → ALL of these get sent to Langfuse           │
+└────────────────────────────────────────────────┘
+```
+
+Python v4+ 또는 JS/TS v5+ SDK를 사용 중이라면 이 버전들이 기본적으로 LLM과 무관한 스팬을 필터링하므로 이런 문제가 발생하지 않아야 합니다. 이전 SDK 버전에서는 주로 다음과 같은 경우에 이 문제가 발생합니다.
+
+- OTEL 자동 계측(예: JS의 `getNodeAutoInstrumentations()` 또는 Python 자동 계측)을 사용 중인 경우입니다. 이는 HTTP 클라이언트, 데이터베이스, 웹 프레임워크를 포함해 발견 가능한 모든 라이브러리를 자동으로 계측합니다. [Langfuse에서 원하지 않는 스팬](/faq/all/existing-otel-setup#unwanted-spans-in-langfuse)을 참고하세요.
+- 다른 관측성(observability) 도구(Sentry, Datadog, Logfire)가 이미 전역 TracerProvider를 설정해 두었고, Langfuse도 여기에 함께 연결된 경우입니다. [기존 OTEL 설정과 함께 Langfuse 사용하기](/faq/all/existing-otel-setup) 또는 [Sentry와 함께 사용하기](/faq/all/existing-sentry-setup)를 참고하세요.
+- 배포 환경이 OTEL을 자동으로 주입하는 경우입니다(예: ADOT를 사용하는 AWS Bedrock AgentCore). [AWS Bedrock AgentCore](/faq/all/existing-otel-setup#aws-bedrock-agentcore-adot)를 참고하세요.
+
+전역 TracerProvider의 작동 방식과 여러 도구 간 상호작용에 대한 자세한 설명은 [기존 OpenTelemetry 설정과 함께 Langfuse 사용하기](/faq/all/existing-otel-setup)를 참고하세요.
+
+## 해결 방법
+
+### 최신 SDK로 업그레이드(권장)
+
+Langfuse Python SDK v4+ 및 JS/TS SDK v5+는 별도 설정 없이 LLM 관련 스팬만 유지하고 HTTP, 데이터베이스, 프레임워크 스팬을 제외하는 **기본 스팬 필터**를 적용합니다. 기본 필터가 유지하는 항목과 커스터마이징 방법에 대한 자세한 내용은 [Instrumentation Scope별 필터링](/docs/observability/sdk/advanced-features#filtering-by-instrumentation-scope)을 참고하세요.
+
+```python
+# Python v4+ — 별도 설정이 필요 없는 스마트 기본 필터
+from langfuse import Langfuse
+
+langfuse = Langfuse()
+```
+
+```typescript
+// JS/TS v5+ — 별도 설정이 필요 없는 스마트 기본 필터
+import { NodeSDK } from "@opentelemetry/sdk-node";
+import { LangfuseSpanProcessor } from "@langfuse/otel";
+
+const sdk = new NodeSDK({
+  spanProcessors: [new LangfuseSpanProcessor()],
+});
+
+sdk.start();
+```
+
+### 필터링 커스터마이징
+
+기본 필터가 요구 사항에 맞지 않는다면 내보낼 스팬을 직접 커스터마이징할 수 있습니다. 각 스팬은 어떤 라이브러리가 생성했는지 식별하는 레이블인 **instrumentation scope**를 가지고 있습니다.
+
+스팬의 scope 이름을 확인하려면 Langfuse UI에서 관측값을 클릭한 뒤 `metadata.scope.name`을 확인하세요.
+
+<LangTabs items={["Python SDK v4+", "JS/TS SDK v5+", "Python SDK v3", "JS/TS SDK v4"]}>
+
+<Tab>
+
+**기본 필터와 결합**하여 추가 scope를 포함할 수 있습니다.
+
+```python
+from langfuse import Langfuse
+from langfuse.span_filter import is_default_export_span
+
+langfuse = Langfuse(
+    should_export_span=lambda span: (
+        is_default_export_span(span)
+        or (
+            span.instrumentation_scope is not None
+            and span.instrumentation_scope.name.startswith("my_framework")
+        )
+    )
+)
+```
+
+또는 (권장하지 않지만) **모든 스팬을 내보낼** 수도 있습니다.
+
+```python
+langfuse = Langfuse(should_export_span=lambda span: True)
+```
+
+</Tab>
+
+<Tab>
+
+**기본 필터와 결합**하여 추가 scope를 포함할 수 있습니다.
+
+```typescript
+import { isDefaultExportSpan, type ShouldExportSpan } from "@langfuse/otel";
+
+const shouldExportSpan: ShouldExportSpan = ({ otelSpan }) =>
+  isDefaultExportSpan(otelSpan) ||
+  otelSpan.instrumentationScope.name.startsWith("my-framework");
+```
+
+또는 **특정 scope를 차단**할 수도 있습니다.
+
+```typescript
+const blockedScopes = ["express", "http", "pg", "redis", "fastify"];
+
+new LangfuseSpanProcessor({
+  shouldExportSpan: ({ otelSpan }) =>
+    !blockedScopes.includes(otelSpan.instrumentationScope.name),
+});
+```
+
+</Tab>
+
+<Tab>
+
+원하지 않는 **특정 scope를 차단**합니다.
+
+```python
+from langfuse import Langfuse
+from langfuse.span_filter import is_default_export_span
+
+blocked = {
+    # HTTP clients
+    "opentelemetry.instrumentation.requests",
+    "opentelemetry.instrumentation.httpx",
+
+    # Web frameworks
+    "opentelemetry.instrumentation.fastapi",
+    "opentelemetry.instrumentation.starlette",
+    "flask",
+    "django",
+
+    # Databases
+    "sqlalchemy",
+    "psycopg",
+    "psycopg2",
+}
+
+langfuse = Langfuse(
+    should_export_span=lambda span: (
+        is_default_export_span(span)
+        and (
+            span.instrumentation_scope is None
+            or span.instrumentation_scope.name not in blocked
+        )
+    )
+)
+```
+
+이전 `blocked_instrumentation_scopes` 파라미터는 여전히 작동하지만 지원 중단(deprecated) 예정이며 향후 제거될 예정입니다 — 차단 규칙은 `should_export_span`으로 표현하는 것을 권장합니다.
+
+</Tab>
+
+<Tab>
+
+원하지 않는 **특정 scope를 차단**합니다.
+
+```typescript
+import { NodeSDK } from "@opentelemetry/sdk-node";
+import { LangfuseSpanProcessor } from "@langfuse/otel";
+
+const blockedScopes = ["express", "http", "pg", "redis", "fastify"];
+
+const sdk = new NodeSDK({
+  spanProcessors: [
+    new LangfuseSpanProcessor({
+      shouldExportSpan: ({ otelSpan }) =>
+        !blockedScopes.includes(otelSpan.instrumentationScope.name),
+    }),
+  ],
+});
+
+sdk.start();
+```
+
+</Tab>
+
+</LangTabs>
+
+필터링 옵션과 헬퍼 함수의 전체 목록은 [SDK 고급 기능 문서](/docs/observability/sdk/advanced-features#filtering-by-instrumentation-scope)를 참고하세요. 정확한 scope 이름은 사용 중인 라이브러리에 따라 다르므로, 항상 Langfuse UI에서 `metadata.scope.name`을 확인해 어떤 scope를 필터링할지 결정하세요.
+
+<Callout type="warning" title="필터링으로 인해 트레이스가 고아 상태가 될 수 있습니다">
+  부모 스팬(예: LLM 호출을 감싸는 FastAPI 요청)을 필터링하면, 해당 자식 스팬들은 연결이 끊긴 최상위 트레이스로 나타납니다. 해결 방법은 [고아 트레이스(orphaned traces)](/faq/all/existing-otel-setup#orphaned-traces)를 참고하세요.
+</Callout>
+
+---
+
+여전히 예상치 못한 스팬이 보이시나요? [지원팀](/support)에 문의해 주세요.

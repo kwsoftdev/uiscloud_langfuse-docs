@@ -1,0 +1,283 @@
+---
+title: Blob Storage로 내보내기
+description: 트레이스, observation, 강화된 observation, 점수를 S3, GCS, Azure Blob Storage 등 Blob Storage로 내보냅니다.
+sidebarTitle: Blob Storage로 내보내기
+sourceRevision: 39a2963efc721e6a1c0a943cdd85d182021d2280
+translationStatus: machine
+---
+
+import BlobStorageReExporting from "@/components-mdx/blob-storage-re-exporting.mdx";
+import BlobStorageEmptyFiles from "@/components-mdx/blob-storage-empty-files.mdx";
+
+# Blob Storage 통합을 통한 내보내기
+
+<AvailabilityBanner
+  availability={{
+    hobby: "not-available",
+    core: "not-available",
+    pro: "team-add-on",
+    enterprise: "full",
+    selfHosted: "full",
+  }}
+/>
+
+`traces`, `observations`, 강화된 observation, `scores`를 S3, GCS, Azure Blob Storage 등 Blob Storage로 예약 내보내기할 수 있습니다.
+
+이 내보내기는 `20분`마다, 또는 `hourly`(매시간), `daily`(매일), `weekly`(매주) 일정으로 실행할 수 있습니다.
+프로젝트 설정으로 이동하여 `Integrations > Blob Storage`를 선택해 새 내보내기를 설정하세요.
+S3, S3 호환 스토리지, Google Cloud Storage, Azure Blob Storage 중 사용할 스토리지를 선택합니다.
+
+## Blob Storage를 통한 내보내기 시작하기
+
+내보내기를 설정하려면 `Your Project` > `Settings` > `Integrations` > `Blob Storage`로 이동하세요.
+
+사용하는 벤더와 인증하기 위한 설정을 입력하고, 통합을 활성화한 뒤 저장을 누릅니다.
+통합을 활성화하면 잠시 후 최초 내보내기가 시작되고, 이후에는 선택한 일정에 따라 계속 진행됩니다.
+내보내기는 Parquet(기본값), CSV, JSON, JSONL 파일 형식을 지원합니다 — [파일 형식](#file-formats)을 참고하세요.
+사용 중인 벤더에 맞는 자격 증명을 얻는 방법은 [Blob Storage 문서](/self-hosting/deployment/infrastructure/blobstorage)를 참고하세요.
+
+<Frame className="my-10" fullWidth>
+  ![Blob Storage Integration Setup](/images/docs/blob-storage.png)
+</Frame>
+
+## 파일 형식 [#file-formats]
+
+내보내기는 Apache Parquet, CSV, JSON, JSONL 파일로 작성할 수 있습니다. 새 통합은 기본적으로 **Parquet**를 사용합니다.
+
+- **Parquet**는 스토리지 엔진에 의해 인코딩 및 압축되는 컬럼형 바이너리 형식으로, 대부분의 데이터 웨어하우스와 쿼리 엔진에서 바로 로드할 수 있습니다. Parquet 파일은 이미 압축되어 있으므로 Parquet 내보내기에는 gzip 압축이 적용되지 않습니다.
+- **CSV, JSON, JSONL**은 선택적으로 gzip 압축이 가능한 텍스트 형식입니다.
+
+Parquet observation 내보내기에는 단위당 모델 가격 컬럼(`input_price`, `output_price`, `total_price`)이 포함되지 않습니다. 이 컬럼들은 내보내기 시점의 모델 정의 가격을 스냅샷한 것이며 향후 폐지될 수 있습니다 — 비용 데이터에는 모든 파일 형식에 포함되는 `cost_details`와 `total_cost`를 사용하세요. 자세한 내용은 필드 참조의 [Parquet 내보내기 관련 참고사항](/docs/api-and-data-platform/features/blob-storage-export-fields#parquet-exports)을 참고하세요.
+
+<Callout type="warning">
+**ClickHouse < 25.11을 실행 중인 셀프 호스팅 배포:** Parquet 내보내기 실패가 오류로 표시되지 않을 수 있습니다. 실행이 완료되고 그 [매니페스트](#run-manifest)가 작성되더라도, Parquet 출력이 불완전하거나 유효하지 않을 수 있습니다. ClickHouse 25.11 이상으로 업그레이드하거나, 안정적인 실패 감지를 위해 텍스트 형식(CSV, JSON, JSONL)을 사용하세요.
+</Callout>
+
+## 내보내기 소스 (Fast Preview)
+
+이제 Blob Storage 통합에는 `Export Source` 선택기가 포함됩니다. 강화된 내보내기를 사용할 수 있는 경우 — Langfuse Cloud, 그리고 v4 프리뷰 옵트인(`LANGFUSE_MIGRATION_V4_ALLOW_PREVIEW_OPT_IN`)을 사용하는 셀프 호스팅 배포 — 새 통합은 기본적으로 `Enriched observations (recommended)`(트레이스 속성이 observation에 직접 설정됨)를 사용합니다. 옵트인하지 않은 셀프 호스팅 배포에서는 강화된 내보내기를 사용할 수 없으며, 새 통합은 기본적으로 `Traces and observations (legacy)`를 사용합니다.
+
+이 소스는 트레이스 속성이 포함된 강화된 observation을 사용하며 훨씬 더 나은 내보내기 성능을 제공합니다. 선택한 소스와 관계없이 `Scores`는 항상 포함됩니다.
+
+사용 가능한 옵션과 각 소스가 버킷 내 `{prefix}{project-id}/` 하위에 작성하는 디렉터리는 다음과 같습니다.
+
+| 내보내기 소스                                                | 작성되는 디렉터리                                         |
+| ------------------------------------------------------------ | --------------------------------------------------------- |
+| `Traces and observations (legacy)`                           | `traces/`, `observations/`, `scores/`                     |
+| `Traces and observations (legacy) and enriched observations` | `traces/`, `observations/`, `observations_v2/`, `scores/` |
+| `Enriched observations (recommended)`                        | `observations_v2/`, `scores/`                             |
+
+모든 실행은 `manifests/` 하위에 [실행 매니페스트](#run-manifest)도 작성합니다. 각 파일에 포함된 컬럼은 필드 참조의 [내보내기 소스 개요](/docs/api-and-data-platform/features/blob-storage-export-fields#export-sources)를 참고하세요.
+
+<Callout type="warning">
+  `Traces and observations (legacy)` 소스는 더 이상 사용되지 않으며 향후 릴리스에서
+  제거될 예정입니다. 새 통합은 `Enriched observations (recommended)`를 사용해야
+  하며, 기존 레거시 통합은 [업그레이드](#upgrade-path)를 강력히 권장합니다.
+</Callout>
+
+Langfuse Cloud에서 여전히 레거시 소스를 내보내는 통합(`Traces and observations (legacy) and enriched observations` 포함)은 `{prefix}{project-id}/DEPRECATION_NOTICE.txt` 위치에 일반 텍스트 폐지 알림도 받습니다. 이 파일은 매 성공적인 실행마다 갱신되며, 실행의 [매니페스트](#run-manifest) 작성 이후 best-effort로 작성되고 매니페스트에는 목록으로 포함되지 않으며, 통합이 `Enriched observations (recommended)`로 전환된 이후 다음 성공적인 실행 시 자동으로 제거됩니다. 매니페스트는 여전히 실행 완료를 나타내는 권위 있는 표시이므로, 이 알림 파일을 완료 신호로 취급하지 마세요. 프리픽스 필터 없이 버킷 콘텐츠를 diff하거나 object-created 이벤트를 구독하는 파이프라인이 있다면 이 오브젝트도 고려해야 합니다.
+
+<Callout type="info">
+**Langfuse Cloud:** 레거시 내보내기 소스는 더 이상 새로 선택할 수 없습니다.
+
+- 2026-05-20 이후 생성된 프로젝트는 레거시 내보내기 소스를 사용할 수 없습니다.
+- 기존 프로젝트라도, 2026-06-22 이후 생성된(새로 구성된 것 포함) Blob Storage 통합은 레거시 내보내기 소스를 선택할 수 없습니다.
+
+두 경우 모두 Export Source 선택기가 표시되지 않으며 내보내기는 자동으로 `Enriched observations (recommended)`를 사용합니다. REST API는 레거시 값을 `400 BAD_REQUEST`로 거부합니다. 2026-06-22 이전에 생성된 Blob Storage 통합은 구성된 내보내기 소스를 유지하며 계속 선택기를 볼 수 있습니다.
+
+**셀프 호스팅:** 이 날짜 기준은 적용되지 않습니다. 다만 배포가 v4 마이그레이션(`LANGFUSE_MIGRATION_V4_WRITE_MODE=events_only`)을 완료하면, 레거시 트레이스/observation 테이블이 더 이상 작성되지 않으므로 이전에 저장된 값을 포함해 레거시 내보내기 소스를 더 이상 사용할 수 없으며, 강화된 소스만 남으면 선택기가 숨겨집니다.
+
+</Callout>
+
+### 기존 구성의 업그레이드 경로 [#upgrade-path]
+
+이 마이그레이션 경로는 **2026-06-22 이전에 생성된 Cloud Blob Storage 통합**과 **여전히 레거시 테이블을 작성하는 셀프 호스팅 배포**에 적용됩니다. 더 최신의 Cloud 통합은 이미 `Enriched observations (recommended)`를 사용하며, 아래 1단계의 이중 쓰기 소스를 포함해 레거시 소스를 선택할 수 없습니다.
+
+기존 통합은 변경하기 전까지 계속 `Traces and observations (legacy)`를 사용합니다.
+
+안전하게 마이그레이션하려면:
+
+1. `Traces and observations (legacy) and enriched observations`로 전환합니다.
+2. 두 소스가 함께 내보내지는 동안 다운스트림 작업과 데이터 소비자를 검증합니다(이 모드는 설계상 중복 레코드를 생성합니다).
+3. 소비자를 `traces/`, `observations/` 디렉터리에서 `observations_v2/`로 재지정합니다.
+4. 검증이 완료되면 `Enriched observations (recommended)`로 전환합니다.
+
+<Callout type="warning">
+전환 후에는 `traces/`, `observations/` 디렉터리에 어떠한 파일도 더 이상 작성되지 않습니다 — 데이터가 없는 구간에 대해서도 작성되는 [빈 파일](#empty-files)조차 작성되지 않습니다. 해당 디렉터리를 계속 감시하는 파이프라인은 오류 신호 없이 조용히 멈추게 되므로, 전환 전에 3단계를 먼저 완료하세요.
+</Callout>
+
+소스를 전환할 때 무엇이 바뀌는지에 대한 필드 단위 비교는 [강화된 내보내기와 레거시 내보내기의 차이](/docs/api-and-data-platform/features/blob-storage-export-fields#enriched-vs-legacy-differences)를 참고하세요.
+
+롤아웃에 대한 자세한 내용은 [Simplify for Scale 체인지로그](/changelog/2026-03-10-simplify-for-scale)를 참고하세요.
+
+## 내보내지는 필드
+
+각 내보내기 파일(트레이스, observation, 강화된 observation, 점수)에 포함된 모든 필드에 대한 전체 참조는 [내보내기 필드 참조](/docs/api-and-data-platform/features/blob-storage-export-fields)를 참고하세요.
+
+## 내보낼 컬럼 선택하기 [#export-field-groups]
+
+필드 그룹을 사용하면 observation 내보내기의 각 행에 표시되는 컬럼 그룹을 선택할 수 있습니다. 필드 그룹은 강화된 `observations_v2` 파일과 레거시 `observations` 파일을 포함한 **모든 내보내기 소스**의 observation 내보내기에 적용되며, 소스에 따라 컬럼 내용이 다릅니다. 전체 행은 11개 그룹으로 구성되며, 그중 10개는 켜고 끌 수 있습니다. **Project Settings → Integrations → Blob Storage**의 **Export Field Groups**에서 전환할 수 있습니다.
+
+그룹은 UI에 표시되는 순서대로 나열되어 있으며, 각 그룹 내 필드는 알파벳순으로 정렬됩니다. `core` 그룹은 필수이며 항상 내보내집니다.
+
+| 그룹            | 강화됨 (`observations_v2`)                                                                                   | 레거시 (`observations`)                                                                                                   |
+| --------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| `core`          | `end_time`, `id`, `parent_observation_id`, `project_id`, `start_time`, `trace_id`, `type`                    | 강화된 소스와 동일                                                                                                        |
+| `basic`         | `bookmarked`, `environment`, `level`, `name`, `public`, `session_id`, `status_message`, `user_id`, `version` | `environment`, `level`, `name`, `status_message`, `version`                                                               |
+| `time`          | `completion_start_time`, `created_at`, `updated_at`                                                          | 강화된 소스와 동일                                                                                                        |
+| `io`            | `input`, `output`                                                                                            | 강화된 소스와 동일                                                                                                        |
+| `metadata`      | `metadata`                                                                                                   | 강화된 소스와 동일                                                                                                        |
+| `model`         | `input_price`, `model_id`, `model_parameters`, `output_price`, `provided_model_name`, `total_price`          | 강화된 소스와 동일                                                                                                        |
+| `usage`         | `cost_details`, `total_cost`, `usage_details`, `usage_pricing_tier_id`, `usage_pricing_tier_name`            | `cost_details`, `total_cost`, `usage_details`, `usage_pricing_tier_name`                                                  |
+| `prompt`        | `prompt_id`, `prompt_name`, `prompt_version`                                                                 | 강화된 소스와 동일                                                                                                        |
+| `metrics`       | `latency`, `time_to_first_token`                                                                             | 강화된 소스와 동일                                                                                                        |
+| `trace_context` | `release`, `tags`, `trace_name`                                                                              | 포함되지 않음 — 별도의 [`traces` 파일](/docs/api-and-data-platform/features/blob-storage-export-fields#traces)에서 제공됨 |
+| `tools`         | `tool_call_names`, `tool_calls`, `tool_definitions`                                                          | 강화된 소스와 동일                                                                                                        |
+
+<Callout type="info">
+  단위당 가격 필드(`input_price`, `output_price`, `total_price`)는 `model` 그룹에 속하며, 일치하는 모델 정의에서 가져옵니다. `model`을 선택 해제하면 워커 측 모델 가격 조회가 전혀 수행되지 않습니다. `usage_pricing_tier_id`와 `usage_pricing_tier_name` 필드는 `usage` 그룹에 남아 있습니다. Parquet 파일 형식에서는 `model`을 선택하더라도 이 세 가격 컬럼이 포함되지 않습니다 — [파일 형식](#file-formats)을 참고하세요.
+</Callout>
+
+새 통합은 기본적으로 11개 그룹을 모두 사용하므로, 선택 범위를 좁히지 않는 한 이전 내보내기와 동작이 동일합니다. 필드 그룹은 observation 내보내기에만 적용되며, 레거시 `traces` 파일은 항상 [고정된 컬럼 세트](/docs/api-and-data-platform/features/blob-storage-export-fields#traces)를 포함합니다.
+
+### REST API를 통한 구성 [#field-groups-rest-api]
+
+`GET`, `PUT /api/public/integrations/blob-storage`는 다음을 수용하고 반환합니다.
+
+- `exportSource` — `LEGACY_TRACES_OBSERVATIONS`, `OBSERVATIONS_V2`, 또는 `LEGACY_TRACES_AND_ENRICHED_OBSERVATIONS`.
+- `exportFieldGroups` — 그룹 이름 목록. 제공하는 경우 반드시 `core`를 포함해야 합니다. 모든 내보내기 소스의 observation 내보내기에 적용됩니다. 업데이트 시 생략하면 기존 값이 유지됩니다.
+- `fileType` — `PARQUET`(새 통합의 기본값), `CSV`, `JSON`, 또는 `JSONL`.
+- `compressed` — 불리언 값이며, 새 통합에서는 기본적으로 `true`입니다. `true`이면 파일은 `.csv.gz`, `.json.gz`, `.jsonl.gz`로 작성됩니다. `PARQUET`에는 적용되지 않습니다 — Parquet 파일은 스토리지 엔진에 의해 압축되며 항상 일반 `.parquet` 파일로 작성됩니다.
+
+전체 스키마는 [API 참조](https://api.reference.langfuse.com/#tag/blobstorageintegrations)를 참고하세요.
+
+## 내보내기 모드 [#export-modes]
+
+**Export Mode**는 통합이 어느 시점부터 내보내기를 시작할지를 결정합니다.
+
+| 모드                 | 시작 시점                      | 사용 시기                                                                                           |
+| -------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------- |
+| **Full history**     | 프로젝트 내 가장 오래된 데이터 | 진행 중인 내보내기와 함께 기존 데이터 전체를 일회성으로 백필하려는 경우.                            |
+| **From setup date**  | 통합을 활성화한 시점           | 앞으로의 데이터만 필요하고 히스토리는 필요하지 않은 경우 — 가장 가볍게 시작할 수 있는 옵션입니다.   |
+| **From custom date** | 선택한 시작 날짜               | 특정 시점(예: 분기 시작일)부터의 히스토리를 원하지만 그 이전 데이터는 모두 내보내고 싶지 않은 경우. |
+
+모드를 변경하면 동기화 위치가 초기화되므로, 이는 히스토리를 다시 스캔하는 메커니즘이기도 합니다 — [데이터 재내보내기 및 구성 변경](#re-exporting)을 참고하세요.
+
+## 내보내기 실행 방식 [#how-exports-run]
+
+각 실행은 하나의 시간 구간에 해당하는 데이터를 버킷으로 내보낸 뒤, 다음 구간으로 넘어가 구성된 일정에 따라 내보냅니다.
+
+- **내보내기 지연.** 데이터는 현재 시점까지 곧바로가 아니라 약간의 지연을 두고 내보내지므로, 아직 수집 중인 레코드가 절반만 작성된 채 내보내지지 않습니다. 이벤트가 기록된 시점과 버킷에 나타나는 시점 사이에 약간의 지연이 있을 것으로 예상하세요.
+- **캐치업 / 백필.** 통합이 과거 시점부터 시작하거나 지연이 발생한 경우, 밀린 작업을 순차적으로 처리하며 정상 주기에 안착하기 전까지 짧은 시간 동안 많은 파일을 연속으로 작성할 수 있습니다. 새로 생성된 full-history 통합은 현재 시점을 따라잡을 때까지 이러한 동작을 보입니다.
+
+## 실행 완료 매니페스트 [#run-manifest]
+
+하나의 내보내기 실행은 선택된 내보내기 소스에 따라 테이블당 하나씩, 최대 4개의 파일을 작성하므로 테이블 파일만으로는 실행이 언제 완료되었는지 알 수 없습니다. 모든 성공적인 실행의 마지막 오브젝트로서, Langfuse는 해당 실행이 생성한 모든 파일을 나열하는 매니페스트 파일을 작성합니다.
+
+```
+{prefix}{project-id}/manifests/{max-timestamp}.json
+```
+
+매니페스트는 실행의 모든 테이블 파일이 업로드된 이후에만 업로드됩니다. 매니페스트가 나타나면 그 안에 나열된 모든 파일이 버킷에서 완전히 사용 가능한 상태입니다. 업로드 중 하나라도 실패하면 매니페스트는 작성되지 않고 전체 실행이 재시도됩니다(재시도 시 테이블 파일은 동일한 키로 덮어써집니다). 매니페스트 키의 타임스탬프는 실행의 `maxTimestamp`를 UTC 기준으로 초 단위까지 잘라내고, 콜론을 하이픈으로 바꾸며 밀리초와 끝의 `Z`를 제거한 값입니다(`2026-07-13T09:00:00.000Z` → `2026-07-13T09-00-00`). 이는 해당 실행의 테이블 파일(`{prefix}{project-id}/{table}/{timestamp}.{extension}`)과 동일한 스템(stem)이므로, 한 실행의 테이블 파일과 매니페스트는 동일한 타임스탬프 스템을 공유합니다.
+
+매니페스트 예시:
+
+```json
+{
+  "version": 1,
+  "projectId": "cm0abcd1234efgh5678ijkl90",
+  "exportSource": "OBSERVATIONS_V2",
+  "window": {
+    "minTimestamp": "2026-07-13T08:00:00.000Z",
+    "maxTimestamp": "2026-07-13T09:00:00.000Z"
+  },
+  "maxTimestamp": "2026-07-13T09:00:00.000Z",
+  "createdAt": "2026-07-13T09:02:11.123Z",
+  "tables": ["observations_v2", "scores"],
+  "files": [
+    {
+      "key": "my-prefix/cm0abcd1234efgh5678ijkl90/observations_v2/2026-07-13T09-00-00.parquet",
+      "table": "observations_v2",
+      "fileType": "PARQUET",
+      "format": "parquet",
+      "compressed": false,
+      "contentType": "application/vnd.apache.parquet",
+      "sizeBytes": 1048576,
+      "rowCount": null
+    },
+    {
+      "key": "my-prefix/cm0abcd1234efgh5678ijkl90/scores/2026-07-13T09-00-00.parquet",
+      "table": "scores",
+      "fileType": "PARQUET",
+      "format": "parquet",
+      "compressed": false,
+      "contentType": "application/vnd.apache.parquet",
+      "sizeBytes": 20480,
+      "rowCount": null
+    }
+  ]
+}
+```
+
+스키마에 대한 참고 사항:
+
+- `version`은 하위 호환성이 깨지는 변경 시에만 증가합니다. 새 필드는 버전 증가 없이 추가될 수 있으므로, 파싱 시 알 수 없는 필드는 무시하세요.
+- `window`는 실행이 다루는 데이터의 시간 범위이며, 양쪽 경계 모두 포함(inclusive)됩니다 — 정확히 `maxTimestamp`에 해당하는 레코드는 다음 실행의 구간에도 포함됩니다. `maxTimestamp`는 `window.maxTimestamp`와 동일한 값이며, 매니페스트 파일명의 타임스탬프 스템은 위에서 설명한 대로 이 값에서 도출됩니다.
+- `tables`와 `files`는 선택된 내보내기 소스를 반영합니다. `scores`는 소스와 관계없이 항상 포함됩니다.
+- `files[].key`는 구성된 프리픽스를 포함한 전체 오브젝트 키이므로, 소비자는 경로를 재구성하지 않고도 나열된 파일을 가져올 수 있습니다.
+- `files[].fileType`은 구성된 파일 형식입니다: `JSON`, `CSV`, `JSONL`, 또는 `PARQUET`. `files[].format`은 압축 여부를 추가로 인코딩하며, `parquet`, `json-raw`, `json-gzip`, `jsonl-raw`, `jsonl-gzip`, `csv-raw`, `csv-gzip` 중 하나입니다.
+- `files[].sizeBytes`는 업로드된 크기입니다(압축된 텍스트 형식의 경우 gzip 이후 크기). `files[].rowCount`는 텍스트 형식의 경우 내보내진 행 수이며, Parquet 파일의 경우 `null`입니다.
+- [캐치업 또는 백필](#how-exports-run) 중에는 내보낸 각 구간이 각각 별도의 실행이자 매니페스트가 되므로, 여러 매니페스트가 짧은 시간 안에 연이어 나타날 수 있습니다.
+
+## 완료된 내보내기 실행에 반응하기 [#export-events]
+
+Langfuse는 내보내기 실행이 완료될 때 웹훅을 보내지 않습니다. 대신 `{prefix}{project-id}/manifests/`에 대한 프리픽스 필터와 함께 스토리지 제공업체의 네이티브 object-created 이벤트를 구독하세요 — 매니페스트가 각 실행의 마지막 오브젝트이므로, 이렇게 하면 완료된 실행당 하나의 이벤트를 받게 됩니다. 이벤트가 발생하면 매니페스트를 다운로드하고 `files[].key`에 나열된 오브젝트를 처리하세요.
+
+제공업체별 방법:
+
+- **AWS S3** — 키 프리픽스 필터와 함께 SQS, SNS, Lambda로 전달되는 `s3:ObjectCreated:*`에 대한 [Event Notifications](https://docs.aws.amazon.com/AmazonS3/latest/userguide/EventNotifications.html), 또는 오브젝트 키 프리픽스와 일치하는 [EventBridge 규칙](https://docs.aws.amazon.com/AmazonS3/latest/userguide/EventBridge.html).
+- **Google Cloud Storage** — `OBJECT_FINALIZE` 이벤트에 대한 [Pub/Sub 알림](https://cloud.google.com/storage/docs/pubsub-notifications); 알림 구성을 생성할 때 오브젝트 이름 프리픽스를 설정하세요.
+- **Azure Blob Storage** — `subjectBeginsWith` 필터(예: `/blobServices/default/containers/<container>/blobs/{prefix}{project-id}/manifests/`)와 함께 `Microsoft.Storage.BlobCreated`에 대한 [Event Grid](https://learn.microsoft.com/en-us/azure/storage/blobs/storage-blob-event-overview) 구독.
+- **MinIO** — 프리픽스 필터와 함께 `s3:ObjectCreated:*`에 대한 [버킷 알림](https://min.io/docs/minio/linux/administration/monitoring/bucket-notifications.html)(웹훅, Kafka, AMQP 등).
+- **Backblaze B2** — 프리픽스 필터와 함께 [Event Notifications](https://www.backblaze.com/docs/cloud-storage-event-notifications)(웹훅).
+
+object-created 이벤트를 지원하지 않는 S3 호환 제공업체(예: Wasabi, DigitalOcean Spaces)의 경우, 대신 매니페스트 프리픽스를 폴링하세요. 일정에 따라 `{prefix}{project-id}/manifests/`를 나열하고, 마지막 체크포인트보다 새로운 매니페스트를 처리하면 됩니다. 매니페스트 이름은 내보내기 타임스탬프순으로 사전식 정렬되므로, 마커 기반(`start-after`) 목록 조회로 저렴하게 폴링할 수 있습니다.
+
+## 내보내기 상태 [#export-status]
+
+통합 설정 페이지에는 상태 배지가 표시됩니다.
+
+| 배지         | 의미                                                                                                 |
+| ------------ | ---------------------------------------------------------------------------------------------------- |
+| **Active**   | 활성화되어 동기화된 상태이며, 다음 내보내기가 향후 예약되어 있습니다.                                |
+| **Running**  | 내보내기 작업이 현재 진행 중입니다(스피너로 표시됨).                                                 |
+| **Queued**   | 내보내기가 실행 예정이며 대기 중입니다.                                                              |
+| **Pending**  | 활성화되었지만 아직 내보내기를 실행한 적이 없습니다(`Data exported up to`에 `Never (pending)` 표시). |
+| **Disabled** | 통합이 꺼져 있습니다.                                                                                |
+| **Error**    | 가장 최근 내보내기가 실패했습니다. 오류 메시지와 타임스탬프가 표시됩니다.                            |
+
+같은 페이지의 상태 카드에는 다음 정보도 표시됩니다.
+
+- **Data exported up to** — 마지막으로 성공적으로 내보낸 구간의 타임스탬프(또는 `Never (pending)`).
+- **Next export scheduled** — 다음 실행이 예정된 시각.
+- **Export mode** — `Full history`, `From setup date`, 또는 `From custom date`(해당하는 경우 시작 날짜 포함).
+- Error 상태일 때 오류 메시지와 시간이 포함된 **Last export failed** 알림.
+
+워커가 내보내기 도중 크래시하면, 2시간짜리 안전장치 TTL이 배지를 Running에서 원래 상태(일반적으로 Queued)로 되돌려 다음 예정된 실행이 진행될 수 있도록 합니다. 최신 상태를 보려면 페이지를 새로고침하세요.
+
+Langfuse는 실패한 내보내기를 다음 실행 시 재시도합니다. 반복적인 실패는 프로젝트 관리자에게 이메일 및 구성된 Slack 또는 웹훅 채널로 알림을 보냅니다. **Project Settings → Notifications**에서 구성할 수 있습니다.
+
+## 데이터 재내보내기 및 구성 변경 [#re-exporting]
+
+<BlobStorageReExporting />
+
+## 버킷 내 빈 파일 [#empty-files]
+
+<BlobStorageEmptyFiles />
+
+## 대안
+
+다음과 같은 방법으로도 데이터를 내보낼 수 있습니다.
+
+- [UI](/docs/api-and-data-platform/features/export-from-ui) - Langfuse UI에서 수동으로 일괄 내보내기
+- [SDK/API](/docs/api-and-data-platform/features/public-api) - Langfuse SDK 또는 API를 사용한 프로그래매틱 접근

@@ -1,3 +1,6 @@
+"use client";
+
+import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { CornerBox } from "@/components/ui/corner-box";
 import { Heading } from "@/components/ui/heading";
@@ -7,8 +10,10 @@ import { HomeSection } from "@/components/home/HomeSection";
 import { EnterpriseLogoGrid } from "@/components/shared/EnterpriseLogoGrid";
 import { cn } from "@/lib/utils";
 import { HeroStatsStrip } from "@/components/home/HeroStatsStrip";
+import { isKoreanPath } from "@/lib/i18n/koPaths";
 
 export function Hero() {
+  const ko = isKoreanPath(usePathname());
   return (
     <HomeSection className="pt-5 sm:pt-8 md:pt-[60px]">
       <CornerBox className="-mb-px -mt-px">
@@ -27,18 +32,19 @@ export function Hero() {
             highlightClassName="mix-blend-multiply"
             className="whitespace-nowrap"
           >
-            Open Source<span className="inline max-[499px]:hidden">&nbsp;</span>
+            {ko ? "오픈소스" : "Open Source"}
+            <span className="inline max-[499px]:hidden">&nbsp;</span>
           </TextHighlight>
           <span className="flex min-[500px]:inline">
             <TextHighlight
               highlightClassName="mix-blend-multiply"
               className="whitespace-nowrap min-[500px]:pr-2"
             >
-              Agent Evals &amp;
+              {ko ? "에이전트 평가 &" : "Agent Evals &"}
             </TextHighlight>
           </span>
           <TextHighlight highlightClassName="mix-blend-multiply">
-            Observability
+            {ko ? "옵저버빌리티" : "Observability"}
           </TextHighlight>
         </Heading>
         <Heading
@@ -51,9 +57,9 @@ export function Hero() {
         ></Heading>
         <div className="flex flex-col gap-6">
           <Text className="max-w-xl">
-            Trace, evaluate, and improve AI agents with one open platform. Use
-            production data to understand behavior, collaborate on fixes, and
-            ship better quality at lower cost and latency.
+            {ko
+              ? "하나의 오픈 플랫폼으로 AI 에이전트를 트레이싱하고, 평가하고, 개선하세요. 프로덕션 데이터로 동작을 파악하고, 함께 문제를 해결하며, 더 낮은 비용과 지연 시간으로 더 나은 품질을 제공하세요."
+              : "Trace, evaluate, and improve AI agents with one open platform. Use production data to understand behavior, collaborate on fixes, and ship better quality at lower cost and latency."}
           </Text>
           <div className="flex flex-wrap gap-3 justify-center items-center">
             <Button
@@ -62,15 +68,15 @@ export function Hero() {
               shortcutKey="s"
               href="/cloud"
             >
-              Start free
+              {ko ? "무료로 시작하기" : "Start free"}
             </Button>
             <Button
               variant="secondary"
               size="default"
               shortcutKey="d"
-              href="/docs"
+              href={ko ? "/docs/kr" : "/docs"}
             >
-              Documentation
+              {ko ? "문서 보기" : "Documentation"}
             </Button>
           </div>
         </div>

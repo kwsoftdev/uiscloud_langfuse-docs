@@ -1,0 +1,45 @@
+---
+title: 트레이스에 연결하기
+sidebarTitle: 트레이스에 연결하기
+description: Langfuse 프롬프트를 트레이스에 연결합니다.
+sourceRevision: 024095cba883fbb0b8b2e1839c930baaed4e67da
+translationStatus: machine
+---
+
+# 프롬프트를 트레이스에 연결하기
+
+프롬프트를 [트레이스](/docs/observability)에 연결하면 프롬프트 버전별로 메트릭과 평가를 추적할 수 있습니다. 이는 시간에 따라 프롬프트 품질을 개선하는 데 있어 기반이 됩니다.
+
+프롬프트와 트레이스를 연결한 후, Langfuse에서 생성(generation) 스팬으로 이동하면 응답을 생성하는 데 사용된 프롬프트가 강조 표시됩니다. 메트릭을 확인하려면 프롬프트로 이동하여 `Metrics` 탭을 클릭하세요.
+
+<Video
+  src="https://static.langfuse.com/docs-videos/prompt-linking.mp4"
+  aspectRatio={16 / 9}
+  gifStyle
+  className="mt-4"
+/>
+
+## 프롬프트를 트레이스에 연결하는 방법
+
+import PromptLinking from "@/components-mdx/prompt-linking.mdx";
+
+<PromptLinking />
+
+<Callout type="info">
+  [폴백 프롬프트](/docs/prompt-management/features/guaranteed-availability#fallback)가
+  사용된 경우, 연결이 생성되지 않습니다.
+</Callout>
+
+## 메트릭 참조
+
+{/* TODO: add screenshot of metrics page which shows various scores and cost metrics for versions of a prompt from langfuse-docs project */}
+
+프롬프트가 트레이스에 연결되면, Langfuse는 프롬프트 버전별로 다음 메트릭을 자동으로 집계합니다. Langfuse UI의 Metrics 탭에서 프롬프트 버전 간 이 메트릭들을 비교할 수 있습니다:
+
+- 생성(generation)의 중앙값 지연 시간(latency)
+- 생성(generation)의 중앙값 입력 토큰 수
+- 생성(generation)의 중앙값 출력 토큰 수
+- 생성(generation)의 중앙값 비용
+- 생성(generation) 횟수
+- 중앙값 [점수](/docs/evaluation/scores/data-model#scores) 값
+- 첫 번째 및 마지막 생성(generation) 타임스탬프

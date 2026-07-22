@@ -1,0 +1,156 @@
+---
+title: 수정 사항
+description: LLM 출력의 개선된 버전을 트레이스와 관측값에 직접 기록하여 더 나은 데이터셋을 구축하고 지속적인 개선을 이끌어냅니다.
+sidebarTitle: 수정 사항
+sourceRevision: ebd88776f7a2585db353a96b9309ff06a258a8fa
+translationStatus: machine
+---
+
+# 수정된 출력
+
+수정 사항(Corrections)을 사용하면 LLM 출력의 개선된 버전을 트레이스 및 관측값 뷰에 직접 기록할 수 있습니다. 도메인 전문가는 모델이 어떻게 출력했어야 하는지를 문서화할 수 있으며, 이는 파인튜닝 데이터셋과 지속적인 개선의 토대가 됩니다.
+
+<Frame>
+  ![Corrected output with diff view](/images/docs/corrections-diff-view.png)
+</Frame>
+
+## 수정 사항을 사용하는 이유
+
+- **도메인 전문가 피드백**: 주제 전문가가 자신의 전문 지식을 바탕으로 모델이 출력했어야 하는 내용을 제공합니다
+- **파인튜닝 데이터셋**: 수정된 출력을 원본 입력과 함께 내보내 프로덕션 트레이스로부터 고품질 학습 데이터를 생성합니다
+- **품질 벤치마킹**: 프로덕션 트레이스 전반에서 실제 출력과 기대 출력을 비교하여 체계적인 문제를 파악합니다
+- **휴먼인더루프 워크플로**: 리뷰 프로세스 중에 수정 사항을 기록하며, 특히 [주석 큐](/docs/evaluation/evaluation-methods/annotation-queues)에서 유용합니다
+
+## 작동 방식
+
+UI 또는 API를 통해 모든 트레이스나 관측값에 수정된 출력을 추가할 수 있습니다. 수정 사항은 변경된 부분을 보여주는 diff 뷰와 함께 원본 출력 옆에 표시됩니다. 각 트레이스 또는 관측값은 하나의 수정된 출력을 가질 수 있습니다.
+
+## 수정 사항 추가하기
+
+<LangTabs items={["Langfuse UI", "API/SDK"]}>
+
+<Tab>
+
+### UI를 통해 추가하기
+
+트레이스 또는 관측값 상세 페이지로 이동합니다.
+
+1. 원본 출력 아래에 있는 **"Corrected Output"** 필드를 찾습니다
+2. 클릭하여 수정 사항을 추가하거나 편집합니다
+3. 개선된 버전의 출력을 입력합니다
+4. 데이터 형식에 맞게 **JSON 검증 모드**와 **일반 텍스트 모드**를 전환합니다
+5. **diff**를 확인하여 원본 출력과 수정된 출력을 비교합니다
+
+<Frame fullWidth>
+  ![Adding a correction in the UI](/images/docs/corrections-add-ui.png)
+</Frame>
+
+에디터는 입력하는 동안 자동으로 저장되며, JSON 모드에서 실시간 검증 피드백을 제공합니다.
+
+</Tab>
+
+<Tab>
+
+### API/SDK를 통해 추가하기
+
+수정 사항은 `dataType: "CORRECTION"`과 `name: "output"`을 가진 점수(score)로 생성됩니다.
+
+<Tabs items={["Python", "TypeScript", "HTTP"]}>
+<Tab>
+
+```python
+from langfuse import Langfuse
+
+langfuse = Langfuse()
+
+# 트레이스에 수정 사항 추가
+langfuse.create_score(
+    trace_id="trace-123",
+    name="output",
+    value="The corrected output text here",
+    data_type="CORRECTION"
+)
+
+# 관측값에 수정 사항 추가
+langfuse.create_score(
+    trace_id="trace-123",
+    observation_id="obs-456",
+    name="output",
+    value="The corrected output text here",
+    data_type="CORRECTION"
+)
+```
+
+</Tab>
+<Tab>
+
+```typescript
+import { LangfuseClient } from "@langfuse/client";
+
+const langfuse = new LangfuseClient();
+
+// 트레이스에 수정 사항 추가
+langfuse.score.create({
+  traceId: "trace-123",
+  name: "output",
+  value: "The corrected output text here",
+  dataType: "CORRECTION"
+});
+
+// 관측값에 수정 사항 추가
+langfuse.score.create({
+  traceId: "trace-123",
+  observationId: "obs-456",
+  name: "output",
+  value: "The corrected output text here",
+  dataType: "CORRECTION"
+});
+```
+
+</Tab>
+<Tab>
+
+```bash
+curl -X POST https://cloud.langfuse.com/api/public/scores \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Basic <base64_encoded_credentials>" \
+  -d '{
+    "traceId": "trace-123",
+    "observationId": "obs-456",
+    "name": "output",
+    "value": "The corrected output text here",
+    "dataType": "CORRECTION"
+  }'
+```
+
+</Tab>
+</Tabs>
+
+</Tab>
+
+</LangTabs>
+
+## 수정 사항 조회하기
+
+수정 사항은 점수로 저장되며, 프로그래밍 방식으로 조회하여 데이터셋을 구축하거나 모델 성능을 분석할 수 있습니다.
+
+<Tabs items={["Python", "TypeScript", "HTTP"]}>
+<Tab>
+
+곧 제공될 예정입니다: SDK를 통한 수정 사항 조회.
+
+</Tab>
+<Tab>
+
+곧 제공될 예정입니다: SDK를 통한 수정 사항 조회.
+
+</Tab>
+<Tab>
+
+```bash
+curl -X GET "https://cloud.langfuse.com/api/public/v3/scores?dataType=CORRECTION&fields=subject,details" \
+  -H "Authorization: Basic <base64_encoded_credentials>"
+```
+
+</Tab>
+</Tabs>

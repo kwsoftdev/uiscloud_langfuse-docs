@@ -1,0 +1,32 @@
+---
+title: 세션/대화를 평가하는 방법은?
+tags: [evaluation, observability]
+sourceRevision: 024095cba883fbb0b8b2e1839c930baaed4e67da
+translationStatus: machine
+---
+
+# 세션/대화를 평가하는 방법은?
+
+이 가이드는 개별 트레이스가 아니라 전체 [세션](/docs/observability/features/sessions)(대화, 스레드 등)을 평가하는 방법을 설명합니다.
+여기서 다루는 내용은 Langfuse가 지원하는 모든 [평가 방법](/docs/evaluation/overview)에 적용됩니다.
+
+Langfuse에서 점수는 트레이스, 관측(observation), 또는 세션에 할당할 수 있습니다([데이터 모델](/docs/evaluation/scores/data-model#scores) 참고).
+
+## 세션 수준 점수
+
+1. 세션 ID를 참조하는 [커스텀 점수](/docs/evaluation/evaluation-methods/custom-scores)를 추가할 수 있습니다.
+2. [주석 큐](/docs/evaluation/evaluation-methods/annotation#annotation-queues)를 사용하여 세션에 주석을 달 수 있습니다.
+
+## 트레이스 수준 LLM-as-a-Judge 평가기
+
+[LLM-as-a-Judge 평가기](/docs/evaluation/evaluation-methods/llm-as-a-judge)는 트레이스에 적용할 수 있습니다.
+Langfuse는 세션이 언제 종료되었는지 본질적으로 알 수 없기 때문에, 평가기를 세션에 직접 적용할 수는 없습니다.
+
+트레이스 수준 LLM-as-a-Judge 평가기를 사용해 세션을 평가하는 것을 권장합니다. 이때 트레이스에 전체 대화 기록이 포함되어 있는지 확인하세요. 이는 일반적으로 대화(즉, 대화 기록이나 단기 메모리)가 트레이스 내 LLM 호출의 입력으로 사용되는 경우에 해당합니다. 평가기를 설정할 때 관측(observation)에서 이 특정 정보를 선택할 수 있습니다.
+
+다음 두 가지 방법 중 하나를 선택할 수 있습니다:
+
+1. 모든 트레이스에서 세션을 평가합니다.
+2. 또는 세션의 마지막 트레이스에 특별한 [태그](/docs/observability/features/tags)(예: `conversation_end`)를 적용하고, 이 태그가 있는 트레이스에서만 평가기가 실행되도록 구성합니다. 이 방법은 평가 비용을 절감하고 메트릭을 더 안정적으로 만드는 데 도움이 될 수 있습니다.
+
+두 경우 모두 점수는 트레이스에 할당됩니다.

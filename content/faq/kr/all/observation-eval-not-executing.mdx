@@ -1,0 +1,151 @@
+---
+title: 관측(observation) 수준 평가기가 실행되지 않는 이유는 무엇인가요?
+description: 관측 수준의 LLM-as-a-Judge 평가기를 설정했지만 점수가 나타나지 않는 경우, 이를 진단하고 해결하는 방법을 안내합니다.
+tags: [evaluation]
+sourceRevision: ebd88776f7a2585db353a96b9309ff06a258a8fa
+translationStatus: machine
+---
+
+# 관측(observation) 수준 평가기가 실행되지 않는 이유는 무엇인가요?
+
+관측 수준의 [LLM-as-a-Judge](/docs/evaluation/evaluation-methods/llm-as-a-judge) 평가기를 설정했지만 점수가 나타나지 않습니다. 평가기 로그가 비어 있거나, 설정 마법사의 미리보기에서는 일치하는 데이터가 보이는데도 실행 내역이 전혀 보이지 않을 수 있습니다.
+
+다음 사항들을 확인해 보세요.
+
+1. [호환되는 SDK 버전 또는 수집(ingestion) 방식을 사용하고 있나요?](#incompatible-sdk-version-or-ingestion-method)
+2. [트레이스 수준 필터를 사용하는 경우: 속성이 관측으로 전파되고 있나요?](#trace-level-attributes-not-propagated-to-observations)
+3. [필터가 실제 관측 데이터와 일치하나요?](#filter-configuration-mismatch)
+4. [매핑된 모든 변수가 일치하는 관측에 존재하나요?](#variable-mapping-references-missing-data)
+5. [평가기의 LLM 연결이 정상 작동하나요?](#llm-connection)
+
+## 호환되지 않는 SDK 버전 또는 수집 방식 [#incompatible-sdk-version-or-ingestion-method]
+
+관측 수준 평가기는 [OTEL 엔드포인트](/integrations/native/opentelemetry)를 통해 수집된 데이터에서만 작동합니다. 즉, 다음 중 하나가 필요합니다.
+
+- **OTel 기반 SDK**: Python v3 이상 또는 JS/TS v4 이상 (이 버전들은 OTEL 엔드포인트를 자동으로 사용합니다)
+- **직접 OTEL 수집**: OpenTelemetry 스팬을 Langfuse의 `/api/public/otel` 엔드포인트로 전송
+
+**레거시 REST 수집 API**(`/api/public/ingestion`) 또는 **레거시 SDK**(Python v2, JS/TS v3)를 통해 전송된 데이터는 관측 수준 평가에 필요한 형식의 관측(observation)을 생성하지 않습니다.
+
+**SDK 버전 확인 방법:**
+
+<LangTabs items={["Python", "JS/TS"]}>
+<Tab>
+
+```bash
+pip show langfuse
+```
+
+`3.0.0` 이상 버전이 필요합니다. v2를 사용 중이라면 [Python v2 → v3 마이그레이션 가이드](/docs/observability/sdk/upgrade-path/python-v2-to-v3)를 참고하세요.
+
+</Tab>
+<Tab>
+
+```bash
+npm list langfuse
+```
+
+`4.0.0` 이상 버전이 필요합니다. v3를 사용 중이라면 [JS/TS v3 → v4 마이그레이션 가이드](/docs/observability/sdk/upgrade-path/js-v3-to-v4)를 참고하세요.
+
+</Tab>
+</LangTabs>
+
+**커스텀 수집 파이프라인을 사용하는 경우** (SDK가 아닌 경우), 레거시 수집 엔드포인트 대신 OTEL 엔드포인트로 데이터를 전송해야 합니다. 엔드포인트 형식 및 인증에 대한 자세한 내용은 [OpenTelemetry 통합](/integrations/native/opentelemetry#opentelemetry-endpoint)을 참고하세요.
+
+## 트레이스 수준 속성이 관측으로 전파되지 않음 [#trace-level-attributes-not-propagated-to-observations]
+
+평가기가 `tags`, `userId`, `sessionId`, `metadata`와 같은 트레이스 수준 필터를 사용하는 경우, 평가기는 이러한 속성을 **관측(observation) 자체에서** 확인하며, 상위 트레이스를 조회하지 않습니다. 이러한 속성을 트레이스에만 설정한 경우(예: Python SDK v3의 `update_current_trace()` 또는 JS SDK v4 이하의 `updateActiveTrace()`를 통해), 관측에는 해당 속성이 없으므로 평가기가 일치하지 않습니다.
+
+**해결 방법**: `propagate_attributes()`(Python) 또는 `propagateAttributes()`(JS/TS)를 사용하여 트레이스 수준 속성을 특정 범위 내에서 생성된 모든 관측에 복사하세요.
+
+<LangTabs items={["Python", "JS/TS"]}>
+<Tab>
+
+```python
+from langfuse import get_client, propagate_attributes
+
+langfuse = get_client()
+
+with langfuse.start_as_current_observation(as_type="span", name="user-workflow"):
+    with propagate_attributes(
+        user_id="user_123",
+        session_id="session_abc",
+        tags=["online_evaluator:my-eval"],
+        metadata={"team": "support"},
+    ):
+        # 이 블록 내에서 생성된 모든 관측은
+        # 전파된 속성을 상속받습니다
+        with langfuse.start_as_current_observation(
+            as_type="generation", name="llm-call"
+        ):
+            pass
+```
+
+</Tab>
+<Tab>
+
+```typescript
+import { startActiveObservation, propagateAttributes } from "@langfuse/tracing";
+
+await startActiveObservation("user-workflow", async () => {
+  await propagateAttributes(
+    {
+      userId: "user_123",
+      sessionId: "session_abc",
+      tags: ["online_evaluator:my-eval"],
+      metadata: { team: "support" },
+    },
+    async () => {
+      // 이 콜백 내에서 생성된 모든 관측은
+      // 전파된 속성을 상속받습니다
+    }
+  );
+});
+```
+
+</Tab>
+</LangTabs>
+
+평가하려는 관측을 생성하기 전에, 트레이스 초반에 `propagate_attributes()`를 호출하세요. 이 방식으로 전파된 속성만 관측에 대한 필터 매칭에 사용할 수 있습니다. 자세한 내용은 [계측 가이드](/docs/observability/sdk/instrumentation#add-attributes-to-observations)를 참고하세요.
+
+## 필터 설정 불일치 [#filter-configuration-mismatch]
+
+평가기 필터가 관측에 실제로 존재하는 값과 일치하지 않을 수 있습니다. 아무것도 일치하지 않아도 오류가 발생하지 않고 평가기가 단순히 실행되지 않기 때문에, 이 문제는 발견하기 어려울 수 있습니다.
+
+**흔한 불일치 사례:**
+
+- **관측 이름**: 이름은 계측 코드가 생성하는 값과 정확히 일치해야 합니다. Langfuse UI에서 트레이스로 이동해 평가하려는 관측을 클릭하고 이름을 확인하세요.
+- **관측 타입**: 올바른 타입(`GENERATION`, `SPAN`, `EVENT`)을 필터링하고 있는지 확인하세요. LLM 호출은 일반적으로 `GENERATION`이며, 래퍼 함수는 보통 `SPAN`입니다.
+- **태그 값**: 태그는 정확한 문자열로 매칭됩니다. 평가기가 `my-eval`을 필터링하는데 관측에는 `online_evaluator:my-eval`이 있다면 일치하지 않습니다.
+- **메타데이터 값**: 태그와 마찬가지로 메타데이터 키와 값도 정확히 일치해야 합니다.
+
+**확인 방법**: 설정 마법사의 평가기 미리보기를 사용하세요. 지난 24시간 동안 필터와 일치한 관측을 보여줍니다. 미리보기에서는 일치하는 항목이 나타나는데도 평가가 계속 실행되지 않는다면, 이 페이지에서 설명하는 다른 원인(SDK 버전, 속성 전파, 수집 방식) 중 하나일 가능성이 높습니다.
+
+## 변수 매핑이 존재하지 않는 데이터를 참조함 [#variable-mapping-references-missing-data]
+
+평가기의 모든 변수 매핑은 **필수**입니다. 관측이 필터와 일치하더라도 매핑된 필드가 해당 관측에 존재하지 않으면(예: 변수를 `observation.metadata.tool_call`에 매핑했는데 해당 필드가 없는 경우), 평가기는 점수를 생성하는 대신 오류를 발생시킵니다.
+
+**확인 방법**: 평가기의 로그 탭으로 이동하세요. 오류 항목이 보이면 클릭해 상세 내용을 확인하세요.
+
+<Frame>
+  ![상태와 결과를 보여주는 평가기 로그](/images/docs/faq-evaluator-logs.png)
+</Frame>
+
+**해결 방법:**
+
+- 필터와 일치하는 모든 관측에 해당 필드가 존재하는지 확인하세요
+- 일부 관측에만 해당 필드가 있는 경우, 필터를 좁혀(예: 관측 이름 필터 추가) 필드가 없는 관측을 제외하세요
+- `observation.input` 또는 `observation.output`처럼 항상 존재하는 필드에 변수를 매핑하는 것을 고려하세요
+
+## LLM 연결 [#llm-connection]
+
+관측이 일치하는데도(평가기 로그에 항목이 보임에도) 여전히 점수가 나타나지 않는다면, 평가기가 사용하는 LLM 연결에 문제가 있을 수 있습니다.
+
+**확인 방법**: **Settings → LLM Connections**로 이동해 다음을 확인하세요.
+
+- API 키가 유효하고 만료되지 않았는지
+- 모델이 구조화된 출력(structured output)을 지원하는지 (평가 결과를 파싱하는 데 필요)
+
+설정에 대한 자세한 내용은 [LLM Connections](/docs/administration/llm-connection)를 참고하세요.
+
+그래도 문제가 해결되지 않나요? [지원팀](/support)에 문의하세요.

@@ -1,0 +1,157 @@
+---
+title: 샘플링
+description: Langfuse 서버가 수집하는 트레이스의 양을 제어하기 위해 샘플링을 구성합니다.
+sidebarTitle: 샘플링
+sourceRevision: ebd88776f7a2585db353a96b9309ff06a258a8fa
+translationStatus: machine
+---
+
+# 샘플링
+
+샘플링을 사용하면 Langfuse가 수집하는 트레이스의 양을 제어할 수 있습니다. 샘플링은 클라이언트 측에서 처리됩니다.
+
+`LANGFUSE_SAMPLE_RATE` 환경 변수를 설정하거나 `sample_rate`/`sampleRate` 생성자 매개변수를 사용하여 샘플링 비율을 구성할 수 있습니다. 값은 0과 1 사이여야 합니다.
+
+기본값은 1이며, 이는 모든 트레이스가 수집됨을 의미합니다. 값이 0.2이면 트레이스의 20%만 수집됩니다. SDK는 트레이스 수준에서 샘플링을 수행하므로, 트레이스가 샘플링되면 해당 트레이스 내의 모든 관측값(observation)과 점수도 함께 샘플링됩니다.
+
+<LangTabs items={["Python SDK", "JS/TS SDK", "OpenAI (JS/TS)", "Langchain (JS/TS)", "Vercel AI SDK (JS/TS)"]}>
+<Tab>
+Python SDK에서는 클라이언트를 초기화할 때 샘플링을 구성할 수 있습니다.
+
+```python
+from langfuse import Langfuse, get_client
+import os
+
+# 방법 1: 환경 변수 설정
+os.environ["LANGFUSE_SAMPLE_RATE"] = "0.5"  # As string in env var
+langfuse = get_client()
+
+# 방법 2: 생성자 매개변수로 초기화한 후 클라이언트 가져오기
+Langfuse(sample_rate=0.5)  # 50% of traces will be sampled
+langfuse = get_client()
+```
+
+`@observe()` 데코레이터를 사용하는 경우:
+
+```python
+from langfuse import observe, Langfuse, get_client
+
+# 샘플링을 적용하여 클라이언트 초기화
+Langfuse(sample_rate=0.3)  # 30% of traces will be sampled
+
+@observe()
+def process_data():
+    # Only ~30% of calls to this function will generate traces
+    # The decision is made at the trace level (first span)
+    pass
+```
+
+트레이스가 샘플링되지 않으면 해당 트레이스의 관측값(스팬 또는 생성)이나 관련 점수는 Langfuse로 전송되지 않으며, 이를 통해 트래픽이 많은 애플리케이션에서 데이터 양을 크게 줄일 수 있습니다.
+
+</Tab>
+<Tab title="JS/TS SDK">
+
+Langfuse는 OpenTelemetry의 샘플링 결정을 따릅니다. OTEL SDK에서 샘플러를 구성하여 Langfuse로 전송할 트레이스를 제어할 수 있습니다. 이는 트래픽이 많은 애플리케이션에서 비용을 관리하고 노이즈를 줄이는 데 유용합니다.
+
+다음은 트레이스의 20%만 전송하도록 `TraceIdRatioBasedSampler`를 구성하는 예시입니다.
+
+```ts filename="instrumentation.ts" /new TraceIdRatioBasedSampler(0.2)/
+import { NodeSDK } from "@opentelemetry/sdk-node";
+import { LangfuseSpanProcessor } from "@langfuse/otel";
+import { TraceIdRatioBasedSampler } from "@opentelemetry/sdk-trace-base";
+
+const sdk = new NodeSDK({
+  // Sample 20% of all traces
+  sampler: new TraceIdRatioBasedSampler(0.2),
+  spanProcessors: [new LangfuseSpanProcessor()],
+});
+```
+
+자세한 내용은 [JS/TS SDK 문서](/docs/sdk/typescript/guide#sampling)를 참고하세요.
+
+</Tab>
+<Tab title="OpenAI (JS/TS)">
+
+Langfuse는 OpenTelemetry의 샘플링 결정을 따릅니다. OTEL SDK에서 샘플러를 구성하여 Langfuse로 전송할 트레이스를 제어할 수 있습니다. 이는 트래픽이 많은 애플리케이션에서 비용을 관리하고 노이즈를 줄이는 데 유용합니다.
+
+다음은 트레이스의 20%만 전송하도록 `TraceIdRatioBasedSampler`를 구성하는 예시입니다.
+
+```ts filename="instrumentation.ts" /new TraceIdRatioBasedSampler(0.2)/
+import { NodeSDK } from "@opentelemetry/sdk-node";
+import { LangfuseSpanProcessor } from "@langfuse/otel";
+import { TraceIdRatioBasedSampler } from "@opentelemetry/sdk-trace-base";
+
+const sdk = new NodeSDK({
+  // Sample 20% of all traces
+  sampler: new TraceIdRatioBasedSampler(0.2),
+  spanProcessors: [new LangfuseSpanProcessor()],
+});
+```
+
+평소와 같이 OpenAI 통합을 초기화합니다.
+
+```ts
+import OpenAI from "openai";
+import { observeOpenAI } from "@langfuse/openai";
+
+const openai = observeOpenAI(new OpenAI());
+```
+
+자세한 내용은 [OpenAI 통합 (JS/TS)](/integrations/model-providers/openai-js)를 참고하세요.
+
+</Tab>
+<Tab>
+
+Langfuse는 Langchain (JS/TS)에 대해서도 OpenTelemetry의 샘플링 결정을 따릅니다. 먼저 OTEL SDK에서 샘플링을 구성한 다음 콜백 핸들러를 초기화하세요.
+
+```ts filename="instrumentation.ts" /new TraceIdRatioBasedSampler(0.2)/
+import { NodeSDK } from "@opentelemetry/sdk-node";
+import { LangfuseSpanProcessor } from "@langfuse/otel";
+import { TraceIdRatioBasedSampler } from "@opentelemetry/sdk-trace-base";
+
+const sdk = new NodeSDK({
+  // Sample 20% of all traces
+  sampler: new TraceIdRatioBasedSampler(0.2),
+  spanProcessors: [new LangfuseSpanProcessor()],
+});
+```
+
+트레이싱과 샘플링을 설정한 후, 평소와 같이 Langchain 콜백 핸들러를 초기화합니다.
+
+```ts
+import { CallbackHandler } from "@langfuse/langchain";
+
+const handler = new CallbackHandler();
+```
+
+자세한 내용은 [Langchain 통합 (JS/TS)](/integrations/frameworks/langchain)를 참고하세요.
+
+</Tab>
+
+<Tab title="Vercel AI SDK (JS/TS)">
+
+[Vercel AI SDK 통합](/integrations/frameworks/vercel-ai-sdk)을 사용하는 경우
+
+```ts filename="instrumentation.ts" {/new TraceIdRatioBasedSampler(0.5)/}
+import { registerOTel } from "@vercel/otel";
+import { LangfuseSpanProcessor } from "@langfuse/otel";
+import { TraceIdRatioBasedSampler } from "@opentelemetry/sdk-trace-base";
+
+export function register() {
+  registerOTel({
+    serviceName: "langfuse-vercel-ai-nextjs-example",
+    traceSampler: new TraceIdRatioBasedSampler(0.5),
+    spanProcessors: [new LangfuseSpanProcessor()],
+  });
+}
+```
+
+</Tab>
+
+</LangTabs>
+
+## GitHub Discussions
+
+import { GhDiscussionsPreview } from "@/components/gh-discussions/GhDiscussionsPreview";
+
+<GhDiscussionsPreview labels={["feat-sampling"]} />

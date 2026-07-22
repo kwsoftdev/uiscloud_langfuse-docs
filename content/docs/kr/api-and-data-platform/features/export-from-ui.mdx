@@ -1,0 +1,34 @@
+---
+title: UI에서 내보내기
+sidebarTitle: UI에서 내보내기
+description: 분석, 파인튜닝, 외부 도구와의 통합을 위해 UI에서 Langfuse 관측성 데이터를 내보냅니다.
+sourceRevision: 9c0d419484845ffbd56805fd068677856e5d764c
+translationStatus: machine
+---
+
+# UI에서 데이터 내보내기
+
+Langfuse는 [오픈소스](/open-source)이며 Langfuse로 추적된 데이터는 열려 있습니다. 분석, 파인튜닝, 모델 학습 또는 외부 도구와의 통합을 위해 관측성 데이터를 내보내세요.
+
+Langfuse의 대부분의 테이블은 일괄 내보내기(batch-export)를 지원합니다. 테이블에 적용된 모든 필터가 내보내기에도 그대로 적용됩니다.
+
+프론트엔드의 사용자 지정 열 구성은 내보낸 데이터에 영향을 주지 않으며, 모든 열이 항상 내보내집니다.
+
+사용 가능한 내보내기 형식:
+
+- CSV
+- JSON
+
+<Video
+  src="https://static.langfuse.com/docs-videos/export-generations-csv.mp4"
+  aspectRatio={1844 / 1080}
+  gifStyle
+/>
+
+## 대안
+
+다음과 같은 방법으로도 데이터를 내보낼 수 있습니다:
+
+- [Blob Storage](/docs/api-and-data-platform/features/export-to-blob-storage) - 클라우드 스토리지로의 예약된 자동 내보내기
+- [SDK/API](/docs/api-and-data-platform/features/public-api) - Langfuse SDK 또는 API를 사용한 프로그래밍 방식 접근
+- [Metrics API](/docs/metrics/features/metrics-api) - 외부 BI 도구에서 사용할 집계 메트릭(비용, 토큰 사용량, 점수) 쿼리

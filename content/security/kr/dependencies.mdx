@@ -1,0 +1,33 @@
+---
+title: 소프트웨어 의존성
+description: Langfuse의 소프트웨어 의존성 및 라이선스에 대한 정보입니다.
+sourceRevision: f4e5e1edb9fa4c33680b0a37ca039a86a341cde0
+translationStatus: machine
+---
+
+# 소프트웨어 의존성 및 라이선스
+
+Langfuse는 오픈소스 구성 요소를 기반으로 구축되었으며, 의존성 및 라이선스에 대한 투명성을 유지하고 있습니다.
+
+오픈소스 전략에 대해 더 알아보려면 [여기](/docs/open-source)를 참고하세요.
+
+## 오픈소스 구성 요소
+
+Langfuse는 핵심 기능을 위해 오픈소스 구성 요소에 의존합니다. 이러한 방침은 투명성을 보장하고, 커뮤니티 기여를 가능하게 하며, 사용자가 전체 스택을 셀프 호스팅할 수 있도록 합니다.
+
+모든 핵심 구성 요소의 소스 코드는 [GitHub](https://github.com/langfuse)에서 확인할 수 있습니다.
+
+### 의존성
+
+**라이선스 정책:** 모든 애플리케이션 수준 의존성(npm 패키지, Python 패키지)이 허용적인(permissive) 오픈소스 라이선스를 사용하도록, 모든 코드 변경에 대해 자동화된 라이선스 검사를 실행합니다.
+**Docker 이미지:** Langfuse Docker 이미지는 표준 Linux 배포판을 기반으로 하며, GPL 2.0 또는 기타 카피레프트(copyleft) 라이선스로 배포될 수 있는 OS 수준 패키지(시스템 유틸리티, 라이브러리)를 포함합니다. 이는 Linux 배포판의 표준 구성 요소이며 소프트웨어 업계에서 일반적으로 사용됩니다.
+
+- Web 컨테이너: [Dockerfile](https://github.com/langfuse/langfuse/blob/main/web/Dockerfile)
+- Worker 컨테이너: [Dockerfile](https://github.com/langfuse/langfuse/blob/main/worker/Dockerfile)
+
+애플리케이션 의존성의 상세 목록은 저희 [리포지토리](https://github.com/langfuse)에서 다음과 같은 파일들을 통해 확인할 수 있습니다.
+
+- Langfuse 서버: [여러 `package.json` 파일](https://github.com/search?q=repo%3Alangfuse%2Flangfuse%20package.json&type=code)
+- Langfuse Python SDK: [`pyproject.toml`](https://github.com/langfuse/langfuse-python/blob/main/pyproject.toml)
+- Langfuse JS/TS SDK: [여러 `package.json` 파일](https://github.com/search?q=repo%3Alangfuse%2Flangfuse-js%20package.json&type=code)
+- Langfuse Java SDK: [여러 `pom.xml` 파일](https://github.com/search?q=repo%3Alangfuse%2Flangfuse-java+pom.xml&type=code)

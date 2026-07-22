@@ -1,0 +1,244 @@
+---
+title: AI 애플리케이션 평가를 위한 코드 평가기 예제 10가지
+description: "LLM 애플리케이션을 위한 복사-붙여넣기 가능한 코드 평가기 10가지: 출력 검증, PII 스크리닝, RAG 인용 확인, 숫자 허용 오차, 거부 응답 감지 등을 다룹니다."
+tags: [guide, evaluation]
+sourceRevision: 467c865a3ff008697d6242d21b185beee601e54f
+translationStatus: machine
+---
+
+# AI 애플리케이션 평가를 위한 코드 평가기 예제 10가지
+
+[코드 평가기](/docs/evaluation/evaluation-methods/code-evaluators)는 Langfuse에서 트레이스와 실험 출력을 채점하는 결정론적(deterministic) 함수입니다. 실행 비용이 들지 않고, 매번 동일한 판정을 반환하며, 밀리초 단위로 실행되기 때문에 판단이 필요 없는 모든 검사, 즉 형식 검증, 정책 스크리닝, 허용 오차 비교, 구조적 검증(assertion)에 적합한 도구입니다. 모델만이 답할 수 있는 질문을 위해 [LLM-as-a-judge](/docs/evaluation/evaluation-methods/llm-as-a-judge) 예산을 아껴 두세요.
+
+**요약:** 아래 각 예제는 Langfuse의 [함수 계약(function contract)](/docs/evaluation/evaluation-methods/code-evaluators#function-contract)을 따르는 완전하고 바로 붙여넣을 수 있는 평가기입니다. `evaluate` 함수는 observation(input, output, metadata)과 실험 컨텍스트를 받아 하나 이상의 점수를 반환합니다. 평가기 런타임은 언어 표준 라이브러리만 제공하며, 모든 예제는 이를 준수하여 서드파티 패키지를 사용하지 않습니다.
+
+모든 예제는 Python 계약을 사용합니다. [TypeScript 계약](/docs/evaluation/evaluation-methods/code-evaluators#function-contract)도 동일합니다.
+
+```python
+# 아래 모든 예제가 공유하는 계약 (Langfuse가 제공):
+# def evaluate(ctx: EvaluationContext) -> EvaluationResult
+#   ctx.observation.input / .output / .metadata
+#   ctx.experiment.item_expected_output / .item_metadata  (실험에서만 사용)
+#   Score(name, value, data_type="BOOLEAN"|"NUMERIC"|"CATEGORICAL", comment=...)
+```
+
+## 1. 정규화된 완전 일치
+
+기대 출력이 알려진 실험에 사용합니다. 원시 문자열 동등 비교는 사소한 차이에도 실패하므로, 먼저 대소문자와 공백을 정규화해야 합니다. 분류 작업, 정형화된 답변, 명령어 생성 작업에 사용하세요.
+
+```python
+def evaluate(ctx):
+    def norm(s):
+        return " ".join(str(s).lower().split())
+
+    expected = ctx.experiment.item_expected_output if ctx.experiment else None
+    match = expected is not None and norm(ctx.observation.output) == norm(expected)
+    return EvaluationResult(scores=[
+        Score(name="exact_match", value=match, data_type="BOOLEAN",
+              comment=None if match else f"Expected {expected!r}")
+    ])
+```
+
+## 2. 구조화된 출력 검증
+
+다운스트림 소비자에게 JSON을 제공하기로 약속한 모든 애플리케이션에 사용합니다. 출력이 파싱되는지, 그리고 필수 키가 올바른 타입으로 존재하는지 확인합니다. 프로덕션 통합을 조용히 깨뜨리는 실패 모드를 잡아냅니다.
+
+```python
+import json
+
+REQUIRED = {"intent": str, "confidence": (int, float), "entities": list}
+
+def evaluate(ctx):
+    try:
+        data = json.loads(str(ctx.observation.output))
+        missing = [k for k, t in REQUIRED.items()
+                   if k not in data or not isinstance(data[k], t)]
+        ok, comment = not missing, f"Missing/mistyped: {missing}" if missing else None
+    except (json.JSONDecodeError, TypeError) as e:
+        ok, comment = False, f"Not valid JSON: {e}"
+    return EvaluationResult(scores=[
+        Score(name="valid_structured_output", value=ok, data_type="BOOLEAN", comment=comment)
+    ])
+```
+
+## 3. PII 패턴 스크리닝
+
+이메일 주소, 전화번호, 카드번호 형태의 연속 숫자가 포함된 출력을 감지하는 저비용 안전망입니다. 패턴 매칭은 완전한 PII 솔루션이 아니지만(예방을 위해서는 마스킹 문서를 참고하세요), 평가기로 활용하면 조용한 유출을 점수화하고 경보 가능한 이벤트로 전환할 수 있습니다.
+
+```python
+import re
+
+PATTERNS = {
+    "email": r"[\w.+-]+@[\w-]+\.[\w.]+",
+    "phone": r"\+?\d[\d\s().-]{8,}\d",
+    "card": r"\b(?:\d[ -]?){13,16}\b",
+}
+
+def evaluate(ctx):
+    text = str(ctx.observation.output)
+    hits = [name for name, pat in PATTERNS.items() if re.search(pat, text)]
+    return EvaluationResult(scores=[
+        Score(name="pii_detected", value=bool(hits), data_type="BOOLEAN",
+              comment=f"Matched: {', '.join(hits)}" if hits else None)
+    ])
+```
+
+## 4. RAG 답변의 인용 존재 여부
+
+아무것도 인용하지 않는 RAG 답변은 아무리 잘 작성되었더라도 환각(hallucination) 위험을 내포합니다. 이 평가기는 답변이 검색된 소스(계측(instrumentation) 코드에서 metadata로 전달) 중 최소 하나를 참조하는지 확인합니다. 이는 근거성(groundedness)의 대리 지표이지 충실도(faithfulness) 판단은 아니므로, 의미적 측면을 위해서는 judge와 함께 사용하세요.
+
+```python
+def evaluate(ctx):
+    output = str(ctx.observation.output)
+    sources = (ctx.observation.metadata or {}).get("retrieved_ids", [])
+    cited = [s for s in sources if str(s) in output]
+    return EvaluationResult(scores=[
+        Score(name="cites_retrieved_source", value=bool(cited), data_type="BOOLEAN",
+              comment=f"Cited {len(cited)}/{len(sources)} retrieved sources")
+    ])
+```
+
+## 5. 응답 길이 예산
+
+답변 길이는 비용, 지연 시간, 사용자 이탈률과 상관관계가 있습니다. 숫자 점수를 사용하면 불만 접수로 문제를 알게 되는 대신 대시보드에서 시간에 따른 변화를 추적할 수 있습니다.
+
+```python
+def evaluate(ctx):
+    words = len(str(ctx.observation.output).split())
+    return EvaluationResult(scores=[
+        Score(name="answer_words", value=words, data_type="NUMERIC"),
+        Score(name="within_length_budget", value=words <= 250, data_type="BOOLEAN",
+              comment=f"{words} words (budget 250)"),
+    ])
+```
+
+## 6. 금지 용어 준수 여부
+
+모든 팀에는 제품이 언급해서는 안 되는 표현이 있습니다: 경쟁사 비방, 승인되지 않은 주장, 폐기된 제품명 등입니다. 목록을 한 번만 정의하고 모든 트레이스에 대해 점수를 매기세요.
+
+```python
+import re
+
+BANNED = ["guaranteed returns", "medical advice", "legacy-product-name"]
+
+def evaluate(ctx):
+    text = str(ctx.observation.output).lower()
+    hits = [t for t in BANNED if re.search(rf"\b{re.escape(t)}\b", text)]
+    return EvaluationResult(scores=[
+        Score(name="compliance_terms", value="fail" if hits else "pass",
+              data_type="CATEGORICAL",
+              comment=f"Found: {hits}" if hits else None)
+    ])
+```
+
+## 7. 허용 오차 내 숫자 답변
+
+숫자를 계산하거나 추출하는 애플리케이션(금융, 분석, 단위 변환)에서는 완전 문자열 일치가 적절한 테스트가 아닙니다. 첫 번째 숫자를 추출하여 기대값과 허용 오차 내에서 비교하세요(답변이 결과값으로 끝나는 경우 `nums[-1]`로 전환하세요).
+
+```python
+import re
+
+def evaluate(ctx):
+    expected = ctx.experiment.item_expected_output if ctx.experiment else None
+    nums = re.findall(r"-?\d+(?:\.\d+)?", str(ctx.observation.output).replace(",", ""))
+    if expected is None or not nums:
+        return EvaluationResult(scores=[
+            Score(name="numeric_match", value=False, data_type="BOOLEAN",
+                  comment="No number found or no expected value")])
+    try:
+        got, want = float(nums[0]), float(expected)
+    except (ValueError, TypeError):
+        return EvaluationResult(scores=[
+            Score(name="numeric_match", value=False, data_type="BOOLEAN",
+                  comment=f"Expected value is not numeric: {expected!r}")])
+    tol = max(abs(want) * 0.01, 1e-9)  # 절대 하한선을 두어 기대값이 0일 때 완전 일치를 요구하지 않도록 함
+    ok = abs(got - want) <= tol  # 1% 허용 오차
+    return EvaluationResult(scores=[
+        Score(name="numeric_match", value=ok, data_type="BOOLEAN",
+              comment=f"got {got}, expected {want}")
+    ])
+```
+
+## 8. 거부 응답 및 무응답 감지
+
+지나치게 신중한 모델은 정당한 요청도 거부하며, 이러한 실패는 공손한 문장 속에 숨어 있습니다. 패턴 휴리스틱은 대부분의 거부 응답을 잡아내며, 플래그가 지정된 트레이스는 확인을 위해 [주석 큐](/docs/evaluation/evaluation-methods/annotation-queues)나 judge로 라우팅하세요.
+
+```python
+import re
+
+REFUSAL_MARKERS = [
+    r"\bI (?:can(?:no|')t|am unable to|won't be able to)\b",
+    r"\bas an AI\b",
+    r"\bI don't have (?:access|the ability)\b",
+]
+
+def evaluate(ctx):
+    text = str(ctx.observation.output)
+    refused = any(re.search(p, text, re.IGNORECASE) for p in REFUSAL_MARKERS)
+    return EvaluationResult(scores=[
+        Score(name="refusal_detected", value=refused, data_type="BOOLEAN")
+    ])
+```
+
+## 9. metadata를 통한 에이전트 궤적 확인
+
+에이전트의 품질은 최종 답변뿐만 아니라 그 답변에 도달한 과정에도 좌우됩니다. 계측 코드가 도구 호출 순서를 metadata에 기록한다면, 평가기는 필수 도구 사용 여부, 스텝 예산 준수 여부, 금지된 도구 미사용 여부 등 궤적 속성을 검증할 수 있습니다.
+
+```python
+def evaluate(ctx):
+    meta = ctx.observation.metadata or {}
+    tools = meta.get("tool_sequence", [])
+    scores = [
+        Score(name="used_required_tool", value="search" in tools, data_type="BOOLEAN"),
+        Score(name="step_count", value=len(tools), data_type="NUMERIC"),
+        Score(name="within_step_budget", value=len(tools) <= 10, data_type="BOOLEAN",
+              comment=f"{len(tools)} tool calls (budget 10)"),
+    ]
+    return EvaluationResult(scores=scores)
+```
+
+## 10. 토큰 중첩 유사도(추가 의존성 없음)
+
+완전 일치가 아닌 "대략 같은 답변"이 필요하지만 임베딩 라이브러리를 임포트할 수 없는 경우, 기대 출력에 대한 토큰 수준 F1 점수는 표준 라이브러리만으로도 충분히 쓸 만한 신호가 됩니다. 다만 다소 조잡한 지표이므로, 중간대의 점수는 판정으로 취급하지 말고 "judge에게 넘길 대상"으로 취급하세요.
+
+```python
+def evaluate(ctx):
+    def tokens(s):
+        return set(str(s).lower().split())
+
+    expected = ctx.experiment.item_expected_output if ctx.experiment else None
+    got, want = tokens(ctx.observation.output), tokens(expected or "")
+    overlap = len(got & want)
+    precision = overlap / len(got) if got else 0.0
+    recall = overlap / len(want) if want else 0.0
+    f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+    return EvaluationResult(scores=[
+        Score(name="token_f1", value=round(f1, 3), data_type="NUMERIC")
+    ])
+```
+
+## 코드 평가기와 LLM-as-a-judge, 언제 무엇을 사용할까
+
+검사가 결정 가능한 경우, 즉 형식, 존재 여부, 범위, 허용 오차, 정책 패턴 등에는 코드 평가기를 사용하세요. 도움이 되는 정도, 소스에 대한 충실도, 어조, 추론 품질처럼 읽고 판단해야 하는 검사에는 [judge](/docs/evaluation/evaluation-methods/llm-as-a-judge)를 사용하세요.
+
+가장 강력한 구성은 이 둘을 체이닝하는 것입니다. 무료 결정론적 스크리닝이 모든 트레이스에서 실행되고, 비용이 드는 judge는 스크리닝에서 문제가 플래그된 경우에만(또는 패턴이 놓치는 것을 잡기 위해 정상 트레이스의 일부 샘플에 대해서만) 실행됩니다. 예제 3, 8, 10은 정확히 이러한 연계를 염두에 두고 작성되었습니다.
+
+[런타임 제약 조건](/docs/evaluation/evaluation-methods/code-evaluators#runtime-constraints)에서 얻을 수 있는 실용적인 참고 사항 두 가지가 있습니다. 평가기 환경은 표준 라이브러리만 제공하므로 `numpy`나 HTTP 호출이 필요한 작업은 SDK를 통해 점수를 다시 기록하는 [외부 평가 파이프라인](/docs/evaluation/evaluation-methods/scores-via-sdk)에서 처리해야 합니다. 또한 평가기는 대상으로 지정한 observation만 받으므로, (위 예제의 `tool_sequence`처럼) 채점하려는 필드가 계측 코드를 통해 input, output, 또는 metadata에 담기도록 해야 합니다.
+
+## FAQ
+
+### 코드 평가기는 프로덕션 트레이스에서도 실행되나요, 아니면 실험에서만 실행되나요?
+
+둘 다 가능합니다. 프로덕션 트레이스에서는 `ctx.experiment` 컨텍스트가 비어 있으므로, 기대 출력 검사(예제 1, 7, 10)는 실험에만 적용되며, 검증(assertion) 방식 검사(예제 2, 3, 5, 6, 8, 9)는 어디에서든 실행됩니다.
+
+### 하나의 평가기가 여러 점수를 반환할 수 있나요?
+
+가능합니다. 예제 5와 9에서처럼 `EvaluationResult`는 점수 목록을 받습니다. 관련된 검사를 하나의 평가기에 묶으면 실행 오버헤드와 설정 관리 범위를 작게 유지할 수 있습니다.
+
+### 코드 평가기 실행에는 비용이 드나요?
+
+모델을 호출하지 않으므로 LLM 비용은 발생하지 않습니다. 저장된 점수는 다른 점수와 마찬가지로 일반 [청구 단위(billable unit)](/docs/administration/billable-units)로 계산됩니다.
+
+### 점수를 생성하지 못하는 평가기는 어떻게 디버깅하나요?
+
+레퍼런스 문서의 [디버깅 섹션](/docs/evaluation/evaluation-methods/code-evaluators#debug-code-evaluator-executions)을 참고하세요. 실행 로그에는 각 실행별 예외와 반환값이 표시됩니다. 가장 흔한 실패 원인은 타입 가정 오류(출력이 문자열이 아니라 dict인 경우)와 필드가 비어 있는 observation을 대상으로 지정한 경우입니다.

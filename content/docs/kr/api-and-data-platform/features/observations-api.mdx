@@ -1,0 +1,259 @@
+---
+title: 관측(Observations) API
+sidebarTitle: 관측(Observations) API
+description: 커서 기반 페이지네이션과 선택적 필드 조회를 제공하는 고성능 v2 엔드포인트로 Langfuse에서 관측 데이터를 가져옵니다.
+sourceRevision: 0cbca16260b9aacf1351bdfef367612ae142ddbb
+translationStatus: machine
+---
+
+# 관측(Observations) API
+
+관측(Observations) API를 사용하면 커스텀 워크플로, 평가 파이프라인, 분석 용도로 Langfuse에서 관측 데이터(스팬, 제너레이션, 이벤트)를 가져올 수 있습니다.
+
+사용자, 모델, 기간별로 그룹화된 총 비용, 토큰 수, 트레이스 볼륨 등 집계된 메트릭이 필요하다면, 원시 데이터를 직접 가져와 집계할 필요가 없도록 설계된 [메트릭(Metrics) API](/docs/metrics/features/metrics-api)를 사용하세요.
+
+API 인증, 기본 URL, SDK 액세스에 대한 일반 정보는 [퍼블릭 API 문서](/docs/api-and-data-platform/features/public-api)를 참고하세요.
+
+<Callout type="info">
+
+기존 트레이스 및 관측 조회 API는 계속 사용할 수 있지만, 대규모 환경에서 성능이 떨어지므로 새로운 데이터 추출 워크플로의 기본값으로는 권장하지 않습니다. 행(row) 단위 데이터 추출에는 관측 API v2를 사용하세요.
+
+</Callout>
+
+## 관측 API v2 [#v2]
+
+<AvailabilityBanner
+  availability={{
+    hobby: "full",
+    core: "full",
+    pro: "full",
+    enterprise: "full",
+    selfHosted: "v4",
+  }}
+/>
+
+<Callout type="info">
+
+**데이터 가용성:** `x-langfuse-ingestion-version: 4` 헤더를 전송하지 않는 이전 버전 SDK(`langfuse-python` < `4.0.0`, `langfuse-js` < `5.0.0`) 또는 직접 사용하는 OpenTelemetry 익스포터의 데이터는 v2 엔드포인트에서 최대 10분까지 지연될 수 있습니다. 신규 데이터를 실시간으로 확인하려면 [Python SDK v4.7.0+](/docs/observability/sdk/upgrade-path/python-v3-to-v4) 또는 [JS/TS SDK v5.4.0+](/docs/observability/sdk/upgrade-path/js-v4-to-v5)로 업그레이드하거나, OTEL 스팬 익스포터에 해당 헤더를 설정하세요.
+
+</Callout>
+
+```
+GET /api/public/v2/observations
+```
+
+v2 관측 API는 고성능 데이터 조회에 최적화된 재설계 엔드포인트입니다. 쿼리당 Langfuse가 수행해야 하는 작업을 최소화함으로써 v1 API의 성능 병목을 해소합니다.
+
+### 기존 트레이스 및 관측 조회에서 업그레이드하기 [#upgrade-from-older-reads]
+
+| 기존 사용 방식                                                  | 권장 대체 방식                                                                                             |
+| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `GET /api/public/traces`로 트레이스 목록 조회                   | `GET /api/public/v2/observations?fromStartTime=<from>&toStartTime=<to>`를 사용하고 `traceId`로 행을 그룹화 |
+| `GET /api/public/traces/{traceId}`로 단일 트레이스 조회         | `GET /api/public/v2/observations?traceId=<traceId>&fromStartTime=<from>&toStartTime=<to>`를 사용           |
+| `GET /api/public/observations`로 관측 목록 조회                 | `GET /api/public/v2/observations?fromStartTime=<from>&toStartTime=<to>`를 사용                             |
+| `GET /api/public/observations/{observationId}`로 단일 관측 조회 | `GET /api/public/v2/observations?filter=<id filter>&fromStartTime=<from>&toStartTime=<to>`를 사용          |
+
+각 요청 범위를 제한하기 위해 항상 `fromStartTime`과 `toStartTime`을 포함하세요.
+
+v2 관측 API는 전체 트레이스 객체가 아니라 관측 행을 반환합니다. 트레이스 활동을 재구성해야 할 때는 `traceId`로 행을 그룹화하고, `traceName`, `traceRelease`, `traceVersion`과 같은 트레이스 수준 차원이 필요한 집계 리포팅에는 [메트릭 API v2](/docs/metrics/features/metrics-api#v2)를 사용하세요. 단일 관측을 조회하려면 `id` 컬럼에 URL 인코딩된 `filter` 조건을 전달하세요. 필터 스키마는 [v2 관측 API 레퍼런스](https://api.reference.langfuse.com/#tag/observations/GET/api/public/v2/observations)를 참고하세요.
+
+### 주요 개선 사항
+
+**1. 선택적 필드 조회**
+
+v1 API는 모든 필드(input/output, usage, metadata 등)를 포함한 전체 행을 반환하므로, 일부 필드만 필요한 경우에도 데이터베이스가 모든 컬럼을 스캔하게 됩니다. v2 API에서는 쉼표로 구분된 문자열로 필요한 필드 그룹만 지정할 수 있습니다.
+
+```
+?fields=core,basic,usage
+```
+
+#### 사용 가능한 필드 그룹
+
+| 그룹            | 필드                                                                                                                   |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `core`          | 항상 포함: id, traceId, startTime, endTime, projectId, parentObservationId, type                                       |
+| `basic`         | name, level, statusMessage, version, environment, bookmarked, public, userId, sessionId                                |
+| `time`          | completionStartTime, createdAt, updatedAt                                                                              |
+| `io`            | input, output                                                                                                          |
+| `metadata`      | metadata                                                                                                               |
+| `model`         | providedModelName, internalModelId, modelParameters                                                                    |
+| `usage`         | usageDetails, inputUsage, outputUsage, totalUsage, costDetails, inputCost, outputCost, totalCost, usagePricingTierName |
+| `prompt`        | promptId, promptName, promptVersion                                                                                    |
+| `metrics`       | latency, timeToFirstToken                                                                                              |
+| `trace_context` | tags, release, traceName                                                                                               |
+
+`fields`를 지정하지 않으면 `core`와 `basic` 필드 그룹이 기본값으로 반환됩니다. 요청하지 않은 그룹의 필드는 응답에서 `null`이 아니라 **아예 존재하지 않습니다**. 다음 필드는 예외로, 항상 존재하지만 `model` 필드 그룹을 선택했을 때만 값이 채워집니다: `modelId`, `inputPrice`, `outputPrice`, `totalPrice`. `inputPrice`, `outputPrice`, `totalPrice`는 소수점 정밀도를 유지하기 위해 **문자열**(예: `"0.000005"`)로 반환되므로, 파이프라인에서 숫자 타입으로 변환해야 합니다.
+
+**2. 커서 기반 페이지네이션**
+
+v1 API는 오프셋 기반 페이지네이션(페이지 번호)을 사용하는데, 이는 데이터셋이 커질수록 점점 느려집니다. v2 API는 더 나은 성능과 일관성을 위해 커서 기반 페이지네이션을 사용합니다.
+
+**동작 방식:**
+
+1. `limit` 파라미터와 함께 첫 요청을 보냅니다.
+2. 더 많은 결과가 있으면 응답의 `meta` 객체에 `cursor`가 포함됩니다.
+3. 다음 요청에서 `cursor` 파라미터로 해당 커서를 전달하여 이어서 조회합니다.
+4. 더 이상 커서가 반환되지 않을 때까지(끝에 도달할 때까지) 반복합니다.
+
+결과는 항상 `startTime` 내림차순(최신순)으로 정렬됩니다.
+
+**커서가 포함된 응답 예시:**
+
+```json
+{
+  "data": [
+    {"id": "obs-1", "traceId": "trace-1", "name": "llm-call", ...},
+    {"id": "obs-2", "traceId": "trace-1", "name": "embedding", ...}
+  ],
+  "meta": {
+    "cursor": "eyJsYXN0U3RhcnRUaW1lIjoiMjAyNS0xMi0xNVQxMDozMDowMFoiLCJsYXN0SWQiOiJvYnMtMTAwIn0="
+  }
+}
+```
+
+응답에 `cursor`가 없거나(`meta`에 없거나) `meta.cursor`가 `null`이면 일치하는 모든 관측을 모두 조회한 것입니다.
+
+**3. 최적화된 I/O 처리**
+
+v1 API는 항상 input/output을 JSON으로 파싱하려 시도하는데, 이는 비용이 클 수 있습니다. v2 API는 기본적으로 I/O를 문자열로 반환합니다. 파싱된 JSON이 필요할 때만 `parseIoAsJson: true`를 설정하세요.
+
+**4. 더 엄격한 제한**
+
+| 기능       | v1     | v2    |
+| ---------- | ------ | ----- |
+| 기본 limit | 1000   | 50    |
+| 최대 limit | 무제한 | 1,000 |
+
+Langfuse Cloud에서는 v2 관측 API에 대한 요청이 조직 단위의 일반 API 속도 제한에 포함됩니다([API 제한 FAQ](/faq/all/api-limits) 참고). 셀프 호스팅 인스턴스에는 강제되는 속도 제한이 없습니다.
+
+### 일반적인 사용 사례
+
+**최근 관측 폴링하기:**
+
+```bash
+curl \
+  -H "Authorization: Basic <BASIC AUTH HEADER>" \
+  "https://cloud.langfuse.com/api/public/v2/observations?fromStartTime=2025-12-15T00:00:00Z&toStartTime=2025-12-16T00:00:00Z&limit=10"
+```
+
+**특정 트레이스의 관측 조회하기:**
+
+```bash
+curl \
+  -H "Authorization: Basic <BASIC AUTH HEADER>" \
+  "https://cloud.langfuse.com/api/public/v2/observations?fields=core,basic,usage&traceId=your-trace-id"
+```
+
+**결과 페이지네이션하기:**
+
+```bash
+# 첫 번째 요청
+curl \
+  -H "Authorization: Basic <BASIC AUTH HEADER>" \
+  "https://cloud.langfuse.com/api/public/v2/observations?fromStartTime=2025-12-01T00:00:00Z&limit=100"
+
+# 응답에 포함된 내용: "meta": { "cursor": "eyJsYXN0..." }
+
+# 커서를 사용한 다음 요청
+curl \
+  -H "Authorization: Basic <BASIC AUTH HEADER>" \
+  "https://cloud.langfuse.com/api/public/v2/observations?fromStartTime=2025-12-01T00:00:00Z&limit=100&cursor=eyJsYXN0..."
+```
+
+### 파라미터
+
+| 파라미터              | 타입     | 설명                                                     |
+| --------------------- | -------- | -------------------------------------------------------- |
+| `fields`              | string   | 포함할 필드 그룹의 쉼표 구분 목록. 기본값은 `core,basic` |
+| `limit`               | integer  | 페이지당 항목 수. 기본값 50, 최대 1,000                  |
+| `cursor`              | string   | 페이지네이션용 Base64 인코딩 커서(이전 응답에서 전달)    |
+| `fromStartTime`       | datetime | 이 일시 이후(포함)의 startTime을 가진 관측을 조회        |
+| `toStartTime`         | datetime | 이 일시 이전의 startTime을 가진 관측을 조회              |
+| `traceId`             | string   | 트레이스 ID로 필터링                                     |
+| `name`                | string   | 관측 이름으로 필터링                                     |
+| `type`                | string   | 관측 유형으로 필터링(GENERATION, SPAN, EVENT)            |
+| `userId`              | string   | 사용자 ID로 필터링                                       |
+| `level`               | string   | 로그 레벨로 필터링(DEBUG, DEFAULT, WARNING, ERROR)       |
+| `parentObservationId` | string   | 부모 관측 ID로 필터링                                    |
+| `environment`         | string   | 환경으로 필터링                                          |
+| `version`             | string   | 버전 태그로 필터링                                       |
+| `parseIoAsJson`       | boolean  | input/output을 JSON으로 파싱(기본값: false)              |
+| `filter`              | string   | 필터 조건의 JSON 배열(쿼리 파라미터보다 우선 적용)       |
+
+### 응답 예시
+
+모든 필드를 포함한 경우
+
+```json
+{
+  "data": [
+    {
+      "id": "support-chat-7-950dc53a-gen",
+      "traceId": "support-chat-7-950dc53a",
+      "startTime": "2025-12-17T16:09:00.875Z",
+      "projectId": "7a88fb47-b4e2-43b8-a06c-a5ce950dc53a",
+      "parentObservationId": null,
+      "type": "GENERATION",
+      "endTime": "2025-12-17T16:09:01.456Z",
+      "name": "llm-generation",
+      "level": "DEFAULT",
+      "statusMessage": "",
+      "version": "",
+      "environment": "default",
+      "bookmarked": false,
+      "public": false,
+      "completionStartTime": "2025-12-17T16:09:00.995Z",
+      "createdAt": "2025-12-17T16:09:00.875Z",
+      "updatedAt": "2025-12-17T16:09:01.456Z",
+      "input": "{\"messages\":[{\"role\":\"user\",\"content\":\"Perfect.\"}]}",
+      "output": "{\"role\":\"assistant\",\"content\":\"You're all set. Have a great day!\"}",
+      "metadata": {},
+      "providedModelName": "gpt-4o",
+      "internalModelId": "clm1a2b3c4d5e6f7g8h9i0j1",
+      "modelParameters": {
+        "temperature": 0.2
+      },
+      "usageDetails": {
+        "input": 98,
+        "output": 68,
+        "total": 166
+      },
+      "inputUsage": 98,
+      "outputUsage": 68,
+      "totalUsage": 166,
+      "costDetails": {
+        "input": 0.00049,
+        "output": 0.00204,
+        "total": 0.00253
+      },
+      "inputCost": 0.00049,
+      "outputCost": 0.00204,
+      "totalCost": 0.00253,
+      "promptId": "",
+      "promptName": "",
+      "promptVersion": null,
+      "latency": 0.581,
+      "timeToFirstToken": 0.12,
+      "userId": "",
+      "sessionId": "support-chat-session",
+      "modelId": "clm1a2b3c4d5e6f7g8h9i0j1",
+      "inputPrice": "0.000005",
+      "outputPrice": "0.00003",
+      "totalPrice": null,
+      "usagePricingTierName": null,
+      "tags": ["support", "chat"],
+      "release": "v1.4.2",
+      "traceName": "support-chat"
+    }
+  ],
+  "meta": {
+    "cursor": "eyJsYXN0U3RhcnRUaW1lVG8iOiIyMDI1LTEyLTE3VDE2OjA5OjAwLjg3NVoiLCJsYXN0VHJhY2VJZCI6InN1cHBvcnQtY2hhdC03LTk1MGRjNTNhIiwibGFzdElkIjoic3VwcG9ydC1jaGF0LTctOTUwZGM1M2EtZ2VuIn0="
+  }
+}
+```
+
+<Callout type="info">
+
+**API 레퍼런스:** 모든 사용 가능한 파라미터, 응답 스키마, 인터랙티브 예제는 [v2 관측 API 레퍼런스](https://api.reference.langfuse.com/#tag/observationsv2/GET/api/public/v2/observations) 전체를 참고하세요.
+
+</Callout>

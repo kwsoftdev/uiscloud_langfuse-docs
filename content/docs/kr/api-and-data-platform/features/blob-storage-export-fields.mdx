@@ -1,0 +1,274 @@
+---
+title: 블롭 스토리지 내보내기 필드 참조
+description: Langfuse 블롭 스토리지 통합이 내보내는 모든 필드를 내보내기 테이블(enriched observations, scores, legacy traces, legacy observations)별로 정리한 전체 참조 문서입니다.
+sidebarTitle: 내보내기 필드 참조
+sourceRevision: 1fc51d3dcfd25c34b3ad49d985a092128959fa15
+translationStatus: machine
+---
+
+# 블롭 스토리지 내보내기 필드 참조 [#blob-storage-export-field-reference]
+
+이 페이지는 Langfuse 블롭 스토리지 통합이 내보내는 모든 필드를 내보내기 테이블별로 정리한 것입니다. 설정 방법과 구성에 대해서는 [Export to Blob Storage](/docs/api-and-data-platform/features/export-to-blob-storage)를 참고하세요.
+
+내보내기 파일은 Parquet(신규 통합의 기본값), CSV, JSON, JSONL 형식으로 작성할 수 있습니다. 타입은 **JSON/JSONL** 내보내기 기준으로 설명되어 있습니다. 타임스탬프는 UTC 기준 `YYYY-MM-DD HH:MM:SS.ffffff` 형식(예: `2024-05-29 13:46:19.963000`)을 사용합니다. CSV 형식에서 타입이 어떻게 매핑되는지는 [CSV 내보내기 관련 참고 사항](#csv-exports)을, Parquet 관련 동작은 [Parquet 내보내기 관련 참고 사항](#parquet-exports)을 참고하세요.
+
+## 내보내기 소스 [#export-sources]
+
+블롭 스토리지 통합은 세 가지 내보내기 소스 모드를 지원합니다(**Project Settings > Integrations > Blob Storage**에서 프로젝트별로 설정 가능):
+
+| 모드                                                          | 작성되는 블롭 경로                    | 설명                                                                                                                                                             |
+| ------------------------------------------------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Enriched observations(권장)**                               | `observations_v2/`, `scores/`         | 각 observation 행에 trace 레벨 필드(`user_id`, `session_id`, `trace_name` 등)가 직접 포함됩니다. trace 컨텍스트를 위해 웨어하우스 측에서 JOIN할 필요가 없습니다. |
+| **Traces and observations(legacy)**                           | `traces/`, `observations/`, `scores/` | 시간 구간마다 세 개의 개별 파일이 생성됩니다. observation에는 trace 레벨 필드가 포함되지 **않으므로** 웨어하우스에서 `trace_id`로 조인해야 합니다.               |
+| **Traces and observations(legacy) and enriched observations** | 위 항목 전부                          | observation 파일 두 세트와 trace, score 파일을 모두 작성합니다.                                                                                                  |
+
+Score는 모드와 관계없이 **항상** 내보내집니다.
+
+<Callout type="info">
+  대부분의 사용 사례에는 **Enriched observations**를 권장합니다 — 파일 수가 적고 trace 컨텍스트를 위한 파일 간 JOIN을 피할 수 있습니다.
+</Callout>
+
+## Enriched observations(`observations_v2/`) [#enriched-observations]
+
+**Enriched observations** 모드와 **Traces and observations(legacy) and enriched observations** 모드에서 내보내집니다.
+
+각 행은 trace 레벨 컨텍스트가 직접 포함된 단일 observation이며, 웨어하우스 측 JOIN이 필요하지 않습니다.
+
+<Callout type="info">
+  아래 컬럼은 11개의 [필드 그룹](/docs/api-and-data-platform/features/export-to-blob-storage#export-field-groups)으로 나뉘며, 그중 10개는 켜고 끌 수 있습니다. 신규 통합은 기본적으로 모든 그룹을 내보냅니다. `core` 그룹은 항상 포함되며, 나머지는 파일 크기를 줄이거나 민감한 컬럼을 제외하기 위해 통합별로 선택 해제할 수 있습니다. 필드 그룹은 레거시 `observations/` 파일에도 적용되지만(그룹별 컬럼 세트는 더 작음) `traces/` 파일에는 적용되지 않으며, 이 파일은 고정된 컬럼 세트를 가집니다.
+</Callout>
+
+| 필드                      | 타입                         | 설명                                                                                     | 사용 참고 사항                                                                                                                                               |
+| ------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`                      | 문자열                       | 고유한 observation 식별자입니다.                                                         | 기본 키입니다.                                                                                                                                               |
+| `trace_id`                | 문자열                       | 상위 trace 식별자입니다.                                                                 | score와 연결하거나 trace별로 observation을 그룹화할 때 사용합니다.                                                                                           |
+| `project_id`              | 문자열                       | Langfuse 프로젝트 식별자입니다.                                                          | 하나의 내보내기 안의 모든 행은 동일한 프로젝트에 속합니다.                                                                                                   |
+| `environment`             | 문자열                       | 환경 라벨입니다.                                                                         | 환경별로 필터링합니다.                                                                                                                                       |
+| `type`                    | 문자열                       | observation 타입: `SPAN`, `GENERATION`, 또는 `EVENT`입니다.                              | generation은 LLM 호출, span은 임의의 작업, event는 특정 시점의 마커입니다.                                                                                   |
+| `parent_observation_id`   | 문자열                       | (중첩된 observation의 경우) 상위 observation ID입니다.                                   | 상위 포인터를 따라가며 trace 트리를 재구성합니다. 최상위 레벨 observation의 경우 빈 문자열입니다.                                                            |
+| `start_time`              | 문자열(타임스탬프)           | observation이 시작된 시각입니다.                                                         | observation의 기본 시간 축입니다.                                                                                                                            |
+| `end_time`                | 문자열(타임스탬프) 또는 null | observation이 종료된 시각입니다.                                                         | event와 진행 중인 observation의 경우 null입니다.                                                                                                             |
+| `name`                    | 문자열                       | 사용자가 지정한 observation 이름입니다.                                                  | 이름(예: 함수 이름, 모델 호출 라벨)으로 그룹화/필터링합니다.                                                                                                 |
+| `metadata`                | 객체                         | 사용자가 제공한 키-값 메타데이터입니다.                                                  | 임의의 컨텍스트입니다. 분석에 필요한 키를 추출하세요.                                                                                                        |
+| `level`                   | 문자열                       | 로그 레벨: `DEBUG`, `DEFAULT`, `WARNING`, `ERROR`.                                       | 에러나 경고를 필터링합니다.                                                                                                                                  |
+| `status_message`          | 문자열                       | 상태 또는 에러 메시지입니다.                                                             | 실패한 observation을 디버깅할 때 확인합니다.                                                                                                                 |
+| `version`                 | 문자열                       | SDK를 통해 설정된 사용자 지정 버전 문자열입니다.                                         | 설정되지 않은 경우 빈 문자열입니다.                                                                                                                          |
+| `input`                   | 문자열                       | observation 입력 페이로드입니다.                                                         | generation의 경우: LLM에 전달된 프롬프트/메시지입니다. 일반 텍스트이거나 JSON일 수 있으며 크기가 클 수 있습니다. 설정되지 않은 경우 빈 문자열입니다.         |
+| `output`                  | 문자열                       | observation 출력 페이로드입니다.                                                         | generation의 경우: LLM 응답입니다. 일반 텍스트이거나 JSON일 수 있으며 크기가 클 수 있습니다. 설정되지 않은 경우 빈 문자열입니다.                             |
+| `provided_model_name`     | 문자열                       | 사용자/SDK가 제공한 모델 이름입니다.                                                     | 원본 모델 문자열입니다(예: `gpt-4o`, `claude-sonnet-4-20250514`). span과 event의 경우 빈 문자열입니다.                                                       |
+| `model_parameters`        | 문자열                       | JSON으로 인코딩된 문자열 형태의 모델 호출 파라미터입니다(예: `"{\"temperature\":0.7}"`). | JSON으로 파싱하세요. 모델 설정이 품질/비용에 미치는 영향을 분석할 때 유용합니다. span과 event의 경우 빈 문자열입니다.                                        |
+| `usage_details`           | 객체(문자열 → 정수)          | 카테고리별 토큰 사용량 내역입니다.                                                       | 키를 추출하세요: 입력 토큰은 `input`, 출력 토큰은 `output`, 전체는 `total`입니다. `input_cached_tokens`, `reasoning_tokens` 등 추가 키가 포함될 수 있습니다. |
+| `cost_details`            | 객체(문자열 → 숫자)          | 카테고리별 비용 내역입니다(USD).                                                         | 키를 추출하세요: 입력 비용은 `input`, 출력 비용은 `output`입니다.                                                                                            |
+| `completion_start_time`   | 문자열(타임스탬프) 또는 null | (스트리밍의 경우) 첫 토큰이 생성된 시각입니다.                                           | `time_to_first_token`을 계산하는 데 사용됩니다. 스트리밍이 아닌 호출의 경우 null입니다.                                                                      |
+| `prompt_name`             | 문자열                       | 사용된 Langfuse 프롬프트의 이름입니다(있는 경우).                                        | 특정 프롬프트를 사용한 observation을 필터링합니다.                                                                                                           |
+| `prompt_version`          | 정수 또는 null               | 사용된 Langfuse 프롬프트의 버전 번호입니다.                                              | 어떤 프롬프트 버전이 사용되었는지 추적합니다.                                                                                                                |
+| `total_cost`              | 숫자                         | 해당 observation의 총 계산 비용입니다(USD).                                              | observation 레벨 비용입니다. trace 레벨 비용을 구하려면 trace 단위로 합산하세요.                                                                             |
+| `latency`                 | 숫자 또는 null               | **초** 단위의 소요 시간입니다(`end_time - start_time`).                                  | `end_time`이 null인 경우 null입니다.                                                                                                                         |
+| `time_to_first_token`     | 숫자 또는 null               | **초** 단위의 첫 토큰까지 걸린 시간입니다(`completion_start_time - start_time`).         | `completion_start_time`이 null인 경우 null입니다. 스트리밍 응답성을 측정합니다.                                                                              |
+| `model_id`                | 문자열                       | (`provided_model_name`으로부터 확인된) Langfuse 모델 정의 ID입니다.                      | 가격 조회에 사용됩니다. 일치하는 모델 정의가 없으면 빈 문자열입니다.                                                                                         |
+| `created_at`              | 문자열(타임스탬프)           | 행 생성 시각입니다.                                                                      | 시스템 타임스탬프입니다.                                                                                                                                     |
+| `updated_at`              | 문자열(타임스탬프)           | 마지막 업데이트 시각입니다.                                                              | 증분 처리에 사용됩니다.                                                                                                                                      |
+| `prompt_id`               | 문자열                       | Langfuse 프롬프트 정의 ID입니다.                                                         | 프롬프트 분석을 위해 `prompt_name`/`prompt_version`과 함께 사용합니다.                                                                                       |
+| `tool_calls`              | 문자열 배열                  | LLM 응답에서 온 원본 도구/함수 호출 페이로드입니다.                                      | 각 요소를 JSON으로 파싱하세요. 전체 도구 호출 객체가 포함됩니다.                                                                                             |
+| `tool_call_names`         | 문자열 배열                  | 호출된 도구/함수의 이름입니다.                                                           | 전체 `tool_calls`를 파싱하지 않고 빠르게 필터링/그룹화할 수 있습니다.                                                                                        |
+| `tool_definitions`        | 객체                         | LLM에 제공된 도구/함수 스키마입니다.                                                     | 도구가 제공되지 않은 경우 빈 객체 `{}`일 수 있습니다.                                                                                                        |
+| `usage_pricing_tier_id`   | 문자열 또는 null             | 비용 계산에 사용된 가격 티어의 ID입니다.                                                 | 모델 정의에서 가져온 Langfuse 가격 티어 UUID입니다. 티어 가격제가 적용되지 않으면 null입니다.                                                                |
+| `usage_pricing_tier_name` | 문자열 또는 null             | 비용 계산에 사용된 가격 티어의 이름입니다.                                               | 모델 정의에서 가져온 사용자 지정 티어 이름입니다. 티어 가격제가 적용되지 않으면 null입니다.                                                                  |
+| `input_price`             | 문자열 또는 null             | 일치하는 모델 정의의 단위당 입력 가격입니다. 십진수 문자열입니다.                        | 일치하는 모델 정의가 없으면 null입니다. 파이프라인에서 숫자형으로 변환하세요. [Parquet 내보내기](#parquet-exports)에는 포함되지 않습니다.                    |
+| `output_price`            | 문자열 또는 null             | 일치하는 모델 정의의 단위당 출력 가격입니다. 십진수 문자열입니다.                        | 일치하는 모델 정의가 없으면 null입니다. 파이프라인에서 숫자형으로 변환하세요. [Parquet 내보내기](#parquet-exports)에는 포함되지 않습니다.                    |
+| `total_price`             | 문자열 또는 null             | 일치하는 모델 정의의 단위당 전체 가격입니다. 십진수 문자열입니다.                        | 일치하는 모델 정의가 없으면 null입니다. 호출당 고정 가격이 있는 모델에 사용됩니다. [Parquet 내보내기](#parquet-exports)에는 포함되지 않습니다.               |
+| `user_id`                 | 문자열                       | 상위 trace의 최종 사용자 식별자입니다.                                                   | 별도 JOIN 없이 바로 사용할 수 있습니다.                                                                                                                      |
+| `session_id`              | 문자열                       | 상위 trace의 세션 식별자입니다.                                                          | 별도 JOIN 없이 바로 사용할 수 있습니다.                                                                                                                      |
+| `trace_name`              | 문자열                       | 상위 trace의 이름입니다.                                                                 | observation을 상위 trace 이름별로 그룹화합니다.                                                                                                              |
+| `tags`                    | 문자열 배열                  | 상위 trace의 태그입니다.                                                                 | 별도 JOIN 없이 바로 사용할 수 있습니다.                                                                                                                      |
+| `release`                 | 문자열                       | 상위 trace의 릴리스 태그입니다.                                                          | 별도 JOIN 없이 바로 사용할 수 있습니다.                                                                                                                      |
+| `bookmarked`              | 불리언                       | 상위 trace의 북마크 플래그입니다.                                                        | 바로 사용할 수 있습니다.                                                                                                                                     |
+| `public`                  | 불리언                       | 상위 trace의 공개 플래그입니다.                                                          | 바로 사용할 수 있습니다.                                                                                                                                     |
+
+<Callout type="info">
+  2026-04-01 이후 생성된 통합의 경우 `latency`와 `time_to_first_token`은 (`observations/` 파일과 동일하게) **초** 단위입니다. 그 이전에 생성된 통합의 경우 하위 호환성을 위해 이 필드들은 **밀리초** 단위입니다.
+</Callout>
+
+### 단일 파일에서 trace 레벨 집계 값 도출하기 [#deriving-trace-aggregates]
+
+**Enriched observations** 내보내기를 사용하면 `observations_v2/` 파일만으로 trace 레벨 메트릭을 계산할 수 있으며, 파일 간 JOIN이 필요하지 않습니다. `trace_id`로 그룹화한 후 trace 비용은 `SUM(total_cost)`로, trace 레이턴시는 `MAX(end_time) - MIN(start_time)`으로 계산하세요.
+
+## Scores(`scores/`) [#scores]
+
+내보내기 소스 모드와 관계없이 **항상 내보내집니다**. 데이터 타입이 `NUMERIC`, `BOOLEAN`, `CATEGORICAL`, `TEXT`인 score가 포함됩니다.
+
+| 필드             | 타입               | 설명                                                                 | 사용 참고 사항                                                                                                                                                                                     |
+| ---------------- | ------------------ | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`             | 문자열             | 고유한 score 식별자입니다.                                           | 기본 키입니다.                                                                                                                                                                                     |
+| `timestamp`      | 문자열(타임스탬프) | score 생성 타임스탬프(이벤트 시각)입니다.                            | score의 기본 시간 축입니다.                                                                                                                                                                        |
+| `project_id`     | 문자열             | Langfuse 프로젝트 식별자입니다.                                      | 하나의 내보내기 안의 모든 행은 동일한 프로젝트에 속합니다.                                                                                                                                         |
+| `environment`    | 문자열             | 환경 라벨입니다.                                                     | 환경별로 필터링합니다.                                                                                                                                                                             |
+| `trace_id`       | 문자열 또는 null   | 연결된 trace 식별자입니다.                                           | trace에 연결되지 않은 독립적인 score의 경우 null입니다. trace 또는 observation 컨텍스트를 얻으려면 조인하세요.                                                                                     |
+| `observation_id` | 문자열 또는 null   | (선택 사항) 연결된 observation 식별자입니다.                         | score가 trace 레벨인 경우 null입니다. score가 특정 observation을 대상으로 하는 경우 non-null입니다.                                                                                                |
+| `session_id`     | 문자열 또는 null   | 연결된 세션 식별자입니다.                                            | 설정되지 않은 경우 null입니다. trace를 조인하지 않고도 세션 컨텍스트에 바로 접근할 수 있습니다.                                                                                                    |
+| `dataset_run_id` | 문자열 또는 null   | (score가 평가 실행에서 나온 경우) 연결된 데이터셋 실행 식별자입니다. | score를 실험/평가 실행에 연결합니다. ad-hoc 또는 annotation score의 경우 null입니다.                                                                                                               |
+| `name`           | 문자열             | score 이름입니다(예: `accuracy`, `helpfulness`, `hallucination`).    | score 지표 이름으로 그룹화/필터링합니다.                                                                                                                                                           |
+| `value`          | 숫자               | 숫자형 score 값입니다.                                               | `BOOLEAN`의 경우: 0 또는 1입니다. `CATEGORICAL`의 경우: 카테고리의 인덱스입니다. `NUMERIC`의 경우: 원본 값입니다. `TEXT`의 경우: 항상 0입니다(의미 없는 값이며, 대신 `string_value`를 사용하세요). |
+| `source`         | 문자열             | score 소스: `API`, `ANNOTATION`, `EVAL`.                             | `API` = SDK를 통한 프로그래매틱 방식, `ANNOTATION` = UI에서의 사람에 의한 annotation, `EVAL` = LLM-as-judge 평가기입니다.                                                                          |
+| `comment`        | 문자열 또는 null   | 선택적인 사람의 코멘트 또는 평가기의 판단 근거입니다.                | score에 대한 맥락 정보입니다. annotation 워크플로에서 유용합니다.                                                                                                                                  |
+| `data_type`      | 문자열             | score 데이터 타입: `NUMERIC`, `BOOLEAN`, `CATEGORICAL`, 또는 `TEXT`. | `value`와 `string_value`를 어떻게 해석할지 결정합니다.                                                                                                                                             |
+| `string_value`   | 문자열 또는 null   | categorical 및 text score의 문자열 표현입니다.                       | `CATEGORICAL`의 경우: 카테고리 라벨입니다(예: `"positive"`, `"neutral"`). `TEXT`의 경우: 자유 텍스트 내용입니다(1~500자). 숫자형 score의 경우 null입니다.                                          |
+| `created_at`     | 문자열(타임스탬프) | 행 생성 시각입니다.                                                  | 시스템 타임스탬프입니다.                                                                                                                                                                           |
+| `updated_at`     | 문자열(타임스탬프) | 마지막 업데이트 시각입니다.                                          | 증분 처리에 사용됩니다.                                                                                                                                                                            |
+
+### score를 trace/observation 컨텍스트로 보강하기 [#enriching-scores]
+
+score에는 trace 레벨 필드가 인라인으로 포함되어 있지 **않습니다**. 보강하려면 다음을 따르세요.
+
+| 내보내기 모드                       | trace 컨텍스트를 얻는 방법                                                                                                                                                                                                                                                                                                               |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Enriched observations**           | `trace_id`를 기준으로 score를 `observations_v2/` 파일에 조인하세요. 여러 observation이 동일한 `trace_id`를 공유하므로, score 행이 중복 증가하지 않도록 먼저 중복 제거(예: `trace_id`당 한 행 선택)를 수행하세요. 각 observation 행에는 이미 `user_id`, `session_id`, `trace_name`, `tags`, `release`, `environment`가 포함되어 있습니다. |
+| **Traces and observations(legacy)** | `user_id`, `environment`, `name` 등을 얻기 위해 `trace_id`를 기준으로 score를 `traces/` 파일에 조인하세요.                                                                                                                                                                                                                               |
+
+## 레거시 내보내기 경로 [#legacy-export-paths]
+
+다음 섹션은 **Traces and observations(legacy)** 내보내기 모드를 다룹니다. 새로 통합을 설정하는 경우 **Enriched observations**를 사용하는 것을 권장합니다.
+
+### Traces(`traces/`) [#traces]
+
+**Traces and observations(legacy)** 모드와 **Traces and observations(legacy) and enriched observations** 모드에서만 내보내집니다.
+
+`traces/` 파일은 **고정된 컬럼 세트**를 가지며, [필드 그룹](/docs/api-and-data-platform/features/export-to-blob-storage#export-field-groups)이 적용되지 않습니다. 레거시 내보내기의 경우 trace 레벨 컨텍스트(`tags`, `release`, trace의 `name`)도 이 파일에 존재하며, 이 필드들은 레거시 `observations/` 행에는 반복되지 않습니다. 이 둘을 결합하려면 `observations/` 파일의 `trace_id`를 이 파일의 `id`에 조인하세요.
+
+| 필드          | 타입               | 설명                                               | 사용 참고 사항                                                                                                                |
+| ------------- | ------------------ | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `id`          | 문자열             | 고유한 trace 식별자입니다.                         | 기본 키입니다. `trace_id`를 통해 observation, score와 조인할 때 사용합니다.                                                   |
+| `timestamp`   | 문자열(타임스탬프) | trace 생성 타임스탬프(이벤트 시각)입니다.          | trace의 기본 시간 축입니다. 파티셔닝, 필터링, 시계열 분석에 사용합니다.                                                       |
+| `name`        | 문자열             | 사용자가 지정한 trace 이름입니다(예: 최상위 작업). | 작업 유형별로 trace를 그룹화하고 필터링할 때 유용합니다.                                                                      |
+| `environment` | 문자열             | 환경 라벨입니다(예: `production`, `staging`).      | 환경별로 필터링하거나 파티셔닝합니다.                                                                                         |
+| `project_id`  | 문자열             | Langfuse 프로젝트 식별자입니다.                    | 하나의 내보내기 안의 모든 행은 동일한 프로젝트에 속합니다.                                                                    |
+| `metadata`    | 객체               | trace에 첨부된 사용자 지정 키-값 메타데이터입니다. | 임의의 컨텍스트입니다. 분석에 필요한 키를 추출하세요.                                                                         |
+| `user_id`     | 문자열 또는 null   | trace와 연관된 최종 사용자 식별자입니다.           | 설정되지 않은 경우 null입니다. 사용자별 분석을 위해 사용자별로 그룹화합니다.                                                  |
+| `session_id`  | 문자열 또는 null   | 관련 trace를 그룹화하는 세션 식별자입니다.         | 설정되지 않은 경우 null입니다. 대화 단위 분석을 위해 trace를 세션으로 그룹화합니다.                                           |
+| `release`     | 문자열 또는 null   | 애플리케이션 릴리스/버전 태그입니다.               | 설정되지 않은 경우 null입니다. 릴리스별로 필터링하거나 비교합니다.                                                            |
+| `version`     | 문자열 또는 null   | SDK를 통해 설정된 사용자 지정 버전 문자열입니다.   | 설정되지 않은 경우 null입니다. 애플리케이션 변경이 시간에 따라 메트릭에 미치는 영향을 추적합니다.                             |
+| `public`      | 불리언             | trace가 공개적으로 공유 가능한지 여부입니다.       | 공개/비공개 trace를 필터링합니다.                                                                                             |
+| `bookmarked`  | 불리언             | Langfuse UI에서 trace가 북마크되었는지 여부입니다. | 북마크된 항목을 필터링합니다.                                                                                                 |
+| `tags`        | 문자열 배열        | trace에 지정된 사용자 정의 태그입니다.             | 다중 값 필터링과 그룹화에 사용합니다.                                                                                         |
+| `input`       | 문자열 또는 null   | trace 입력 페이로드입니다.                         | 트레이싱된 작업의 최상위 입력입니다. 일반 텍스트이거나 JSON일 수 있으며 크기가 클 수 있습니다. 설정되지 않은 경우 null입니다. |
+| `output`      | 문자열 또는 null   | trace 출력 페이로드입니다.                         | 최상위 출력입니다. 일반 텍스트이거나 JSON일 수 있으며 크기가 클 수 있습니다. 설정되지 않은 경우 null입니다.                   |
+| `created_at`  | 문자열(타임스탬프) | 행 생성 시각입니다.                                | 시스템 타임스탬프입니다. 일반적으로 `timestamp`와 유사하지만 늦게 도착한 데이터의 경우 다를 수 있습니다.                      |
+| `updated_at`  | 문자열(타임스탬프) | 마지막 업데이트 시각입니다.                        | 증분 처리에 유용합니다: `updated_at`이 마지막 동기화 이후인 행만 재처리하세요.                                                |
+
+#### trace 내보내기에 포함되지 않는 필드 [#traces-derived-fields]
+
+다음 필드는 직접 내보내지지 않습니다. 웨어하우스에서 다음과 같이 도출하세요.
+
+| 필드           | 도출 방법                                                                              |
+| -------------- | -------------------------------------------------------------------------------------- |
+| `total_cost`   | observations 파일에서 `trace_id`별로 observation 레벨 `total_cost`를 합산합니다.       |
+| `latency`      | `trace_id`별로 observation 전체에 대해 `MAX(end_time) - MIN(start_time)`을 계산합니다. |
+| `observations` | 전체 목록을 얻으려면 `trace_id`로 observations 파일을 조인합니다.                      |
+| `scores`       | 전체 목록을 얻으려면 `trace_id`로 scores 파일을 조인합니다.                            |
+| `html_path`    | `{langfuse_host}/project/{project_id}/traces/{id}` 형식으로 구성합니다.                |
+
+### Observations(`observations/`) [#observations]
+
+**Traces and observations(legacy)** 모드와 **Traces and observations(legacy) and enriched observations** 모드에서 내보내집니다.
+
+이 행에는 **observation 레벨 데이터만** 포함됩니다. `user_id`, `session_id`, `tags`와 같은 trace 레벨 필드는 포함되지 않으므로, 웨어하우스에서 `trace_id`를 기준으로 `traces/` 파일을 조인하거나 **Enriched observations** 내보내기 모드로 전환하세요.
+
+[필드 그룹](/docs/api-and-data-platform/features/export-to-blob-storage#export-field-groups)은 이 파일에도 적용되지만, enriched 내보내기보다 그룹별 컬럼 세트가 더 작습니다. `trace_context` 그룹은 여기서는 영향을 주지 않으며, 해당 필드는 `traces/` 파일에 존재합니다. 아래 표는 모든 그룹이 선택된 경우의 전체 컬럼을 나열한 것입니다.
+
+| 필드                      | 타입                         | 설명                                                                                     | 사용 참고 사항                                                                                                                                                                |
+| ------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                      | 문자열                       | 고유한 observation 식별자입니다.                                                         | 기본 키입니다.                                                                                                                                                                |
+| `trace_id`                | 문자열                       | 상위 trace 식별자입니다.                                                                 | trace 레벨 필드를 얻거나 score와 연결하려면 이 값으로 조인하세요.                                                                                                             |
+| `project_id`              | 문자열                       | Langfuse 프로젝트 식별자입니다.                                                          | 하나의 내보내기 안의 모든 행은 동일한 프로젝트에 속합니다.                                                                                                                    |
+| `environment`             | 문자열                       | 환경 라벨입니다.                                                                         | 환경별로 필터링합니다.                                                                                                                                                        |
+| `type`                    | 문자열                       | observation 타입: `SPAN`, `GENERATION`, 또는 `EVENT`입니다.                              | generation은 LLM 호출, span은 임의의 작업, event는 특정 시점의 마커입니다.                                                                                                    |
+| `parent_observation_id`   | 문자열 또는 null             | (중첩된 observation의 경우) 상위 observation ID입니다.                                   | 상위 포인터를 따라가며 trace 트리를 재구성합니다. 최상위 레벨 observation의 경우 null입니다.                                                                                  |
+| `start_time`              | 문자열(타임스탬프)           | observation이 시작된 시각입니다.                                                         | observation의 기본 시간 축입니다.                                                                                                                                             |
+| `end_time`                | 문자열(타임스탬프) 또는 null | observation이 종료된 시각입니다.                                                         | event와 진행 중인 observation의 경우 null입니다.                                                                                                                              |
+| `name`                    | 문자열                       | 사용자가 지정한 observation 이름입니다.                                                  | 이름(예: 함수 이름, 모델 호출 라벨)으로 그룹화/필터링합니다.                                                                                                                  |
+| `metadata`                | 객체                         | 사용자가 제공한 키-값 메타데이터입니다.                                                  | 임의의 컨텍스트입니다. 분석에 필요한 키를 추출하세요.                                                                                                                         |
+| `level`                   | 문자열                       | 로그 레벨: `DEBUG`, `DEFAULT`, `WARNING`, `ERROR`.                                       | 에러나 경고를 필터링합니다.                                                                                                                                                   |
+| `status_message`          | 문자열 또는 null             | 상태 또는 에러 메시지입니다.                                                             | 설정되지 않은 경우 null입니다. 실패한 observation을 디버깅할 때 확인합니다.                                                                                                   |
+| `version`                 | 문자열 또는 null             | SDK를 통해 설정된 사용자 지정 버전 문자열입니다.                                         | 설정되지 않은 경우 null입니다.                                                                                                                                                |
+| `input`                   | 문자열 또는 null             | observation 입력 페이로드입니다.                                                         | generation의 경우: LLM에 전달된 프롬프트/메시지입니다. 일반 텍스트이거나 JSON일 수 있으며 크기가 클 수 있습니다. 설정되지 않은 경우 null입니다.                               |
+| `output`                  | 문자열 또는 null             | observation 출력 페이로드입니다.                                                         | generation의 경우: LLM 응답입니다. 일반 텍스트이거나 JSON일 수 있으며 크기가 클 수 있습니다. 설정되지 않은 경우 null입니다.                                                   |
+| `provided_model_name`     | 문자열 또는 null             | 사용자/SDK가 제공한 모델 이름입니다.                                                     | 원본 모델 문자열입니다(예: `gpt-4o`, `claude-sonnet-4-20250514`). span과 event의 경우 null입니다.                                                                             |
+| `model_parameters`        | 문자열 또는 null             | JSON으로 인코딩된 문자열 형태의 모델 호출 파라미터입니다(예: `"{\"temperature\":0.7}"`). | JSON으로 파싱하세요. 모델 설정이 품질/비용에 미치는 영향을 분석할 때 유용합니다. span과 event의 경우 null입니다.                                                              |
+| `usage_details`           | 객체(문자열 → 정수)          | 카테고리별 토큰 사용량 내역입니다.                                                       | 키를 추출하세요: 입력 토큰은 `input`, 출력 토큰은 `output`, 전체는 `total`입니다. `input_cached_tokens`, `reasoning_tokens` 등 추가 키가 포함될 수 있습니다.                  |
+| `cost_details`            | 객체(문자열 → 숫자)          | 카테고리별 비용 내역입니다(USD).                                                         | 키를 추출하세요: 입력 비용은 `input`, 출력 비용은 `output`입니다.                                                                                                             |
+| `completion_start_time`   | 문자열(타임스탬프) 또는 null | (스트리밍의 경우) 첫 토큰이 생성된 시각입니다.                                           | `time_to_first_token`을 계산하는 데 사용됩니다. 스트리밍이 아닌 호출의 경우 null입니다.                                                                                       |
+| `prompt_name`             | 문자열 또는 null             | 사용된 Langfuse 프롬프트의 이름입니다(있는 경우).                                        | 프롬프트가 사용되지 않은 경우 null입니다. 특정 프롬프트를 사용한 observation을 필터링합니다.                                                                                  |
+| `prompt_version`          | 정수 또는 null               | 사용된 Langfuse 프롬프트의 버전 번호입니다.                                              | 어떤 프롬프트 버전이 사용되었는지 추적합니다.                                                                                                                                 |
+| `total_cost`              | 숫자 또는 null               | 해당 observation의 총 계산 비용입니다(USD).                                              | 비용을 계산할 수 없는 경우 null입니다. observation 레벨 비용입니다. trace 레벨 비용을 구하려면 trace 단위로 합산하세요.                                                       |
+| `latency`                 | 숫자 또는 null               | **초** 단위의 소요 시간입니다(`end_time - start_time`).                                  | `end_time`이 null인 경우 null입니다.                                                                                                                                          |
+| `time_to_first_token`     | 숫자 또는 null               | **초** 단위의 첫 토큰까지 걸린 시간입니다(`completion_start_time - start_time`).         | `completion_start_time`이 null인 경우 null입니다. 스트리밍 응답성을 측정합니다.                                                                                               |
+| `model_id`                | 문자열 또는 null             | (`provided_model_name`으로부터 확인된) Langfuse 모델 정의 ID입니다.                      | 가격 조회에 사용됩니다. 일치하는 모델 정의가 없으면 null입니다.                                                                                                               |
+| `created_at`              | 문자열(타임스탬프)           | 행 생성 시각입니다.                                                                      | 시스템 타임스탬프입니다.                                                                                                                                                      |
+| `updated_at`              | 문자열(타임스탬프)           | 마지막 업데이트 시각입니다.                                                              | 증분 처리에 사용됩니다.                                                                                                                                                       |
+| `prompt_id`               | 문자열 또는 null             | Langfuse 프롬프트 정의 ID입니다.                                                         | 프롬프트가 사용되지 않은 경우 null입니다. 프롬프트 분석을 위해 `prompt_name`/`prompt_version`과 함께 사용합니다.                                                              |
+| `tool_calls`              | 문자열 배열                  | LLM 응답에서 온 원본 도구/함수 호출 페이로드입니다.                                      | 각 요소를 JSON으로 파싱하세요. 전체 도구 호출 객체가 포함됩니다.                                                                                                              |
+| `tool_call_names`         | 문자열 배열                  | 호출된 도구/함수의 이름입니다.                                                           | 전체 `tool_calls`를 파싱하지 않고 빠르게 필터링/그룹화할 수 있습니다.                                                                                                         |
+| `tool_definitions`        | 객체                         | LLM에 제공된 도구/함수 스키마입니다.                                                     | 도구가 제공되지 않은 경우 빈 객체 `{}`일 수 있습니다.                                                                                                                         |
+| `usage_pricing_tier_name` | 문자열 또는 null             | 비용 계산에 사용된 가격 티어의 이름입니다.                                               | 모델 정의에서 가져온 사용자 지정 티어 이름입니다. 티어 가격제가 적용되지 않으면 null입니다. enriched 내보내기와 달리 이 파일에는 `usage_pricing_tier_id`가 포함되지 않습니다. |
+| `input_price`             | 문자열 또는 null             | 일치하는 모델 정의의 단위당 입력 가격입니다. 십진수 문자열입니다.                        | 일치하는 모델 정의가 없으면 null입니다. 파이프라인에서 숫자형으로 변환하세요. [Parquet 내보내기](#parquet-exports)에는 포함되지 않습니다.                                     |
+| `output_price`            | 문자열 또는 null             | 일치하는 모델 정의의 단위당 출력 가격입니다. 십진수 문자열입니다.                        | 일치하는 모델 정의가 없으면 null입니다. 파이프라인에서 숫자형으로 변환하세요. [Parquet 내보내기](#parquet-exports)에는 포함되지 않습니다.                                     |
+| `total_price`             | 문자열 또는 null             | 일치하는 모델 정의의 단위당 전체 가격입니다. 십진수 문자열입니다.                        | 일치하는 모델 정의가 없으면 null입니다. 호출당 고정 가격이 있는 모델에 사용됩니다. [Parquet 내보내기](#parquet-exports)에는 포함되지 않습니다.                                |
+
+### enriched 내보내기와 legacy 내보내기의 차이점 [#enriched-vs-legacy-differences]
+
+레거시 `traces/` 파일과 `observations/` 파일을 결합하면 enriched `observations_v2/` 파일과 거의 동일한 데이터를 얻을 수 있습니다. 순차적인 차이점은 다음과 같습니다.
+
+| 방향                                   | 필드                                                                             | 참고 사항                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| -------------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| enriched에만 존재                      | `usage_pricing_tier_id`                                                          | 레거시 `observations/` 파일에는 `usage_pricing_tier_name`만 포함됩니다.                                                                                                                                                                                                                                                                                                                                                                      |
+| legacy에만 존재(`traces/` 파일을 통해) | trace 레벨 `input`, `output`, `metadata`, `timestamp`, `version`                 | `timestamp`는 항상 신뢰성 있게 설정됩니다(root span 시작 시각). trace 레벨 `input`/`output`은 Langfuse SDK나 지원되는 프레임워크(예: Vercel AI SDK, Genkit, Pydantic AI)를 사용하는 경우에만 채워지며, 순수 OTEL 자동 계측의 경우에는 null입니다. trace 레벨 `metadata`는 일반적으로 비즈니스 데이터가 아닌 계측 속성을 담고 있습니다. trace 레벨 `version`은 `basic` 그룹에 있는 observation 레벨 `version` 필드와는 독립적으로 설정됩니다. |
+| 동일한 데이터, 다른 구조               | `bookmarked`, `public`, `release`, `session_id`, `tags`, `trace_name`, `user_id` | enriched 내보내기에서는 모든 observation 행에 비정규화되어 포함되지만, legacy에서는 `traces/` 파일에서만 확인할 수 있으며(`trace_name`은 `name`으로 불림) `trace_id`를 통해 조인해야 합니다.                                                                                                                                                                                                                                                 |
+
+## CSV 내보내기 관련 참고 사항 [#csv-exports]
+
+CSV 형식에서는 모든 값이 텍스트로 표현됩니다. JSON/JSONL과의 주요 차이점은 다음과 같습니다.
+
+| JSON 타입          | CSV 표현 방식                                                                                                          |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| string             | 일반 텍스트 값입니다.                                                                                                  |
+| number             | 숫자 텍스트입니다(예: `1.23`). 파이프라인에서 float로 파싱하세요.                                                      |
+| integer            | 소수점이 없는 숫자 텍스트입니다(예: `1024`).                                                                           |
+| boolean            | `true` 또는 `false`입니다.                                                                                             |
+| null               | 빈 필드입니다.                                                                                                         |
+| array of strings   | JSON으로 인코딩된 문자열입니다(예: `["tag1","tag2"]`). 이 필드를 JSON으로 파싱하세요.                                  |
+| object             | JSON으로 인코딩된 문자열입니다(예: `{"input":500,"output":120}`). 이 필드를 JSON으로 파싱하세요.                       |
+| string (timestamp) | UTC 기준 `YYYY-MM-DD HH:MM:SS.ffffff`입니다(예: `2024-05-29 13:46:19.963000`). 파이프라인에서 타임스탬프로 파싱하세요. |
+
+<Callout type="info">
+  **가격 필드:** `input_price`, `output_price`, `total_price`는 십진수 정밀도를 유지하기 위해 JSON/JSONL에서 **따옴표로 감싼 문자열**로 내보내집니다(예: `"0.03"`). CSV에서는 일반 텍스트로 표시됩니다. 웨어하우스에서 이 값들을 숫자형 또는 decimal 타입으로 변환하세요. 다른 비용 필드(`total_cost`, `cost_details` 값)는 JSON 숫자로 내보내집니다. 가격 필드는 [Parquet 내보내기](#parquet-exports)에는 포함되지 않습니다.
+</Callout>
+
+CSV를 웨어하우스에 로드할 때는 타임스탬프 필드를 웨어하우스의 타임스탬프 타입으로, 숫자 필드를 float/decimal로 변환하고, 웨어하우스가 지원한다면 JSON으로 인코딩된 필드(객체, 배열)를 네이티브 map/array 타입으로 파싱하세요.
+
+## Parquet 내보내기 관련 참고 사항 [#parquet-exports]
+
+Apache Parquet은 신규 통합의 기본 파일 타입입니다. 스토리지 엔진에 의해 인코딩 및 압축되는 컬럼형 바이너리 포맷이므로 gzip 압축이 적용되지 않으며, Parquet 파일은 항상 일반 `.parquet` 확장자로 작성됩니다.
+
+Parquet observation 내보내기(`observations_v2/`와 레거시 `observations/` 모두)에는 단위당 모델 가격 컬럼인 `input_price`, `output_price`, `total_price`가 포함되지 않습니다. 이 컬럼들은 내보내기 시점에 일치하는 모델 정의의 가격을 스냅샷으로 저장할 뿐, observation이 기록된 시점에 적용되던 가격이 아니므로 과거 데이터로서의 가치가 제한적이며, 향후 폐지될 수도 있습니다. 비용 데이터에는 모든 파일 타입에 포함되며 observation별 계산된 비용을 담고 있는 `cost_details`와 `total_cost`를 사용하세요.
+
+Trace와 score 내보내기는 모든 파일 타입에서 동일한 필드를 포함합니다.
+
+## 블롭 스토리지 내 파일 구성 [#file-organization]
+
+```
+{project_id}/
+├── observations_v2/          # Enriched observations 모드(권장)
+│   └── {timestamp}.{parquet|json|jsonl|csv}[.gz]
+├── scores/                   # 항상 내보내짐
+│   └── {timestamp}.{parquet|json|jsonl|csv}[.gz]
+├── traces/                   # Traces and observations(legacy) 모드 전용
+│   └── {timestamp}.{parquet|json|jsonl|csv}[.gz]
+├── observations/             # Traces and observations(legacy) 모드 전용
+│   └── {timestamp}.{parquet|json|jsonl|csv}[.gz]
+└── manifests/                # 실행 완료 매니페스트, 마지막에 작성됨
+    └── {timestamp}.json
+```
+
+파일은 설정된 내보내기 빈도(20분마다, 매시간, 매일, 매주)에 따라 파티셔닝됩니다. 각 파일은 하나의 시간 구간을 담당합니다. `.gz` 접미사는 gzip으로 압축된 텍스트 형식에만 적용되며, Parquet 파일은 gzip으로 압축되지 않습니다.
+
+`manifests/` 폴더에는 완료된 내보내기 실행마다 하나의 JSON 파일이 있으며, 해당 실행이 작성한 모든 파일을 나열합니다 — 자세한 내용은 [실행 완료 매니페스트](/docs/api-and-data-platform/features/export-to-blob-storage#run-manifest)를 참고하세요.

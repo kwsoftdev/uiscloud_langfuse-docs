@@ -1,0 +1,191 @@
+---
+title: LLM 애플리케이션을 위한 환각 탐지
+description: "LLM 애플리케이션을 위한 환각 탐지: 분류 체계, 프로덕션 트레이스에 대한 LLM-as-a-judge 평가기, 참조 답변을 활용한 오프라인 실험, 코드 사전 스크리닝."
+tags: [guide, evaluation]
+sourceRevision: 467238ceb51a6352fd65938f4a2f8b8fccc0dd42
+translationStatus: machine
+---
+
+# LLM 애플리케이션을 위한 환각 탐지
+
+환각(hallucination)이란 거짓이거나 근거가 없는 내용을 주장하는 출력을 말합니다. 조작된 인용, 확신에 찬 잘못된 숫자, 존재하지 않는 API 메서드가 그 예입니다. 환각 탐지는 근거 없는 주장에 대해 출력을 자동으로 채점하여, 이 실패가 사용자의 불만이 아니라 대시보드의 메트릭으로 드러나도록 하는 방법입니다. 이 페이지에서는 무엇이 환각으로 간주되는지, 실무에서 효과가 있는 탐지 방법들, 그리고 탐지를 수행하는 평가기(judge)를 설계하는 방법을 Langfuse를 통한 실제 구현과 함께 다룹니다.
+
+**요약:** 프로덕션 환각 탐지는 실시간 트래픽의 샘플에 대해 LLM-as-a-judge 평가기를 실행합니다. 이 평가기는 참조 없이(reference-free) 동작하며, 같은 관측(observation)에 기록된 입력 및 컨텍스트와 출력을 비교하므로 정답(ground truth)이 필요하지 않습니다. 오프라인 탐지는 각 릴리스 이전에 참조 답변이 있는 데이터셋에 대해 실험을 실행하며, 이 경우 평가기는 알려진 정답 출력과 대조하여 주장을 검증할 수 있습니다. 결정론적(deterministic) 코드 사전 스크리닝(누락된 인용, 컨텍스트에 없는 숫자)은 비용 없이 위험 신호를 표시하고, 표시된 트레이스만 유료 평가기로 라우팅합니다. 점수는 환각/정상의 이진(binary) 판정으로 매기며, 실패한 주장은 점수 코멘트에 나열합니다.
+
+## 무엇이 환각으로 간주되는가
+
+환각이란 가용한 증거가 뒷받침하지 않는, 출력에 담긴 주장입니다. 두 가지 구분 기준이 탐지 방식을 결정합니다.
+
+**내재적(intrinsic) 대 외재적(extrinsic).** 내재적 환각은 소스 자료와 모순됩니다. 컨텍스트에는 한도가 분당 100건이라고 되어 있는데 답변은 1,000건이라고 하는 경우입니다. 외재적 환각은 소스에 없는 내용을 추가합니다. 답변이 실제로 검색된 적 없는 논문을 인용하거나, 존재하지 않는 설정 플래그를 지어내는 경우입니다. 외재적 주장은 사실일 수도 있지만, 근거 있는 답변을 약속하는 애플리케이션은 이를 검증할 수 없으므로, 탐지에서는 근거 없음과 거짓을 동일하게 취급합니다.
+
+**근거 컨텍스트(grounded-context) 대 오픈 도메인(open-domain).** 두 번째 축은 대조할 증거가 무엇인가입니다.
+
+| 상황                                        | 사용 가능한 증거              | 탐지 방식                                                                                     |
+| ------------------------------------------- | ----------------------------- | --------------------------------------------------------------------------------------------- |
+| 근거 컨텍스트 (RAG, 도구 결과, 제공된 문서) | 컨텍스트가 출력과 함께 기록됨 | 출력의 주장을 기록된 컨텍스트와 비교                                                          |
+| 오픈 도메인 (모델이 자체 지식으로 답변)     | 비교할 컨텍스트 없음          | 세계 지식을 갖춘 평가기, 오프라인 테스트의 참조 답변, 또는 자기 일관성(self-consistency) 검사 |
+
+근거 컨텍스트 탐지는 비교의 문제이며, 훨씬 다루기 쉬운 경우입니다. 증거가 트레이스와 함께 이동하기 때문입니다. 오픈 도메인 탐지는 더 어렵습니다. 트레이스상에 주장의 사실 여부를 입증할 만한 것이 없기 때문이며, 이 경우 오프라인 참조 데이터셋과 평가기의 세계 지식이 더 큰 역할을 담당합니다.
+
+## 환각 탐지 vs 충실도(faithfulness) vs 관련성(relevance)
+
+세 가지 메트릭이 "답변이 틀렸다"는 하나의 범주로 뭉뚱그려지지만, 이들은 서로 독립적으로 실패하므로 별도의 평가기가 필요합니다.
+
+- **환각 탐지**는 출력이 증거로 뒷받침되지 않는 주장을 하는지 묻습니다. 이는 검색(retrieval) 여부와 무관하게 모든 LLM 애플리케이션에 적용됩니다.
+- **충실도**는 RAG에 적용되는 근거 컨텍스트의 하위 사례입니다. 답변의 모든 주장이 검색된 문서로 뒷받침되는가를 묻습니다. [RAG 충실도 평가](/resources/engineering/rag-faithfulness-evaluation)에서는 검색 실패와 생성 실패를 구분하는 방법을 포함해 이 사례를 심층적으로 다룹니다.
+- **답변 관련성**은 출력이 애초에 질문을 다루고 있는지를 묻습니다. 답변은 완전히 근거가 있으면서도 주제에서 벗어날 수 있고, 반대로 주제에 완벽히 부합하면서도 조작된 내용일 수 있습니다. [답변 관련성 평가](/resources/engineering/answer-relevance-evaluation)에서 이 차원을 다룹니다.
+
+애플리케이션이 RAG 파이프라인이라면, 충실도 페이지가 주된 환각 위험에 대한 더 깊이 있는 다룸입니다. 이 페이지는 일반적인 탐지 문제, 즉 분류 체계, 프로덕션 및 오프라인 연결 방식, 그리고 세 메트릭 모두에 적용되는 평가기 설계를 다룹니다.
+
+## 세 가지 탐지 방법
+
+| 방법                                    | 참조 답변 필요 여부              | 검사당 비용                 | 실행 위치                    |
+| --------------------------------------- | -------------------------------- | --------------------------- | ---------------------------- |
+| 프로덕션 트레이스에 대한 LLM-as-a-judge | 불필요                           | 평가기 모델 호출 1회        | 실시간 트래픽, 샘플링        |
+| 오프라인 실험의 평가기                  | 필요 (참조 답변이 있는 데이터셋) | 항목당 평가기 모델 호출 1회 | 릴리스 이전, CI 또는 필요 시 |
+| 결정론적 코드 사전 스크리닝             | 불필요                           | 없음                        | 모든 트레이스                |
+
+### 방법 1: 프로덕션 트레이스에 대한 LLM-as-a-judge
+
+Langfuse는 Langfuse와 Ragas 같은 파트너가 구축하고 유지 관리하는 관리형 [LLM-as-a-judge](/docs/evaluation/evaluation-methods/llm-as-a-judge) 평가기 카탈로그를 제공합니다. 환각은 Context-Relevance, Toxicity, Helpfulness와 함께 관리형 차원 중 하나이므로, 시작하는 데 프롬프트 작성이 필요하지 않습니다. Hallucination 평가기는 참조 없이(reference-free) 동작합니다. 관측에서 매핑한 입력 및 컨텍스트와 출력을 대조하여 판정하는데, 바로 이 점 때문에 예상 출력이 존재하지 않는 프로덕션 트래픽에서도 작동합니다.
+
+설정 순서는 다음과 같습니다.
+
+1. Evaluators 페이지에서 `+ Set up Evaluator`를 클릭하고, LLM Connection을 통해 기본 평가기 모델을 설정합니다. 판정 결과가 안정적으로 파싱되려면 모델이 구조화된 출력(structured output)을 지원해야 합니다.
+2. 카탈로그에서 관리형 Hallucination 평가기를 선택합니다 (또는 도메인에 더 엄격한 루브릭이 필요하다면 `{{variables}}`를 사용해 커스텀 프롬프트를 정의합니다).
+3. 권장되는 프로덕션 대상인 실시간 관측을 대상으로 지정합니다. 판정할 가치가 있는 관측으로 필터링합니다. 예를 들어 `customer-facing` 태그가 붙은 트레이스의 최종 답변 생성만으로 제한하고, 샘플링 비율을 설정합니다. 트래픽의 5~10%만 판정해도 추세를 파악하기에 충분한 경우가 대부분이며, 모든 것을 판정하는 비용을 지불할 필요가 없습니다.
+4. 관측 필드를 평가기의 변수에 매핑합니다. Langfuse는 최근 24시간의 실제 데이터를 사용해 채워진 평가기 프롬프트를 미리보기로 보여주며, JSONPath 표현식으로 중첩된 필드도 처리할 수 있습니다.
+
+한 가지 동작 방식은 정확성을 위해 꼭 알아둬야 합니다. 관측 단위 평가기는 대상으로 지정한 관측에 있는 데이터만 볼 수 있으며, 형제(sibling) 관측이나 자식(child) 관측은 보지 못합니다. 평가기가 근거성(groundedness)을 확인하기 위해 검색된 컨텍스트가 필요하다면, 계측(instrumentation)이 그 컨텍스트를 대상 관측에 넣도록 해야 하거나, 전체 입력과 출력을 기록하는 루트 관측을 대상으로 지정해야 합니다. 점수는 비동기적으로 관측에 반영되며, 평가기의 Fast Mode를 활성화하고 트레이스 테이블에서 행을 선택한 뒤 Actions → Evaluate를 실행하면 과거 트래픽에 대해서도 소급 적용할 수 있습니다.
+
+### 방법 2: 참조 데이터셋을 활용한 오프라인 탐지
+
+프롬프트나 모델 변경을 배포하기 전에, 참조 답변이 있는 항목으로 구성된 데이터셋에 대해 후보 버전을 실행하고, 평가기가 참조와 대조하여 주장을 검증하도록 합니다. 이는 프로덕션 모니터링이라면 사용자가 이미 목격한 뒤에야 잡아냈을 환각 회귀(regression)를 미리 잡아냅니다. Python SDK를 사용하면 [SDK를 통한 실험](/docs/evaluation/experiments/experiments-via-sdk)이 이 루프를 감싸줍니다. `run_experiment`는 항목별로 태스크를 실행하고, 평가기를 적용하며, 비교를 위해 실행 결과를 Langfuse에 기록합니다.
+
+```python
+import json
+
+from langfuse import Evaluation, get_client
+from openai import OpenAI
+
+langfuse = get_client()
+judge_client = OpenAI()
+
+JUDGE_PROMPT = """Check the generated answer against the reference answer.
+
+Question: {question}
+Reference answer: {reference}
+Generated answer: {answer}
+
+List every factual claim in the generated answer that contradicts the reference
+or asserts something the reference does not support. If there are none, return
+an empty list. Reply as JSON: {{"unsupported_claims": [...], "hallucinated": <bool>}}"""
+
+
+def hallucination_judge(*, input, output, expected_output, **kwargs):
+    response = judge_client.chat.completions.create(
+        model="gpt-4.1",
+        response_format={"type": "json_object"},
+        messages=[
+            {
+                "role": "user",
+                "content": JUDGE_PROMPT.format(
+                    question=input, reference=expected_output, answer=output
+                ),
+            }
+        ],
+    )
+    verdict = json.loads(response.choices[0].message.content)
+    return Evaluation(
+        name="hallucinated",
+        value=1.0 if verdict["hallucinated"] else 0.0,
+        comment="; ".join(verdict["unsupported_claims"]) or None,
+    )
+
+
+def hallucination_rate(*, item_results, **kwargs):
+    values = [
+        e.value
+        for r in item_results
+        for e in r.evaluations
+        if e.name == "hallucinated"
+    ]
+    return Evaluation(
+        name="hallucination_rate",
+        value=sum(values) / len(values) if values else None,
+    )
+
+
+def my_task(*, item, **kwargs):
+    return answer_question(item.input)  # 여기에서 애플리케이션을 호출합니다
+
+
+dataset = langfuse.get_dataset("qa-with-references")
+
+result = dataset.run_experiment(
+    name="Hallucination check",
+    description="Judge outputs against reference answers",
+    task=my_task,
+    evaluators=[hallucination_judge],
+    run_evaluators=[hallucination_rate],
+)
+print(result.format())
+```
+
+평가기는 이진 판정을 점수로, 문제가 된 주장을 코멘트로 반환하므로, 실패한 항목은 전체 출력을 다시 읽지 않고도 실행(run) 화면에서 바로 디버깅할 수 있습니다. `hallucination_rate` 실행 평가기는 각 실험 실행에 대해 하나의 비교 가능한 숫자를 제공하며, 이 값이 바로 CI 게이트가 검증할 값이 됩니다. 데이터셋은 프로덕션에서 구축하세요. 프로덕션 평가기가 표시한 트레이스는 모두 후보 항목이 되며, 검토 과정에서 수정된 참조 답변을 함께 제공합니다.
+
+### 방법 3: 결정론적 사전 스크리닝
+
+일부 환각 위험 신호는 모델 없이도 판별할 수 있습니다. 정규식으로는 의미(semantics)를 검증할 수 없으므로 이 자체로는 환각 탐지가 아니지만, 무료이고 결정론적이며 모든 트레이스에서 실행되기 때문에 첫 번째 계층으로 적합합니다. 정직한 예시 두 가지를 소개합니다.
+
+- **인용 존재 여부.** 검색된 소스를 하나도 인용하지 않는 근거 기반 답변은, 잘 읽히더라도 환각 위험입니다. [코드 평가기 예제](/resources/engineering/code-evaluator-examples) 페이지에는 그대로 붙여 쓸 수 있는 버전(예제 4)과 그 외 9가지 결정론적 검사가 있습니다.
+- **뒷받침되지 않는 숫자.** 답변에 등장하지만 제공된 컨텍스트 어디에도 없는 숫자는 구체적이고 검사 가능한 위험 신호입니다. UI에서 작성하고 관측에 대해 실행하는 Langfuse 코드 평가기의 예입니다.
+
+```python
+import re
+
+def evaluate(ctx):
+    context = str((ctx.observation.metadata or {}).get("retrieved_context", ""))
+    answer = str(ctx.observation.output)
+    answer_nums = set(re.findall(r"-?\d+(?:\.\d+)?", answer.replace(",", "")))
+    context_nums = set(re.findall(r"-?\d+(?:\.\d+)?", context.replace(",", "")))
+    unsupported = answer_nums - context_nums
+    return EvaluationResult(scores=[
+        Score(name="unsupported_numbers", value=bool(unsupported), data_type="BOOLEAN",
+              comment=f"Not in context: {sorted(unsupported)}" if unsupported else None)
+    ])
+```
+
+거짓 양성(파생된 값, 모델이 다르게 포맷한 날짜 등)은 예상해야 하며, 이는 판정이 아니라 라우팅이 임무인 스크리닝에서는 받아들일 만합니다.
+
+## 환각 평가기 설계하기
+
+**주장 단위 검사, 답변 단위 판정.** 답변 전체를 한 번에 채점하는 평가기는 그 외에는 정확한 응답 안에 숨어 있는 조작된 세부 사항 하나를 놓칩니다. 평가기에게 사실 주장들을 열거하고 각각을 검사하도록 지시하세요. 위 프롬프트가 하는 방식대로 말이죠. 그런 다음 결과를 종합합니다. 어떤 주장이든 실패하면 그 답변은 환각으로 판정됩니다. 주장별 목록은 점수 코멘트에 들어가는데, 이것이 표시된 트레이스를 검토 가능하게 만들고, 주장 단위로 사람이 매긴 라벨에 대해 평가기를 보정할 수 있게 해줍니다.
+
+**이진 판정.** 환각은 1~5점 척도가 아니라 통과/실패로 채점하세요. 이진 채점은 수용 가능한 것과 수용 불가능한 것을 가르는 기준을 정밀하게 정의하도록 강제하는 반면, 등급 척도는 3점이 무엇을 의미하는지 읽는 사람마다 다르게 생각하게 만듭니다. 이는 [Langfuse Academy 평가 모듈](/academy/evaluate)에서 지속적으로 권장하는 방식이며, 환각은 이 원칙이 가장 명확하게 적용되는 사례입니다. 답변의 나머지 부분이 아무리 훌륭해도 조작된 주장 하나가 있으면 실패이기 때문입니다.
+
+**단계적 확대, 가장 저렴한 계층부터.** 모든 트래픽에 무료 코드 스크리닝을 실행합니다. 스크리닝이 표시한 모든 것에 평가기를 실행하고, 여기에 스크리닝이 놓치는 패턴을 잡기 위한 정상 트래픽 샘플도 추가합니다. 고위험 흐름에서 평가기가 표시한 트레이스는 [주석 큐](/docs/evaluation/evaluation-methods/annotation-queues)로 라우팅하세요. 여기서 사람의 판정은 평가기 보정 데이터이자 오프라인 데이터셋용 참조 답변으로 이중으로 쓰입니다. 각 계층은 다음 단계, 즉 더 비용이 큰 계층이 처리해야 할 물량을 줄여줍니다.
+
+## 새로운 인프라 없이 하는 환각 탐지
+
+환각 탐지는 배포하고 운영해야 할 또 다른 서비스처럼 들려서 뒤로 미뤄지는 경우가 많습니다. 애플리케이션이 이미 Langfuse로 트레이스를 보내고 있다면 그렇지 않습니다. LLM-as-a-judge 평가기, 코드 평가기, 데이터셋, 실험 모두 트레이스를 받는 것과 동일한 Langfuse 배포 안에서 실행되므로, 위에서 설명한 설정은 아키텍처에 새로운 서비스를 전혀 추가하지 않습니다. 유일한 외부 호출은 Langfuse가 구성한 프로바이더 자격 증명을 사용해 LLM Connection을 통해 평가기 모델로 보내는 호출뿐입니다.
+
+이는 클라우드가 아닌 환경에서도 마찬가지입니다. Langfuse는 오픈 소스이며 [셀프 호스팅](/self-hosting)이 가능하므로, 트레이스 수집부터 평가기 실행, 점수 저장에 이르는 전체 탐지 루프를 팀이 통제하는 인프라에서 실행할 수 있습니다. 데이터 상주(data-residency) 제약이 있는 팀은 트레이싱을 수행하는 것과 동일한 셀프 호스팅 인스턴스에서 탐지를 실행합니다.
+
+## FAQ
+
+### 환각 탐지와 충실도 평가의 차이는 무엇인가요? [#hallucination-vs-faithfulness]
+
+충실도는 환각 탐지의 RAG 특화 사례입니다. 답변의 모든 주장이 검색된 컨텍스트로 뒷받침되는지를 확인합니다. 환각 탐지는 더 넓은 범위의 메트릭으로, 검색된 컨텍스트가 전혀 없는 오픈 도메인 답변과, 문서가 아니라 입력 자체와 모순되는 조작까지 포괄합니다. 애플리케이션이 RAG 파이프라인이라면, 충실도가 먼저 구현해야 할 이 메트릭의 버전입니다.
+
+### 정답(ground truth) 없이도 환각을 탐지할 수 있나요? [#detection-without-ground-truth]
+
+네, 참조 없는(reference-free) 평가기를 사용하면 가능합니다. Langfuse의 관리형 Hallucination 평가기는 같은 관측에 기록된 입력 및 컨텍스트와 출력을 대조하여 확인하므로, 예상 출력이 필요 없고 실시간 프로덕션 트래픽에서 실행할 수 있습니다. 참조 없는 탐지가 할 수 없는 것은, 기록된 어떤 증거도 뒷받침하거나 반박하지 않는 오픈 도메인 주장을 검증하는 일입니다. 이런 경우에는 오프라인 실험의 참조 데이터셋이나, 세계 지식으로 신뢰받는 평가기가 필요합니다.
+
+### LLM 평가기는 환각 탐지에서 얼마나 신뢰할 수 있나요? [#judge-reliability]
+
+추세를 파악하고 라우팅하는 데는 충분히 신뢰할 만하지만, 모든 판정을 진실로 취급할 만큼 신뢰할 수는 없습니다. 평가기는 이진 루브릭과 주장 단위 검사에서 가장 잘 작동하며, 미묘한 도메인 사실에서는 가장 취약합니다. 특히 평가 대상 모델과 같은 모델 계열에서 나온 평가기라면 동일한 맹점을 공유할 수 있습니다. 사람이 매긴 라벨과 대조하여 보정하세요. 평가기 판정의 샘플을 주석 큐로 보내고, 일치도를 측정하고, 일치도가 안정될 때까지 루브릭을 다듬으세요.
+
+### 환각 탐지로 사용자가 보기 전에 잘못된 답변을 차단할 수 있나요? [#blocking-at-request-time]
+
+아니요. 평가기 점수는 응답이 배송된 이후 비동기적으로 생성되므로, 회귀를 탐지하고 트레이스를 검토로 라우팅하며 회귀 데이터셋을 구축하는 데는 적합한 도구입니다. 진행 중인 답변을 막아야 하는 검사는 가드레일이며, 이는 요청 처리 시점에 애플리케이션 코드 안에 있어야 합니다. 그리고 그 가드레일의 결정 역시 다른 모든 출력과 마찬가지로 채점되어야 합니다.

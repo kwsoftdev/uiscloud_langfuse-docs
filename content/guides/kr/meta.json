@@ -1,0 +1,10 @@
+{
+  "title": "가이드",
+  "pages": [
+    "index",
+    "user-feedback-loop",
+    "human-in-the-loop-scoring",
+    "llm-as-a-judge-calibration-skill",
+    "videos"
+  ]
+}

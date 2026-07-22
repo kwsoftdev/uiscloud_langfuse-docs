@@ -1,0 +1,266 @@
+---
+title: 태그
+description: 태그는 사용 사례, 사용된 함수/API, 환경 및 기타 기준에 따라 Langfuse에서 트레이스와 관측을 필터링하고 정리하는 데 도움이 됩니다.
+sidebarTitle: 태그
+sourceRevision: ebd88776f7a2585db353a96b9309ff06a258a8fa
+translationStatus: machine
+---
+
+import { PropagationRestrictionsCallout } from "@/components/PropagationRestrictionsCallout";
+
+# 태그
+
+태그를 사용하면 Langfuse에서 관측과 트레이스를 분류하고 필터링할 수 있습니다.
+
+태그는 문자열이며(각 최대 200자), 하나의 관측에는 여러 태그가 있을 수 있습니다. 트레이스 내 모든 관측에 적용된 태그 전체 집합은 자동으로 집계되어 Langfuse의 트레이스 객체에 추가됩니다. 태그가 200자를 초과하면 삭제됩니다.
+
+Langfuse는 관측에 대해 불변(immutable) 데이터 모델을 사용하기 때문에, 태그는 생성된 후 UI에서 추가하거나 편집할 수 없습니다.
+
+## 태그를 관측에 전파하기
+
+`propagate_attributes()`를 사용하면 컨텍스트 내의 관측 그룹에 태그를 적용할 수 있습니다.
+
+<LangTabs items={["Python SDK", "JS/TS SDK", "OpenAI (Python)", "OpenAI (JS/TS)", "Langchain (Python)", "Langchain (JS/TS)", "Flowise"]}>
+<Tab>
+`@observe()` 데코레이터를 사용하는 경우:
+
+```python /propagate_attributes/
+from langfuse import observe, propagate_attributes
+
+@observe()
+def my_function():
+    # 모든 하위 관측에 태그 적용
+    with propagate_attributes(
+        tags=["tag-1", "tag-2"]
+    ):
+        # 중첩된 모든 관측에 이 태그가 자동으로 적용됩니다
+        result = process_data()
+        return result
+```
+
+관측을 직접 생성하는 경우:
+
+```python /propagate_attributes(tags=["tag-1", "tag-2"])/
+from langfuse import get_client, propagate_attributes
+
+langfuse = get_client()
+
+with langfuse.start_as_current_observation(as_type="span", name="my-operation") as root_span:
+    # 모든 하위 관측에 태그 적용
+    with propagate_attributes(tags=["tag-1", "tag-2"]):
+        # 여기서 생성된 모든 관측에 이 태그가 자동으로 적용됩니다
+        with root_span.start_as_current_observation(
+            as_type="generation",
+            name="llm-call",
+            model="gpt-4o"
+        ) as gen:
+            # 이 generation에도 태그가 자동으로 적용됩니다
+            pass
+```
+
+</Tab>
+<Tab title="JS/TS SDK">
+
+컨텍스트 매니저를 사용하는 경우:
+
+```ts /propagateAttributes/
+import { startActiveObservation, propagateAttributes } from "@langfuse/tracing";
+
+await startActiveObservation("context-manager", async (span) => {
+  span.update({
+    input: { query: "What is the capital of France?" },
+  });
+
+  // 모든 하위 관측에 태그 적용
+  await propagateAttributes(
+    {
+      tags: ["tag-1", "tag-2"],
+    },
+    async () => {
+      // 여기서 생성된 모든 관측에 이 태그가 자동으로 적용됩니다
+      // ... 로직 작성 ...
+    }
+  );
+});
+```
+
+`observe` 래퍼를 사용하는 경우:
+
+```ts /propagateAttributes/
+import { observe, propagateAttributes } from "@langfuse/tracing";
+
+const processData = observe(
+  async (data: string) => {
+    // 모든 하위 관측에 태그 적용
+    return await propagateAttributes(
+      { tags: ["tag-1", "tag-2"] },
+      async () => {
+        // 중첩된 모든 관측에 이 태그가 자동으로 적용됩니다
+        const result = await performProcessing(data);
+        return result;
+      }
+    );
+  },
+  { name: "process-data" }
+);
+
+const result = await processData("input");
+```
+
+자세한 내용은 [JS/TS SDK 문서](/docs/sdk/typescript/guide)를 참고하세요.
+
+</Tab>
+<Tab title="OpenAI (Python v2)">
+
+```python /propagate_attributes/
+from langfuse import get_client, propagate_attributes
+from langfuse.openai import openai
+
+langfuse = get_client()
+
+with langfuse.start_as_current_observation(as_type="span", name="openai-call"):
+    # OpenAI generation을 포함한 모든 관측에 태그 적용
+    with propagate_attributes(
+        tags=["tag-1", "tag-2"]
+    ):
+        completion = openai.chat.completions.create(
+            name="test-chat",
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a calculator."},
+                {"role": "user", "content": "1 + 1 = "}
+            ],
+            temperature=0,
+        )
+```
+
+또는 감싸는 span 없이 OpenAI를 사용하는 경우:
+
+```python
+from langfuse.openai import openai
+
+completion = openai.chat.completions.create(
+  name="test-chat",
+  model="gpt-3.5-turbo",
+  messages=[
+    {"role": "system", "content": "You are a calculator."},
+    {"role": "user", "content": "1 + 1 = "}],
+  temperature=0,
+  metadata={"langfuse_tags": ["tag-1", "tag-2"]}
+)
+```
+
+</Tab>
+<Tab title="OpenAI (JS/TS)">
+
+```ts /propagateAttributes/
+import OpenAI from "openai";
+import { observeOpenAI } from "@langfuse/openai";
+import { startActiveObservation, propagateAttributes } from "@langfuse/tracing";
+
+await startActiveObservation("openai-call", async () => {
+  // 모든 관측에 태그 적용
+  await propagateAttributes(
+    {
+      tags: ["tag-1", "tag-2"],
+    },
+    async () => {
+      const res = await observeOpenAI(new OpenAI()).chat.completions.create({
+        messages: [{ role: "system", content: "Tell me a story about a dog." }],
+        model: "gpt-3.5-turbo",
+        max_tokens: 300,
+      });
+    }
+  );
+});
+```
+
+</Tab>
+<Tab>
+
+```python /propagate_attributes/
+from langfuse import get_client, propagate_attributes
+from langfuse.langchain import CallbackHandler
+
+langfuse = get_client()
+langfuse_handler = CallbackHandler()
+
+with langfuse.start_as_current_observation(as_type="span", name="langchain-call"):
+    # 모든 하위 관측에 태그 적용
+    with propagate_attributes(
+        tags=["tag-1", "tag-2"]
+    ):
+        response = chain.invoke(
+            {"topic": "cats"},
+            config={"callbacks": [langfuse_handler]}
+        )
+```
+
+또는 chain 호출 시 metadata를 사용하는 방법:
+
+```python
+from langfuse.langchain import CallbackHandler
+
+handler = CallbackHandler()
+
+chain.invoke(
+    {"animal": "dog"},
+    config={
+        "callbacks": [handler],
+        "metadata": {"langfuse_tags": ["tag-1", "tag-2"]},
+    },
+)
+```
+
+</Tab>
+<Tab title="Langchain (JS/TS)">
+
+```ts /propagateAttributes/
+import { startActiveObservation, propagateAttributes } from "@langfuse/tracing";
+import { CallbackHandler } from "@langfuse/langchain";
+
+const langfuseHandler = new CallbackHandler();
+
+// 모든 하위 관측에 태그 적용
+await propagateAttributes(
+  {
+    tags: ["tag-1", "tag-2"],
+  },
+  async () => {
+    await chain.invoke(
+      { input: "<user_input>" },
+      { callbacks: [langfuseHandler] }
+    );
+  }
+);
+```
+
+또는 [CallbackHandler](/integrations/frameworks/langchain)를 사용할 때, 생성자에 `tags`를 전달할 수 있습니다:
+
+```ts
+const handler = new CallbackHandler({
+  tags: ["tag-1", "tag-2"],
+});
+```
+
+또는 chain 호출 시 runnable 설정을 통해 동적으로 태그를 지정할 수도 있습니다:
+
+```ts
+const langfuseHandler = new CallbackHandler()
+const tags = ["tag-1", "tag-2"];
+
+// chain 호출에 config를 전달하여 Langfuse 트레이스 속성으로 파싱되도록 합니다
+await chain.invoke({ input: "<user_input>" }, { callbacks: [langfuseHandler], tags: tags });
+```
+
+</Tab>
+
+</LangTabs>
+
+<PropagationRestrictionsCallout attributes={["tags"]} />
+
+## GitHub 토론
+
+import { GhDiscussionsPreview } from "@/components/gh-discussions/GhDiscussionsPreview";
+
+<GhDiscussionsPreview labels={["feat-tags"]} />

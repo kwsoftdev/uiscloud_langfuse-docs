@@ -1,0 +1,59 @@
+---
+title: Langchain 트레이스 내 관측값의 이름을 어떻게 커스터마이징하나요?
+tags: [integration]
+sourceRevision: 9c0d419484845ffbd56805fd068677856e5d764c
+translationStatus: machine
+---
+
+# 트레이스 내 Langchain 클래스의 이름을 어떻게 커스터마이징하나요?
+
+Langchain 내에서 run의 이름을 업데이트할 수 있습니다. Langfuse는 해당 이름을 감지하여 UI에 표시합니다.
+
+## `with_config`를 통한 커스텀 `run_name` (Python)
+
+Langchain 트레이스의 이름을 커스터마이징하려면 run의 `config` 내에서 `run_name` 파라미터를 사용할 수 있습니다.
+
+예시 (출처: [Langchain 문서](https://python.langchain.com/docs/concepts/runnables/#setting-custom-run-name-tags-and-metadata))
+
+```python
+from langchain import chat_models, prompts, callbacks, schema
+
+chain = (
+    prompts.ChatPromptTemplate.from_template("Reverse the following string: {text}")
+    | chat_models.ChatOpenAI()
+).with_config({"run_name": "StringReverse"})
+```
+
+```python
+from langchain.schema import runnable
+
+configured_lambda_chain = (
+    chain
+    | StrOutputParser()
+    | runnable.RunnableLambda(reverse_and_concat).with_config(
+        {"run_name": "LambdaReverse"}
+    )
+)
+```
+
+```python
+from langchain import agents, tools
+
+
+agent_executor = agents.initialize_agent(
+    llm=chat_models.ChatOpenAI(),
+    tools=[tools.ReadFileTool(), tools.WriteFileTool(), tools.ListDirectoryTool()],
+    agent=agents.AgentType.OPENAI_FUNCTIONS,
+)
+result = agent_executor.with_config({"run_name": "File Agent"}).invoke(
+    "What files are in the current directory?"
+)
+```
+
+## Langchain 클래스의 커스텀 name 인자
+
+Langchain 클래스에 커스텀 `name` 인자를 전달할 수도 있습니다. 이렇게 하면 Langfuse 트레이스에 표시될 때 해당 클래스의 기본 이름이 재정의됩니다.
+
+```python
+model = ChatOpenAI(name="generate-rating")
+```

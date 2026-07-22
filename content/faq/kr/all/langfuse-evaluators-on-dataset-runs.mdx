@@ -1,0 +1,18 @@
+---
+title: 데이터셋 실행에서 Langfuse 호스팅 평가기를 사용하는 방법은?
+sidebarTitle: 데이터셋 실행에서 Langfuse 호스팅 평가기 사용하기
+description: 데이터셋 실행에서 Langfuse 호스팅 평가기를 사용하는 방법은?
+tags: [evaluation]
+sourceRevision: 9c0d419484845ffbd56805fd068677856e5d764c
+translationStatus: machine
+---
+
+# 데이터셋 실행에서 Langfuse 호스팅 평가기를 사용하는 방법은?
+
+[SDK를 통한 실험](/docs/evaluation/experiments/experiments-via-sdk)을 실행하기 전에, Langfuse UI에서 실행할 평가기를 먼저 설정해야 합니다. 실행할 평가기는 다음 형식으로 구성해야 합니다.
+
+- **데이터셋(Dataset)**: 평가기가 실행될 소스 데이터셋을 필터링합니다.
+- **범위(Scope)**: 새로운 데이터셋 실행에만 적용할지, 그리고/또는 과거 데이터셋 실행에도 평가기를 실행할지(백필링) 선택합니다.
+- **샘플링(Sampling)**: 비용과 평가 처리량을 관리하기 위해, 데이터셋 실행 항목 중 일부 비율(예: 5%)에 대해서만 평가기를 실행하도록 구성할 수 있습니다.
+
+자세한 내용은 [llm-as-a-judge](/docs/evaluation/evaluation-methods/llm-as-a-judge) 문서를 참고하세요.

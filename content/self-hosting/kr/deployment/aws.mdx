@@ -1,0 +1,34 @@
+---
+title: Terraform으로 AWS에 Langfuse 배포하기
+description: Terraform을 통해 AWS에서 Langfuse를 실행하는 단계별 가이드입니다.
+label: "Version: v3"
+sidebarTitle: "AWS (Terraform)"
+sourceRevision: 3ae8ee6d78d14712b476ede271bf8761f4efe1a5
+translationStatus: machine
+---
+
+# Terraform으로 AWS에 Langfuse 배포하기
+
+이 가이드에서는 공식 Terraform 모듈([langfuse/langfuse-terraform-aws](https://github.com/langfuse/langfuse-terraform-aws))을 사용하여 AWS에 Langfuse를 배포하는 단계를 안내합니다.
+AWS 계정에 대한 액세스 권한과 로컬 머신에 설치된 Terraform CLI가 필요합니다.
+
+기본적으로 Terraform 모듈은 Langfuse 애플리케이션 컨테이너 및 데이터 저장소([아키텍처 개요](/self-hosting#architecture))에 필요한 인프라를 프로비저닝합니다.
+선택적으로 모듈을 구성하여 기존 AWS 리소스를 사용할 수도 있습니다. 자세한 내용은 Readme를 참고하세요.
+
+또는 [Helm 차트](/self-hosting/deployment/kubernetes-helm)를 사용하여 Kubernetes에 Langfuse를 배포할 수도 있습니다.
+
+<Callout type="info">
+  Terraform 배포 가이드 또는 모듈에 기여하는 데 관심이 있으시다면 [GitHub
+  저장소](https://github.com/langfuse/langfuse-terraform-aws)에 이슈를 생성해
+  주세요.
+</Callout>
+
+## Readme
+
+출처: [langfuse/langfuse-terraform-aws](https://github.com/langfuse/langfuse-terraform-aws)
+
+import { GitHubReadme } from "@/components/GitHubReadme";
+
+<div className="p-6 mt-6 border bg-card rounded-md">
+  <GitHubReadme url="https://raw.githubusercontent.com/langfuse/langfuse-terraform-aws/refs/heads/main/README.md" />
+</div>

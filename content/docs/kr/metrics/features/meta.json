@@ -1,0 +1,10 @@
+{
+  "title": "기능",
+  "pages": [
+    "custom-dashboards",
+    "metrics-api",
+    "monitors",
+    "external:[PostHog로 내보내기 ↗](/integrations/analytics/posthog)",
+    "external:[Mixpanel로 내보내기 ↗](/integrations/analytics/mixpanel)"
+  ]
+}

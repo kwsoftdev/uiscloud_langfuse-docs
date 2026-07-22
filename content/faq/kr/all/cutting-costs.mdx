@@ -1,0 +1,53 @@
+---
+title: Langfuse Cloud 요금을 절감하려면 어떻게 해야 하나요?
+tags: [platform, cloud]
+sourceRevision: ecc69b1d83e5a0e352ad0c067e6483ce87e579d5
+translationStatus: machine
+---
+
+# Langfuse Cloud 요금을 절감하려면 어떻게 해야 하나요?
+
+Langfuse Cloud [요금제](/pricing)는 청구 기간당 수집된 유닛 수를 기준으로 산정됩니다.
+
+`Units = Traces + Observations + Scores` ([데이터 모델](/docs/administration/billable-units))
+
+대부분의 비용 급증은 **너무 많은 트레이스 또는 지나치게 상세한 observation을 수집**하는 데서 발생합니다.
+핵심적인 인사이트는 유지하면서도 **더 적은 트레이스를 샘플링하거나 필수 데이터만 기록함으로써 비용을 빠르게 절감**할 수 있습니다.
+
+[요금 계산기](/pricing?calculatorOpen=true)를 사용하여 사용량 수준에 따라 월별 비용이 어떻게 달라지는지 예상해 보세요.
+
+"Langfuse Usage Management" 대시보드를 통해 유닛 사용량을 실시간으로 추적할 수 있습니다.
+
+<Frame>
+  ![Langfuse Usage Management
+  Dashboard](/images/docs/cloud-usage-management-dashboard.png)
+</Frame>
+
+## 옵션 1: 트레이스당 observation 수 줄이기
+
+트레이스 내의 모든 observation은 유닛 총량에 포함됩니다. 일부 observation은 지나치게 상세하거나 특정 사용 사례와 관련이 없을 수 있습니다. 이를 제거하는 단계는 다음과 같습니다.
+
+1. 트레이스를 검토하여 가치가 낮거나 불필요한 observation을 식별합니다.
+2. 이러한 observation을 제외하도록 통합/계측(instrumentation)을 업데이트합니다.
+   - 대부분의 통합에서는 어떤 observation이 생성되는지 직접 정의합니다. 따라서 계측을 업데이트하여 제거할 수 있습니다.
+   - Python SDK(v3, OpenTelemetry 기반)를 사용하는 경우, 기본적으로 모든 OpenTelemetry 스팬이 Langfuse로 내보내집니다. 관련 없는 observation이 있다면 [계측 스코프(instrumentation scope) 기준으로 observation을 필터링](/docs/sdk/python/sdk-v3#filtering-by-instrumentation-scope)할 수 있습니다.
+   - JS SDK(v4, OpenTelemetry 기반)를 사용하는 경우, [관련 없는 스팬과 observation을 필터링](/docs/observability/sdk/advanced-features#filter-exported-spans)할 수 있습니다.
+
+## 옵션 2: 더 적은 트레이스 샘플링하기
+
+LLM 애플리케이션 개발에서는 모든 트레이스를 보관하는 것이 유용한 경우가 많습니다. 기존 관측성(observability)과는 다르게:
+
+- 트레이스가 흥미로운지 여부는 완료된 후(사용자 피드백, LLM-as-a-judge 평가 등을 통해)에야 알 수 있기 때문에, 오류 수준을 기준으로 한 동적 샘플링은 현실적으로 어렵습니다.
+- 모든 트레이스를 보관하면 향후 모델 증류(distillation) 작업에도 도움이 됩니다.
+
+다만 애플리케이션이 상당한 규모로 운영되고 있다면, 샘플링은 합리적인 비용 절감 전략이 될 수 있습니다. 자세한 내용은 [샘플링 문서](/docs/tracing-features/sampling)를 참고하세요.
+
+## 비용 급증 전에 알림 받기
+
+[지출 알림(spend alerts)을 설정](/docs/administration/spend-alerts)하면 Langfuse Cloud 조직이 미리 정한 금액 임계값을 초과할 때 이메일 알림을 받을 수 있습니다.
+이를 통해 지출을 모니터링하고 예기치 않은 비용이 발생하기 전에 조치를 취할 수 있습니다.
+지출 알림은 조직 설정에서 구성할 수 있습니다.
+
+---
+
+Langfuse 청구 관련하여 궁금한 점이 있으신가요? [지원팀](/support)에 문의해 주세요.

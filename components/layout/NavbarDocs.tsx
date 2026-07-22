@@ -2,9 +2,10 @@ import { Logo } from "@/components/Logo";
 import { NavbarExtraContent } from "@/components/NavbarExtraContent";
 import { HiringBadge } from "@/components/HiringBadge";
 import InkeepSearchBar from "@/components/inkeep/InkeepSearchBar";
+import { LanguagePreferenceToggle } from "@/components/LanguagePreferenceToggle";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { sectionNavData } from "./Navbar";
+import { sectionNavData } from "@/lib/nav-tree";
 
 const cornersStyle = cn(
   "flex items-stretch flex-1 bg-line-structure p-px py-0",
@@ -50,6 +51,7 @@ export function NavbarDocs({
           <div className="flex flex-1 gap-2 px-2.5 py-3 lg:rounded-sm items-center justify-between bg-surface-1">
             <HiringBadge className="hidden lg:block" />
             <InkeepSearchBar className="hidden lg:block" />
+            <LanguagePreferenceToggle />
           </div>
         </div>
         <div

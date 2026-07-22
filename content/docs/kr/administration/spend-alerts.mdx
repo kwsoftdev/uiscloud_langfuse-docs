@@ -1,0 +1,37 @@
+---
+title: 지출 알림
+sidebarTitle: 지출 알림
+description: 조직의 지출이 사전에 정의한 금액 임계값을 초과하면 알림을 받아 Langfuse Cloud 비용을 더 잘 관리할 수 있습니다.
+sourceRevision: cc715a36b9e3947e29753dc234d9829906643de8
+translationStatus: machine
+---
+
+# 지출 알림
+
+<AvailabilityBanner
+  availability={{
+    hobby: "not-available",
+    core: "full",
+    pro: "full",
+    enterprise: "full",
+    selfHosted: "not-available",
+  }}
+/>
+
+**Langfuse Cloud** 청구액이 사전에 정의한 금액 임계값을 초과하면 이메일 알림을 받을 수 있도록 지출 알림을 구성하세요. 이 알림은 Langfuse Cloud 사용에 대해 Langfuse에 지불하는 비용을 다루며, Langfuse 관측성에서 추적하는 LLM 또는 모델 비용은 포함하지 않습니다. 이를 통해 Langfuse 청구액을 모니터링하고 예상치 못한 요금이 발생하기 전에 조치를 취할 수 있습니다.
+
+지출 알림을 구성하려면 조직 설정으로 이동한 뒤 **Billing** 탭을 선택하세요.
+
+<Frame className="my-10" fullWidth>
+  ![Langfuse에서 지출 알림 구성하기](/images/docs/spend-alerts.png)
+</Frame>
+
+## 작동 방식
+
+지출 알림은 조직의 총 Langfuse Cloud 구독 지출을 모니터링합니다. 조직의 청구 통화로 사용자 지정 임계값을 설정하고, 지출이 해당 한도를 초과하면 이메일 알림을 받을 수 있습니다.
+
+**임계값 계산:** 지출은 기본 요금, 사용량 기반 요금, 할인, 세금을 포함한 총 예상 청구 금액을 기준으로 평가됩니다.
+
+**모니터링 주기:** 적시에 알림을 제공하기 위해 각 조직의 사용량을 60~90분마다 확인합니다.
+
+**알림:** 이메일 알림은 **Owner** 또는 **Admin** 역할을 가진 모든 조직 구성원에게 전송됩니다. 알림 피로를 방지하기 위해 각 알림은 청구 주기당 최대 한 번만 트리거됩니다.

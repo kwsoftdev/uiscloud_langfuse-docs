@@ -1,0 +1,41 @@
+---
+title: Langfuse v2 셀프 호스팅
+sidebarTitle: 개요
+description: Langfuse는 오픈 소스이며 Docker를 사용하여 셀프 호스팅할 수 있습니다. 이 섹션에서는 다양한 배포 시나리오에 대한 가이드를 제공합니다.
+label: "Version: v2"
+sourceRevision: 9c0d419484845ffbd56805fd068677856e5d764c
+translationStatus: machine
+---
+
+# Langfuse v2 셀프 호스팅
+
+<Callout type="info">
+  이 가이드는 Langfuse v2를 다룹니다. Langfuse v3에 대해서는 [v3
+  문서](/self-hosting)를 참고하세요. Langfuse v2는 2025년 1분기 말까지 보안 업데이트를
+  제공합니다. 업그레이드 중 궁금한 점이 있으면 [v3
+  업그레이드 가이드](/self-hosting/upgrade-guides/upgrade-v2-to-v3)를 참고하거나
+  [GitHub Discussions](/gh-support)에서 스레드를 열어주세요.
+</Callout>
+
+Langfuse는 오픈 소스이며 Docker를 사용하여 셀프 호스팅할 수 있습니다. 이 섹션에서는 다양한 배포 시나리오에 대한 가이드를 제공합니다.
+
+## 배포 옵션 [#deployment-options]
+
+다음과 같은 옵션을 사용할 수 있습니다.
+
+- Langfuse Cloud: Langfuse 팀이 호스팅하고 관리하는 완전 관리형 버전의 Langfuse입니다.
+- Langfuse 셀프 호스팅: 자체 인프라에서 Langfuse를 실행합니다.
+  - Docker를 통한 프로덕션 배포. 다양한 클라우드 제공업체에 Langfuse를 배포하는 자세한 방법은 [배포 가이드](/self-hosting/v2/deployment-guide)를 참고하세요.
+  - [Docker Compose](/self-hosting/v2/docker-compose)를 통해 로컬 환경 또는 단일 VM에서 실행합니다.
+
+## 아키텍처
+
+Langfuse는 오픈 소스 구성 요소에만 의존하며, 로컬 환경, 클라우드 인프라, 또는 온프레미스 환경에 배포할 수 있습니다.
+
+import ArchitectureDiagram from "@/components-mdx/architecture-diagram-v2.mdx";
+
+<ArchitectureDiagram />
+
+## Langfuse v2로 업그레이드
+
+Langfuse v1에서 업그레이드하는 경우 [업그레이드 가이드](/self-hosting/upgrade/upgrade-guides/upgrade-v1-to-v2)를 참고하세요.

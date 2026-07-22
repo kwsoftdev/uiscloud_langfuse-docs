@@ -1,0 +1,43 @@
+---
+title: 엔터프라이즈 라이선스 키 (셀프 호스팅)
+sidebarTitle: 라이선스 키 (EE)
+description: 셀프 호스팅 Langfuse 배포에서 라이선스 키를 활성화하는 방법을 알아보세요.
+label: "Version: v3"
+sourceRevision: a5b0436c20b23836f6c8e54904de4660a34137cc
+translationStatus: machine
+---
+
+# 엔터프라이즈 라이선스 키
+
+모든 핵심 Langfuse 기능과 API는 별도의 제한 없이 Langfuse OSS(MIT 라이선스)에서 사용할 수 있습니다.
+
+Langfuse를 셀프 호스팅으로 운영할 때는 Langfuse Cloud와 동일한 배포 인프라를 사용합니다. 버전 간 확장성 제한은 없습니다.
+
+일부 추가 엔터프라이즈 기능은 라이선스 키가 필요합니다:
+
+- [프로젝트 수준 RBAC 역할](/docs/rbac)
+- [보호된 프롬프트 라벨](/docs/prompt-management/features/prompt-version-control#protected-prompt-labels)
+- [데이터 보존 정책](/docs/data-retention)
+- [감사 로그](/changelog/2025-01-21-audit-logs)
+- [서버 측 데이터 마스킹](/self-hosting/security/data-masking#server-side-ingestion-masking-ee)
+- [UI 커스터마이징](/self-hosting/administration/ui-customization)
+- [조직 생성자](/self-hosting/administration/organization-creators)
+- [조직 관리 API 및 SCIM](/docs/administration/scim-and-org-api)
+- [인스턴스 관리 API](/self-hosting/administration/instance-management-api)
+
+Langfuse 엔터프라이즈에 대한 자세한 내용은 [가격 페이지](/pricing-self-host)를 참고하세요.
+
+## 라이선스 키 활성화
+
+라이선스 키를 구매한 후, 다음 환경 변수를 Langfuse 배포(두 langfuse 컨테이너 모두)에 추가하여 활성화할 수 있습니다:
+
+```bash
+LANGFUSE_EE_LICENSE_KEY=<your-license-key>
+```
+
+엔터프라이즈 셀프 호스팅 배포는 라이선스 준수를 위해 제한된 텔레메트리를 사용합니다.
+수집되는 정확한 필드는 [텔레메트리 문서](/self-hosting/security/telemetry)를 참고하세요.
+
+## 문의사항
+
+라이선스에 대해 궁금한 점이 있으면 [문의하기](/support)를 통해 연락해 주세요.

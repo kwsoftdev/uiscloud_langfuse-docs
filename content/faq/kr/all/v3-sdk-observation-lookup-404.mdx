@@ -1,0 +1,35 @@
+---
+title: v3 SDK로 관측 항목을 조회하면 왜 404가 발생하나요?
+sidebarTitle: v3 SDK 관측 항목 조회 404
+description: v3 SDK를 Fast(v4) UI와 함께 사용할 때, 일부 관측 ID — 특히 `source_observation_id`에 저장된 `t-<traceId>` 형태의 ID — 는 v3 SDK로 조회할 수 없습니다. 원인과 해결 방법을 설명합니다.
+tags: [observability, tracing, evaluation]
+sourceRevision: 934f5541d1a09bb6328555a8c59921e6d788c253
+translationStatus: machine
+---
+
+# v3 SDK로 관측 항목을 조회하면 왜 404가 발생하나요?
+
+## 무슨 일이 일어나고 있나요
+
+v4 데이터 모델에는 관측 항목만 존재합니다 — 트레이스는 별도의 엔티티로 존재하지 않으므로, 트레이스의 메타데이터는 관측 항목*으로서* 표현되어야 합니다. Langfuse는 v3 수집 경로로 트레이스가 들어올 때마다 `t-<traceId>` ID를 가진 합성 관측 항목을 이중 기록(dual-write)하는 방식으로 이를 처리합니다. 이 합성 행(row)은 이벤트 테이블(v4)에 존재하며, 클래식 관측 항목 테이블(v3)에는 존재하지 않습니다.
+
+Fast(v4) UI에서 트레이스를 데이터셋에 추가하면 이 합성 ID가 `source_observation_id`에 기록됩니다. 이후 v3 SDK로 해당 ID를 조회하면 기본적으로 v3 테이블을 참조하는데, 이 테이블에는 합성 행이 없으므로 404가 발생합니다.
+
+## 해결 방법
+
+상황에 맞게 다음 두 가지 방법 중 하나를 선택하세요:
+
+**1. v3 SDK를 유지하면서 쿼리 파라미터 추가하기**
+
+호출 시 `useEventsTable=true`를 전달하면 서버가 합성 행이 존재하는 이벤트 테이블에서 읽어옵니다:
+
+```python
+langfuse.api.observations.get(
+    observation_id,
+    request_options={"additional_query_parameters": {"useEventsTable": "true"}},
+)
+```
+
+**2. 최신 SDK로 마이그레이션하기**
+
+[Python SDK v4.7.0 이상](/docs/observability/sdk/upgrade-path/python-v3-to-v4) 및 [JS/TS SDK v5.4.0 이상](/docs/observability/sdk/upgrade-path/js-v4-to-v5)은 v4 데이터 모델을 네이티브로 사용하므로 `useEventsTable` 플래그가 내부적으로 자동 적용되어 별도의 우회 방법이 필요하지 않습니다.

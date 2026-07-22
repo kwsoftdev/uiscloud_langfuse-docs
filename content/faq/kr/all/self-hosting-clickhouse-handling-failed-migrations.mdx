@@ -1,0 +1,36 @@
+---
+title: 셀프 호스팅 Langfuse에서 Clickhouse의 실패한 마이그레이션 처리
+tags: [self-hosting]
+sourceRevision: 6c549009e68e4ffd3798b1593d50afeadc4dffc5
+translationStatus: machine
+---
+
+import { Details, Summary } from "@/components/Details";
+
+# 셀프 호스팅 Langfuse에서 Clickhouse의 실패한 마이그레이션 처리
+
+마이그레이션 오류가 발생하면 마이그레이션 도구는 동일한 데이터베이스에서 추가 마이그레이션을 실행하지 못하도록 막습니다. 오류가 발생한 마이그레이션을 수정한 후에도 "Dirty database version 1. Fix and force version"과 같은 오류 메시지가 표시됩니다. 이는 데이터베이스가 'dirty' 상태로 표시되었다는 의미입니다. 마이그레이션이 부분적으로 적용되었는지, 아니면 전혀 적용되지 않았는지 확인해야 합니다. 실제 상태를 파악한 후, 데이터베이스의 현재 상태를 정확히 반영하는 버전으로 강제 설정합니다. 올바른 버전으로 강제 설정하고 마이그레이션을 수정하고 나면 데이터베이스는 다시 'clean' 상태가 되어 이후 마이그레이션을 계속 진행할 수 있습니다.
+
+<Details>
+<Summary>실패한 마이그레이션을 수정하는 코드 예시</Summary>
+
+마이그레이션 16이 실패했다고 가정해 보겠습니다. 실패한 마이그레이션을 수정했습니다. 다시 마이그레이션을 시도해도 마이그레이션은 여전히 거부됩니다:
+
+```bash
+error: Dirty database version 16. Fix and force version.
+```
+
+마지막으로 성공한 버전인 15로 데이터베이스를 강제 설정해야 합니다. 데이터베이스 자격 증명은 반드시 본인의 것으로 교체하세요.
+아래 명령을 실행하기 전에 golang-migrate가 설치되어 있는지 확인하세요. 설치되어 있지 않다면 [contributing guide](https://github.com/langfuse/langfuse/blob/main/CONTRIBUTING.md#development-setup)에 링크된 가이드를 따라주세요. 그런 다음 터미널에서 Langfuse 프로젝트 폴더의 루트로 이동합니다. 이후 다음 명령을 실행합니다:
+
+```bash
+migrate -path migrations/ -database clickhouse://test:test@localhost:9000/dummy force 15
+```
+
+다시 마이그레이션을 실행하면 이제 다음과 같은 출력이 표시됩니다:
+
+```bash
+16/u migration_name (12.718637ms)
+```
+
+</Details>

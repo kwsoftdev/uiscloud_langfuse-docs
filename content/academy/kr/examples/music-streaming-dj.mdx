@@ -1,0 +1,314 @@
+---
+title: 음악 스트리밍 DJ
+sidebarTitle: 음악 DJ
+description: 음악 스트리밍 앱의 새롭고 저위험 DJ 기능이 거의 즉시 출시되고, 청취 행동으로부터 개선되는 과정.
+sourceRevision: 36fdc4ebf487005821c8d6e3140f039fd801fac0
+translationStatus: machine
+---
+
+import { DjProductScreens } from "@/components/academy/DjProductScreens";
+
+# 음악 스트리밍 DJ
+
+<Callout type="info">
+  이 예시는 [Langfuse Academy](/academy)의 개념을 설명하기 위한 것입니다.
+</Callout>
+
+## 맥락
+
+한 음악 스트리밍 앱이 베타로 DJ 기능을 추가합니다. DJ는 사용자가 이전에 재생한 곡과 알고리즘이 사용자가 좋아할 것이라고 판단한 곡을 바탕으로 재생목록을 계속 유지합니다. 몇 곡마다 다음에 나올 곡과 그것을 선택한 이유에 대해 짧게 말합니다. 청취자는 마이크 버튼을 클릭하고 DJ에게 말을 걸어 선택적으로 DJ와 상호작용하며 방향을 지시할 수도 있습니다.
+
+<DjProductScreens />
+
+두 가지 특성이 AI 엔지니어링 설정 방식을 결정합니다.
+
+1. **잘못된 출력의 위험이 낮습니다**. 최악의 경우라 해봐야 곡이 건너뛰어지거나 DJ의 코멘트가 어색한 정도이며, 이 기능은 베타로 표시되어 있습니다.
+2. 이는 새로운 기능이므로 **시작할 만한 과거 데이터가 없으며**, 팀은 실제 청취자의 행동으로부터 배워야 합니다.
+
+이 때문에 가능한 한 빨리 출시하고 [처음부터 실제 피드백을 바탕으로 반복 개선하는](/academy/ai-engineering-loop#you-dont-have-to-close-the-full-loop-on-day-one) 것이 합리적입니다.
+
+## DJ 트레이싱
+
+함께 [세션을 구성하는](/academy/tracing#traces-vs-sessions) 두 가지 종류의 [트레이스](/academy/tracing#anatomy-of-a-trace)가 있습니다.
+
+| 트레이스 이름       | 세부 사항                                                                                                                                                                                                                   |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `plan-next-set`     | 다음 트랙 세트를 계획하고 코멘터리를 작성하며, DJ 자신이 몇 곡마다, 또는 DJ에 대한 요청에 의해 트리거됩니다.<br />**입력:** 청취 컨텍스트와 지시 사항(있는 경우)<br />**출력:** 큐에 추가된 다음 트랙, 그리고 코멘터리 문구 |
+| `handle-dj-request` | 마이크 버튼에 의해 트리거되는, 청취자의 음성 요청을 처리합니다.<br />**입력:** 음성 클립과 현재 큐<br />**출력:** 짧은 답변, 그리고 이 트레이스가 트리거하는 `plan-next-set` 실행에 대한 지시 사항                          |
+
+한 청취 세션과 두 트레이스 유형을 자세히 살펴봅니다.
+
+<Tabs
+  items={[
+    "Example session",
+    "Example plan-next-set trace",
+    "Example handle-dj-request trace",
+  ]}
+>
+<Tab>
+
+<TraceViewDiagram
+  ariaLabel="A listening session with DJ-initiated traces and one user request"
+  label="Session listen_7f3e · user u_8841"
+  rows={[
+    {
+      kind: "trace",
+      name: "plan-next-set",
+      preview: '"Kicking off with two favorites from your week."',
+      duration: "2.8s",
+    },
+    {
+      kind: "trace",
+      name: "plan-next-set",
+      preview: '"Staying in this lane with some mellow electronica."',
+      duration: "2.4s",
+    },
+    {
+      kind: "trace",
+      name: "handle-dj-request",
+      preview: '"Play something calmer."',
+      duration: "1.6s",
+    },
+    {
+      kind: "trace",
+      name: "plan-next-set",
+      preview: '"Calming it down, here is some ambient piano."',
+      chips: ["triggered by dj-request"],
+      duration: "1.5s",
+    },
+  ]}
+/>
+
+</Tab>
+<Tab>
+
+<TraceViewDiagram
+  ariaLabel="The observations inside a plan-next-set trace"
+  rows={[
+    {
+      kind: "trace",
+      name: "plan-next-set",
+      chips: ["session: listen_7f3e", "user: u_8841"],
+      duration: "1.5s",
+      input:
+        'taste: electronica, downtempo · recent: Tycho "Awake", Bonobo "Kerala" · instruction: "calmer"',
+      output:
+        '4 tracks queued · commentary: "Calming it down, here is some ambient piano."',
+    },
+    {
+      kind: "tool",
+      name: "select-tracks",
+      duration: "0.6s",
+      indent: true,
+      input:
+        'taste: electronica, downtempo · recent: Tycho "Awake", Bonobo "Kerala" · instruction: "calmer"',
+      output:
+        'Nils Frahm "Says" · Ólafur Arnalds "Saman" · Max Richter "On the Nature of Daylight" · Joep Beving "Sleeping Lotus"',
+    },
+    {
+      kind: "gen",
+      name: "write-commentary",
+      chips: ["gpt-4.1-mini", "120 tok", "$0.0002"],
+      duration: "0.9s",
+      indent: true,
+      input: 'the 4 selected tracks · instruction: "calmer"',
+      output: '"Calming it down, here is some ambient piano."',
+    },
+  ]}
+/>
+
+</Tab>
+<Tab>
+
+<TraceViewDiagram
+  ariaLabel="The observations inside a handle-dj-request trace"
+  rows={[
+    {
+      kind: "trace",
+      name: "handle-dj-request",
+      chips: ["session: listen_7f3e", "user: u_8841"],
+      duration: "1.6s",
+      input: "voice clip (2s)",
+      output: 'reply: "Got it, calming things down." · instruction: "calmer"',
+    },
+    {
+      kind: "tool",
+      name: "transcribe-request",
+      duration: "0.4s",
+      indent: true,
+      input: "voice clip (2s)",
+      output: '"Play something calmer."',
+    },
+    {
+      kind: "gen",
+      name: "interpret-request",
+      chips: ["gpt-4.1-mini", "210 tok", "$0.0004"],
+      duration: "1.2s",
+      indent: true,
+      input: '"Play something calmer." · current queue',
+      output: 'reply: "Got it, calming things down." · instruction: "calmer"',
+    },
+    {
+      kind: "event",
+      name: "trigger-plan-next-set",
+      duration: "@ 1.6s",
+      indent: true,
+      input: 'instruction: "calmer"',
+    },
+  ]}
+/>
+
+</Tab>
+</Tabs>
+
+## 사용자 행동 포착
+
+사용자로부터 배우기 위해, 해당되는 트레이스에 [흥미로운 행동](/academy/monitoring#user-feedback)을 기록합니다.
+
+<EvaluatorBlock
+  evaluators={[
+    {
+      name: "track_skipped",
+      type: "Player event",
+      check: "청취자가 DJ가 선택한 트랙을 시작한 직후 건너뛰는 경우",
+      returns: "binary plus comment, on the plan-next-set trace",
+      details: (
+        <>
+          별도의 평가기가 필요하지 않습니다. 플레이어가 점수를 기록합니다. 항상
+          그 순간 재생 중이던 세트의{" "}
+          <code>plan-next-set</code> 트레이스에 기록되며, 코멘트에는 어떤
+          트랙이 건너뛰어졌는지가 담기므로, 여러 곡을 놓친 세트는 여러 점수를
+          모으게 됩니다.
+        </>
+      ),
+    },
+    {
+      name: "dj_replaced",
+      type: "Player event",
+      check: "청취자가 DJ를 끄지만 계속 청취하는 경우",
+      returns: "binary, on the session",
+      details: (
+        <>
+          세션이 그냥 종료되는 것만으로는 큰 의미가 없습니다. 청취자가 단순히
+          어딘가에 도착했을 수도 있기 때문입니다. DJ 없이 계속 청취를
+          이어간다는 사실이 신호가 되는 지점으로, 청취자가 DJ 대신 음악을
+          선택했다는 뜻입니다.
+        </>
+      ),
+    },
+    {
+      name: "message_type",
+      type: "LLM-as-a-judge",
+      check: (
+        <>
+          각 음성 요청을 <code>steering</code>, <code>correction</code>,{" "}
+          <code>repeated_instruction</code>, <code>positive_reaction</code>,
+          또는 <code>negative_reaction</code>으로 분류합니다
+        </>
+      ),
+      returns: "categorical, on the handle-dj-request trace",
+      details: (
+        <>
+          <code>steering</code>은 이 기능의 정상적인 사용이며 실패 집계에서
+          제외됩니다. <code>correction</code>은 DJ의 마지막 동작이 빗나갔음을
+          의미합니다. <code>repeated_instruction</code>은 DJ가 이미 받은
+          지시를 따르지 못했다는 뜻으로, 취향을 잘못 판단한 것이 아니라
+          지시 준수 실패이며 이는 다른 수정 방식을 요구합니다.
+        </>
+      ),
+    },
+  ]}
+/>
+
+원칙적으로 팀은 이것만으로도 이미 반복 개선을 시작할 수 있습니다. 트레이싱과 [모니터링](/academy/monitoring#metrics-and-signals)은 그 자체로 작은 루프를 형성합니다. 초기 단계에서는 이것만으로도 팀이 DJ 기능을 빠르게 개선하는 데 충분할 가능성이 높습니다.
+
+<AnnotatedLoop
+  ariaLabel="A sub-loop between tracing and monitoring, with the offline stages not yet in use"
+  subloop
+  stations={{
+    trace: { note: "every set and every request" },
+    monitor: { note: "skips, dj_replaced, message_type" },
+    dataset: { dimmed: true, note: "not yet" },
+    change: { dimmed: true, note: "not yet" },
+    eval: { dimmed: true, note: "not yet" },
+  }}
+/>
+
+설정이 성숙해지고 팀이 더 구조화된 테스트 체계를 갖추고자 하면, 이러한 신호들을 기반으로 데이터셋과 실험을 구축하기 시작할 수 있습니다.
+
+## 구조화된 테스트
+
+실시간 신호만 있는 상태에서 변경 사항을 테스트한다는 것은 곧 배포하고 점수를 지켜보는 것을 의미합니다. 팀은 더 의도적인 두 가지 테스트 방식을 추가할 수 있습니다. [데이터셋 기반 실험](/academy/experiments#how-experiments-are-used)과 실제 사용자 대상 A/B 테스트입니다.
+
+### 데이터셋 기반 실험
+
+이 사용 사례에서는 엔드투엔드 테스트를 오프라인으로 수행하기가 매우 어렵습니다. 어떤 세션이 좋았는지는 실제 청취 행동에서만 드러나며, 취향은 사용자마다 다르므로 모두에게 적용되는 기대 출력이란 존재하지 않습니다. `select-tracks` 같은 [단일 단계](/academy/datasets#what-makes-a-good-dataset)는 테스트할 수 있으며, 이때 기대값은 정확한 트랙이 아니라 세트의 방향성을 기술합니다.
+
+<DatasetBlock
+  datasets={[
+    {
+      name: "selection-directions",
+      description:
+        "Listening contexts paired with good and bad directions for the next set. Tests only the select-tracks step.",
+      items: [
+        {
+          input:
+            "taste: indie folk · recent: Big Thief 'Vampire Empire', Fleet Foxes 'Mykonos' · instruction: none",
+          expectedOutput:
+            "Good directions: adjacent indie folk, soft rock. Bad directions: high-energy EDM, hip hop.",
+        },
+        {
+          input:
+            "taste: electronica, house · recent: an upbeat house set · instruction: 'something calmer'",
+          expectedOutput:
+            "Good directions: downtempo, ambient electronica. Bad directions: more upbeat house, ignoring the instruction.",
+        },
+      ],
+    },
+  ]}
+/>
+
+<EvaluatorBlock
+  evaluators={[
+    {
+      name: "direction_match",
+      type: "LLM-as-a-judge",
+      check:
+        "선택된 세트가 좋은 방향 중 하나로 가고 나쁜 방향은 피하는가?",
+      returns: "binary, per dataset item",
+      details: (
+        <>
+          <a href="/academy/evaluate#reference-based-vs-reference-free">
+            참조 기반
+          </a>{" "}
+          평가기입니다. 기대 출력이 평가 기준이 되는 방향을 제공합니다. DJ
+          전체가 아니라 <code>select-tracks</code> 단계에서만 실행되므로,
+          실행 비용이 저렴하고 실패가 발생하면 곧바로 선택 단계를 가리킵니다.
+        </>
+      ),
+    },
+  ]}
+/>
+
+### 실제 사용자 대상 A/B 테스트
+
+코멘터리의 어조처럼 오프라인으로 평가하기 어려운 변경 사항도 있습니다. 위험이 낮으므로 팀은 소수의 청취자 그룹에 새 버전을 제공하고, 스킵률이나 `message_type` 분포 같은 신호 점수를 그룹 간에 비교할 수 있습니다. 새 버전이 더 좋은 성과를 보이면 모든 사용자에게 배포할 수 있습니다.
+
+이것이 갖춰지면 전체 루프가 가동됩니다.
+
+<AnnotatedLoop
+  ariaLabel="The full loop for the DJ: live signals, step-scoped datasets, experiments, and A/B tests"
+  stations={{
+    trace: { note: "every set and every request" },
+    monitor: { note: "skips, dj_replaced, message_type, A/B comparisons" },
+    dataset: { note: "from what we see while monitoring production" },
+    change: { note: "selection algorithm, DJ prompt, ..." },
+    eval: { note: "grade step outputs against their expectations" },
+  }}
+/>
+
+## 결론
+
+이 예시는 위험이 낮고 학습할 과거 데이터가 없는 기능의 사례입니다. 이런 경우 가장 좋은 방법은 가능한 한 빨리 트레이스를 확보하고 모니터링을 시작해 거기서 배우는 것입니다. 데이터셋, 실험, A/B 테스트 같은 나머지 요소는 시간이 지나면서 그 위에 구축할 수 있습니다.
+
+더 알아보려면 [다른 예시](/academy/examples)나 [아카데미](/academy)를 확인하세요.

@@ -1,0 +1,53 @@
+---
+title: Langfuse에 동료 초대하기
+description: Langfuse 프로젝트에 동료를 초대하는 방법을 알아보세요. 이 가이드는 프로젝트에 사용자를 추가하는 방법과 일반적인 문제를 해결하는 방법을 단계별로 안내합니다.
+tags: [platform, auth, administration]
+sourceRevision: 01de6e92026f01a22315ebed693ae87319caba53
+translationStatus: machine
+---
+
+# Langfuse 프로젝트에 동료를 초대하는 방법
+
+## Langfuse 프로젝트에 다른 사람을 어떻게 초대하나요?
+
+프로젝트의 설정으로 이동하여 'Project Members' 항목 아래에 있는 'add a new member' 버튼을 클릭하세요. 동료가 Langfuse에서 사용하는 이메일 주소를 입력합니다. 프로젝트에 사용자를 추가하는 방법에 대한 자세한 내용은 [여기](/docs/rbac#add-users-to-a-project)에서 확인할 수 있습니다.
+
+## Langfuse 프로젝트에 참여할 수 없어요
+
+### 초대는 받았는데 초대 이메일을 받지 못했어요
+
+초대는 이메일로 발송되며, 조직에 표시되기 전에 **이메일에 있는 링크를 클릭하여 초대를 수락**해야 합니다. 수락하기 전까지는 초대받은 이메일 주소로 가입하거나 로그인하더라도 계정에 해당 프로젝트가 표시되지 않습니다.
+
+이메일이 도착하지 않은 경우:
+
+1. Langfuse에서 보낸 이메일이 있는지 **스팸, 프로모션, 격리(quarantine) 폴더를 확인**하세요. 회사 메일 필터와 SSO로 보호된 메일함이 흔한 원인입니다.
+2. 초대를 보낸 사람에게 **정확한 이메일 주소**를 초대장이 발송된 주소와 대조하여 확인하세요. 오타나 별칭(`first.last+team@…`)이 흔한 원인입니다.
+3. **데이터 리전을 확인**하세요. 초대는 하나의 Langfuse 데이터 리전(EU, US, Japan, HIPAA — 아래 참조)에 한정됩니다. 수락 링크는 해당 프로젝트가 위치한 리전에서만 작동합니다.
+4. 링크가 만료되었거나 찾을 수 없는 경우, 초대한 사람에게 **Project settings → Members**에서 초대를 삭제하고 다시 보내달라고 요청하세요.
+
+### 올바른 Langfuse 테넌트를 사용하고 있나요? (EU / US / Japan / HIPAA?)
+
+Langfuse Cloud는 여러 데이터 리전에서 운영됩니다: [유럽 연합(EU)](https://cloud.langfuse.com), [미국(USA)](https://us.cloud.langfuse.com), [일본(Japan)](https://jp.cloud.langfuse.com), 그리고 별도의 [HIPAA 준수 미국 리전](https://hipaa.cloud.langfuse.com)입니다.
+프로젝트를 생성한 데이터 리전에 로그인되어 있는지 확인하세요. 로그인 시 데이터 리전을 선택할 수 있으며, URL 표시줄에서도 확인할 수 있습니다(`cloud.langfuse.com` = EU, `us.cloud.langfuse.com` = US, `jp.cloud.langfuse.com` = Japan, `hipaa.cloud.langfuse.com` = HIPAA).
+
+[Langfuse Cloud 데이터 리전](/security/data-regions)에 대해 더 알아보세요.
+
+### 올바른 이메일 주소를 사용하고 있나요?
+
+프로젝트에 초대받은 경우, 초대가 발송된 이메일 주소와 정확히 동일한 주소로 로그인하고 있는지 확인하세요. GitHub나 Google과 같은 SSO로 로그인하는 경우, 예상했던 것과 이메일 주소가 다를 수 있습니다.
+
+Langfuse UI 좌측 하단의 이름을 클릭하면 계정에 등록된 이메일 주소를 확인할 수 있습니다.
+
+### 프로젝트 소유자(owner)인가요?
+
+조직 내 다른 사람이 프로젝트를 생성했다면, 그 사람에게 (해당 Langfuse 프로젝트로) 다시 초대해달라고 요청하세요.
+
+## Langfuse의 접근 역할(Access Roles)
+
+### Langfuse에서 데이터에 어떤 유형의 접근 권한을 부여할 수 있나요?
+
+Langfuse에서 접근 권한을 부여하는 기본 역할은 Owner, Admin, Member, Viewer입니다. 각 역할에 부여되는 구체적인 접근 권한은 [Langfuse 역할 및 RBAC 문서](/docs/rbac#roles)에서 확인할 수 있습니다.
+
+### Langfuse의 역할 기반 접근 제어(RBAC)에 대해 더 알아보기
+
+[Langfuse의 역할 기반 접근 제어](/docs/rbac)에 대해 더 알아보려면 문서를 확인하세요.

@@ -1,0 +1,20 @@
+---
+title: 셀프 호스팅 인스턴스에 대한 접근을 내부 사용자로 제한하려면 어떻게 해야 하나요?
+tags: [self-hosting, administration]
+sourceRevision: 9c0d419484845ffbd56805fd068677856e5d764c
+translationStatus: machine
+---
+
+# 셀프 호스팅 인스턴스에 대한 접근을 내부 사용자로 제한하려면 어떻게 해야 하나요?
+
+셀프 호스팅한 Langfuse 인스턴스를 퍼블릭 인터넷에 노출하는 경우, 접근을 내부 사용자로만 제한하고 싶을 수 있습니다.
+
+**접근을 제한하는 권장 방법:**
+
+1. 이메일/비밀번호 인증을 비활성화합니다 (`AUTH_DISABLE_USERNAME_PASSWORD=true`)
+2. Google, GitHub, Okta, Auth0 등 Langfuse가 지원하는 인증 제공자를 사용합니다. 자세한 내용은 [문서](/self-hosting/security/authentication-and-sso)를 참고하세요.
+3. 인증 제공자를 설정하여 내부 사용자만 접근할 수 있도록 제한합니다.
+
+**선택 사항: 조직 생성 제한**
+
+_Organization Creators_ 허용 목록을 활용하여 새 조직을 생성할 수 있는 사용자를 제한할 수 있습니다. 자세한 내용은 [문서](/self-hosting/administration/organization-creators)를 참고하세요.

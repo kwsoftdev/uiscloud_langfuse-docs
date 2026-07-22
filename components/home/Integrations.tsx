@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { HomeSection } from "./HomeSection";
 import { Heading, TextHighlight } from "@/components/ui";
 import { Button } from "@/components/ui/button";
@@ -11,11 +12,13 @@ import { IntegrationLabel } from "@/components/ui/integration-label";
 import IconPython from "@/components/icons/python";
 import IconTypescript from "@/components/icons/typescript";
 import { cn } from "@/lib/utils";
+import { isKoreanPath } from "@/lib/i18n/koPaths";
 
 // ─── Data (paths per homepage integration spec) ─────────────────────────────
 
 const languagesGroup = {
   title: "Languages (via OTel)",
+  titleKo: "언어 (OTel 경유)",
   items: [
     {
       label: "Python (Native SDK)",
@@ -38,6 +41,7 @@ const languagesGroup = {
 
 const agentFrameworksGroup = {
   title: "Agent frameworks",
+  titleKo: "에이전트 프레임워크",
   items: [
     {
       label: "LangChain",
@@ -128,6 +132,7 @@ const agentFrameworksGroup = {
 
 const modelProvidersGroup = {
   title: "Model providers",
+  titleKo: "모델 제공업체",
   items: [
     {
       label: "OpenAI",
@@ -406,11 +411,13 @@ function IntegrationGroupCard({
   items,
   className,
   showMoreLabel,
+  ko,
 }: {
   title: string;
   items: { label: string; href: string; icon?: ReactNode }[];
   className?: string;
   showMoreLabel?: boolean;
+  ko?: boolean;
 }) {
   return (
     <div
@@ -437,7 +444,7 @@ function IntegrationGroupCard({
         ))}
         {showMoreLabel && (
           <span className="text-[13px] text-text-tertiary ml-1">
-            and many more…
+            {ko ? "그 외 다수…" : "and many more…"}
           </span>
         )}
       </div>
@@ -488,35 +495,46 @@ function MarqueeRow({
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 export function Integrations() {
+  const ko = isKoreanPath(usePathname());
   return (
     <HomeSection id="integrations" className="pt-[120px]">
       <div className="flex flex-col gap-4 items-start mb-10">
         <Heading className="text-left max-w-[16ch] sm:max-w-none">
-          Works with <TextHighlight>any stack.</TextHighlight>
+          {ko ? (
+            <>
+              모든 스택과 <TextHighlight>함께 작동합니다.</TextHighlight>
+            </>
+          ) : (
+            <>
+              Works with <TextHighlight>any stack.</TextHighlight>
+            </>
+          )}
         </Heading>
         <Text className="text-left max-w-[52ch]">
-          Langfuse works with any language and framework supporting OTel
-          instrumentation. Additionally, 100+ integrations make getting started
-          even easier. No framework lock-in.
+          {ko
+            ? "Langfuse는 OTel 계측을 지원하는 모든 언어와 프레임워크에서 동작합니다. 여기에 더해 100개 이상의 통합으로 더욱 쉽게 시작할 수 있습니다. 특정 프레임워크에 종속되지 않습니다."
+            : "Langfuse works with any language and framework supporting OTel instrumentation. Additionally, 100+ integrations make getting started even easier. No framework lock-in."}
         </Text>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
         <IntegrationGroupCard
           className="sm:col-span-2"
-          title={languagesGroup.title}
+          title={ko ? languagesGroup.titleKo : languagesGroup.title}
           items={languagesGroup.items}
         />
 
         <IntegrationGroupCard
-          title={agentFrameworksGroup.title}
+          title={ko ? agentFrameworksGroup.titleKo : agentFrameworksGroup.title}
           items={agentFrameworksGroup.items}
           showMoreLabel
+          ko={ko}
         />
         <IntegrationGroupCard
-          title={modelProvidersGroup.title}
+          title={ko ? modelProvidersGroup.titleKo : modelProvidersGroup.title}
           items={modelProvidersGroup.items}
           showMoreLabel
+          ko={ko}
         />
 
         <div className="integration-group sm:col-span-2 flex flex-col gap-4 items-start p-3 sm:p-4.5 border border-line-structure bg-surface-bg rounded-[2px] corner-box-hover-stripes transition-[background] duration-180 ease-out">
@@ -525,7 +543,7 @@ export function Integrations() {
               size="m"
               className="font-medium text-left text-text-secondary"
             >
-              100+ more integrations
+              {ko ? "100개 이상의 추가 통합" : "100+ more integrations"}
             </Text>
           </div>
           <div className="flex flex-col gap-2 w-full">
@@ -536,15 +554,15 @@ export function Integrations() {
 
         <div className="sm:col-span-2 flex flex-row flex-wrap gap-y-2 gap-x-3 justify-between items-center p-3 sm:px-4.5 sm:py-3 border border-line-structure bg-surface-bg rounded-[2px] corner-box-hover-stripes transition-[background] duration-180 ease-out">
           <Button variant="secondary" size="small" href="/integrations">
-            See all integrations
+            {ko ? "전체 통합 보기" : "See all integrations"}
           </Button>
           <span className="text-[13px] text-text-secondary">
-            Don&apos;t find your integration?{" "}
+            {ko ? "찾는 통합이 없나요? " : "Don't find your integration? "}
             <Link
               href="/integrations#request-integration"
               className="text-text-secondary hover:text-text-primary underline underline-offset-2 decoration-line-structure hover:decoration-text-tertiary transition-colors"
             >
-              Request it →
+              {ko ? "요청하기 →" : "Request it →"}
             </Link>
           </span>
         </div>

@@ -1,0 +1,210 @@
+---
+title: 인증 & SSO
+sidebarTitle: 인증 & SSO
+description: Langfuse에서 지원하는 SSO(Single Sign-On) 방식 개요
+sourceRevision: 2f0c851ca7951652bdcb4d1515337720eb866493
+translationStatus: machine
+---
+
+# 인증 & SSO
+
+기본적으로 Langfuse는 이메일/비밀번호, 소셜 로그인(Google, GitHub, Microsoft로 로그인), 그리고 ClickHouse Cloud를 통한 인증을 지원합니다.
+
+보안을 강화하려면 OIDC를 통해 Enterprise SSO(예: Okta, Authentik, GitHub Enterprise, OneLogin, Azure AD, Keycloak, JumpCloud 등)를 구성할 수도 있습니다.
+
+<Callout type="info">
+
+권한 부여에 대한 자세한 내용은 [RBAC 문서](/docs/administration/rbac)를 참고하세요.
+
+</Callout>
+
+<Callout type="info">
+
+셀프 호스팅 인스턴스의 경우 [셀프 호스팅 인증 및 SSO 가이드](/self-hosting/security/authentication-and-sso)를 참고하세요.
+
+</Callout>
+
+## 이메일/비밀번호 인증
+
+Langfuse는 기본적으로 이메일과 비밀번호를 통한 인증을 사용합니다. Langfuse는 표준 비밀번호 복잡도 요건을 적용합니다.
+
+소셜 로그인으로 가입한 경우, 로그인 페이지의 "비밀번호 재설정" 링크를 통해 비밀번호를 추가할 수 있습니다.
+
+## 소셜 및 프로바이더 로그인
+
+간편한 접속을 위해 사용자는 기존 프로바이더 계정으로 로그인할 수 있습니다:
+
+- Google
+- GitHub
+- Microsoft (Azure AD/Entra ID)
+- ClickHouse Cloud
+
+보안상의 이유로 Langfuse는 Google, GitHub, Microsoft 로그인 간의 전환이나, 이메일/비밀번호로 가입한 후 이러한 소셜 로그인 중 하나로 다시 가입하는 것을 지원하지 않습니다. ClickHouse Cloud는 아래에서 설명하는 것처럼 명시적인 계정 연결을 지원합니다.
+
+## ClickHouse Cloud 인증 [#clickhouse-cloud]
+
+사용자는 [ClickHouse Cloud](https://clickhouse.com/cloud) 계정으로 Langfuse Cloud에 로그인할 수 있습니다.
+이 프로바이더는 모든 Langfuse Cloud 리전에서 사용 가능하며, 로그인 페이지에서 다른 로그인 옵션과 함께 표시됩니다.
+
+세부 사항:
+
+- **계정 연결:** 다른 소셜 로그인과 달리, 이미 Langfuse 계정이 존재하는 이메일로 ClickHouse Cloud에 로그인하면 두 계정이 연결됩니다. 기존 프로젝트, 멤버십, API 키가 그대로 이전되므로, 사용자는 새 계정을 만들지 않고도 이메일/비밀번호나 다른 소셜 로그인에서 ClickHouse Cloud로 전환할 수 있습니다.
+- **로그인:** 로그인 페이지에서 **Sign in with ClickHouse Cloud**를 클릭하고 ClickHouse Cloud 계정으로 인증합니다.
+
+## Enterprise SSO 및 SSO 강제 적용 [#sso]
+
+<AvailabilityBanner
+  availability={{
+    hobby: "not-available",
+    core: "not-available",
+    pro: "team-add-on",
+    enterprise: "full",
+    selfHosted: "full",
+  }}
+/>
+
+Langfuse는 OIDC를 통해 **Enterprise SSO**(예: Okta, Authentik, OneLogin, Azure AD, Keycloak, WorkOS, JumpCloud 등)를 지원합니다.
+
+<Callout type="info">
+
+Langfuse는 고객 조직당 여러 도메인을 지원하지만, 각 도메인은 반드시 해당 조직이 독점적으로 소유해야 합니다.
+(하청업체나 컨설팅사와 같은) 공유 도메인은 지원되지 않습니다.
+
+</Callout>
+
+세부 사항:
+
+- **마이그레이션:** 이메일/비밀번호나 소셜 로그인으로 가입한 기존 사용자는 Enterprise SSO 프로바이더가 설정되면 자동으로 마이그레이션됩니다.
+- **권한 부여:** Enterprise SSO는 신규 가입 사용자에게 [역할](/docs/administration/rbac)을 자동으로 프로비저닝하지 않습니다. 사용자는 UI(설정 > 멤버) 또는 [SCIM API](/docs/administration/scim-and-org-api)를 통해 조직에 초대되어야 합니다.
+- **로그인:** Enterprise SSO 프로바이더로 로그인하려면 (1) 이메일 주소를 입력하고 (2) "Continue"를 누르세요. Enterprise SSO 프로바이더로 리디렉션되어 인증하게 됩니다.
+
+<Frame className="max-w-lg">
+  ![SSO 로그인 흐름](/images/security/sso-signin.png)
+</Frame>
+
+<Callout type="info">
+
+Langfuse는 **OIDC만** 지원합니다. SAML은 지원되지 않습니다.
+
+</Callout>
+
+### Langfuse Cloud에서 Enterprise SSO 구성하기 [#configure-enterprise-sso]
+
+조직 관리자는 **Organization Settings > SSO**에서 Enterprise SSO를 직접 구성할 수 있습니다.
+
+#### 1) 도메인 검증
+
+1. **Organization Settings > SSO**로 이동합니다.
+2. **Verify Domain** 섹션에서 **Add Domain**을 클릭하고 검증할 도메인을 입력합니다.
+3. Langfuse가 제공하는 DNS TXT 레코드를 DNS 프로바이더에 복사합니다.
+4. DNS 전파를 기다린 후 **Verify**를 클릭하여 도메인을 검증합니다.
+
+<Callout type="info">
+
+SSO를 구성하기 전에 도메인 검증이 필요합니다. 이를 통해 해당 도메인을 실제로 소유한 조직만 SSO를 구성할 수 있습니다.
+
+검증이 실패하면 레코드 이름/값이 정확히 일치하는지 확인하고, 둘러싸인 따옴표를 제거한 후 전파가 끝난 뒤 다시 확인하세요. 대부분의 DNS 프로바이더는 몇 분 정도 걸리지만, 최대 24시간이 걸릴 수도 있습니다.
+
+</Callout>
+
+#### 2) SSO 구성
+
+1. **SSO Configuration** 섹션에서, 설정하려는 검증된 도메인 옆의 **Configure SSO**를 클릭합니다.
+2. Langfuse가 제공하는 콜백 URL을 복사하여 IdP 애플리케이션의 리디렉션/콜백 URL 허용 목록에 추가합니다.
+3. IdP에서 발급 URL(issuer URL), 클라이언트 ID, 클라이언트 시크릿을 입력한 후 구성을 저장합니다.
+4. 검증된 도메인에 속한 사용자로 로그인을 테스트합니다.
+
+<Callout type="warning">
+
+GitHub 및 GitHub Enterprise는 표준 OIDC 검색(discovery) 엔드포인트를 노출하지 않습니다. Langfuse는 설정 과정에서 이러한 발급 URL을 사전 검증할 수 없습니다. IdP의 발급 URL과 콜백 URL 허용 목록을 다시 확인하고, 저장 직후 바로 테스트 로그인을 실행하여 배포 전에 오류를 잡아내세요.
+
+</Callout>
+
+#### SSO 강제 적용 시 잠금 방지하기 [#prevent-lockout]
+
+SSO를 강제 적용해도 이미 활성화된 세션은 종료되지 않습니다. 강제 적용이 활성화된 이후에도 현재 브라우저 세션은 로그인 상태를 유지합니다. 이를 활용해 안전하게 설정을 검증하세요: 강제 적용을 활성화한 다음, 별도의 브라우저나 프라이빗/시크릿 창에서 SSO 로그인을 테스트합니다. 로그인이 예상대로 작동하지 않으면, 다른 사용자에게 영향을 미치기 전에 여전히 활성 상태인 세션에서 구성을 되돌리세요.
+
+#### Break-Glass 사용자
+
+Langfuse는 강제 적용된 도메인에 대한 예외를 지원하지 않습니다. 도메인에 SSO 강제 적용이 활성화된 이후에도 이메일/비밀번호 로그인을 계속 사용할 수 있는 "break glass" 계정은 존재하지 않습니다. 이 기능에 관심이 있으시면 이 [GitHub 디스커션](https://github.com/orgs/langfuse/discussions/14532)에 투표해 주세요.
+
+### 벤더별 가이드
+
+#### Okta [#okta]
+
+##### 1단계: Okta에서 OIDC 애플리케이션 생성
+
+1. Okta 관리자 콘솔에 로그인합니다
+2. **Applications** > **Applications**로 이동합니다
+3. **Create App Integration**을 클릭합니다
+4. 로그인 방식으로 **OIDC - OpenID Connect**를 선택합니다
+5. 애플리케이션 유형으로 **Web Application**을 선택합니다
+6. **Next**를 클릭합니다
+
+##### 2단계: 애플리케이션 구성
+
+1. **App integration name**을 입력합니다 (예: "Langfuse")
+2. **Sign-in redirect URI**를 다음과 같이 설정합니다:
+   `https://<langfuse-url>/api/auth/callback/<domain>.okta`
+   예시: `https://cloud.langfuse.com/api/auth/callback/example.com.okta`
+3. 필요한 경우 (선택 사항) **Sign-out redirect URI**를 설정합니다
+4. (Scopes) Langfuse는 인증 과정에서 scope를 사용하지 않습니다
+5. **Assignments**에서 사용자를 할당할 방법을 선택합니다
+6. **Save**를 클릭합니다
+
+##### 3단계: 자격 증명 확인
+
+1. 애플리케이션의 **General** 탭에서 **Client ID**와 **Client Secret**을 복사합니다
+2. Okta **Issuer URL**을 확인합니다 (예: `https://example.okta.com`)
+
+##### 4단계: Langfuse에서 도메인 검증
+
+1. Langfuse에서 **Organization Settings > SSO**를 엽니다
+2. **Verify Domain** 섹션에서 **Add Domain**을 클릭하고 Okta를 사용할 도메인을 입력합니다
+3. Langfuse가 제공하는 DNS TXT 레코드를 DNS 프로바이더에 복사합니다
+4. DNS 전파를 기다린 후 Langfuse에서 **Verify**를 클릭합니다
+
+##### 5단계: Langfuse에서 SSO 구성
+
+1. **Organization Settings > SSO**의 **SSO Configuration** 섹션에서 검증된 도메인을 찾습니다
+2. **Configure SSO**를 클릭합니다
+3. 프로바이더로 **Okta**를 선택합니다
+4. Langfuse가 표시하는 콜백 URL을 복사하여 Okta의 **Sign-in redirect URIs** 허용 목록에 추가합니다
+5. **Issuer URL**, **Client ID**, **Client Secret**을 입력합니다
+6. 구성을 저장합니다
+
+##### 6단계: 사용자 할당
+
+1. Okta에서 Langfuse 애플리케이션의 **Assignments** 탭으로 이동합니다
+2. Langfuse에 접근해야 하는 사용자 또는 그룹을 할당합니다
+
+##### IdP 개시 SSO [#okta-idp-initiated-sso]
+
+Langfuse는 **IdP 개시 SSO**(Identity Provider-initiated Single Sign-On)를 지원합니다. 이를 통해 사용자는 Langfuse가 아닌 Okta에서 직접 SSO 흐름을 시작할 수 있습니다.
+
+_IdP 개시 SSO 인증 흐름 예시 (Okta):_
+
+<Video
+  src="https://static.langfuse.com/docs-videos/idp-initiated-sign-in.mp4"
+  aspectRatio={1812 / 1080}
+  title="IdP-Initiated SSO Authentication Flow"
+  className="max-w-xl"
+  gifStyle
+/>
+
+IdP 개시 SSO를 활성화하려면 Okta가 사용자를 다음 주소로 리디렉션하도록 구성하세요:
+
+```
+https://cloud.langfuse.com/auth/sso-initiate?provider=<PROVIDER>
+```
+
+- `<PROVIDER>`를 콜백 URL의 마지막 부분으로 교체하세요. 예: `example.com.okta`.
+- Okta 설정에서 `Redirect to app to initiate login (OIDC Compliant)` 옵션을 사용하세요.
+
+##### SCIM을 통한 사용자 프로비저닝
+
+자동화된 사용자 프로비저닝에 대해서는 [Okta SCIM 설정 가이드](/docs/administration/scim-and-org-api#okta)를 참고하세요.
+
+## 관련 자료
+
+- [SCIM & 조직 API](/docs/administration/scim-and-org-api) — SSO 구성 후 사용자 프로비저닝, 역할 할당, 프로젝트 설정을 자동화합니다

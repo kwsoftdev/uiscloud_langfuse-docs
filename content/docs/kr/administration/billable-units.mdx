@@ -1,0 +1,64 @@
+---
+title: 청구 단위
+description: Langfuse에서 청구 단위가 어떻게 계산되는지 알아보세요.
+sourceRevision: de415d0a2931ad4b5928b933403e867a1fbdeb51
+translationStatus: machine
+---
+
+# 청구 단위
+
+Langfuse [가격 정책](/pricing)은 청구 기간당 수집된 단위 수를 기준으로 합니다. 단위는 [트레이스](/docs/observability/data-model#traces), [관측치(observation)](/docs/observability/data-model#observations) 또는 [점수](/docs/evaluation/scores/data-model#scores) 중 하나입니다.
+
+`Units` = `Count of Traces` + `Count of Observations` + `Count of Scores`
+
+## Langfuse Cloud
+
+Langfuse Cloud의 경우, [가격 계산기](/pricing?calculatorOpen=true)를 사용하여 예상 사용량을 기반으로 월별 비용을 추정할 수 있습니다.
+
+## 셀프 호스팅(OSS/Enterprise)
+
+셀프 호스팅 Langfuse(OSS)는 MIT 라이선스로 무료이므로 사용량 기반 청구가 없습니다. 셀프 호스팅 Langfuse Enterprise의 경우, 청구 단위는 가격 정책을 구성하는 요소 중 하나입니다.
+
+위의 단위 정의는 [Langfuse Cloud](/pricing)로 이전하는 비용을 추정하거나 [셀프 호스팅](/self-hosting) 배포 규모를 산정하는 등 데이터 볼륨을 수치화하고자 할 때 여전히 유용합니다.
+
+내장된 **Langfuse Usage Management** 대시보드(Langfuse가 제공하는 큐레이션 대시보드 중 하나, [Custom Dashboards](/docs/metrics/features/custom-dashboards) 참조)에서 단위 수를 직접 확인할 수 있습니다.
+
+<Steps>
+
+### 대시보드 열기
+
+Langfuse 프로젝트에서 **Dashboards**로 이동하여 **Langfuse Usage Management**를 엽니다.
+
+<Frame>
+  ![유지 관리되는 Langfuse Usage Management 대시보드를 포함한 Langfuse 대시보드 목록](/images/docs/self-hosted-usage-management-dashboards-list.png)
+</Frame>
+
+### 최근 30일 선택
+
+한 달치 사용량을 포착하기 위해 날짜 범위를 최근 30일로 설정합니다.
+
+### 개수 합산
+
+카운트 위젯들을 합산하여 월별 단위 수를 구합니다:
+
+- **Total Trace Count**
+- **Total Observation Count**
+- **Total Score Count**(숫자형 및 범주형 위젯을 합산)
+
+<Frame>
+  ![트레이스, 관측치, 점수의 총 개수를 보여주는 Langfuse Usage Management 대시보드](/images/docs/self-hosted-usage-management-dashboard.png)
+</Frame>
+
+</Steps>
+
+위 예시의 경우:
+
+`Units` = `20,070 Traces` + `119,500 Observations` + `561 Scores` = `140,131 units / month`(연간 약 `1,681,572 units / year`)
+
+## FAQ
+
+**Langfuse Cloud에서 사용량을 어떻게 추적할 수 있나요?** Langfuse의 Dashboards 탭에 있는 Usage Monitoring Report를 사용하여 프로젝트별 Langfuse Cloud 사용량을 분석하세요. 조직 전체의 사용량을 확인하려면 [지출 알림(spend alerts)](/docs/administration/spend-alerts)을 사용하세요.
+
+**Langfuse 기능으로 생성된 단위도 청구 단위에 포함되나요?** 네. Langfuse에 저장된 모든 트레이스, 관측치, 점수는 애플리케이션에서 전송된 것이든 LLM-as-a-Judge, Annotation Queues, 실험과 같은 Langfuse 기능으로 생성된 것이든 관계없이 청구 단위로 집계됩니다.
+
+**비용 절감을 위해 Langfuse Cloud 사용량을 어떻게 최적화할 수 있나요?** 애플리케이션 규모가 커져서 Langfuse Cloud 비용을 최적화하고 싶다면 [이 가이드](/faq/all/cutting-costs)를 확인해 보세요.

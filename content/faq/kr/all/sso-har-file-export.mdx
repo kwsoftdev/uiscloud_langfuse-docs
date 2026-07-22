@@ -1,0 +1,59 @@
+---
+title: SSO 문제 해결을 위한 HAR 파일 내보내기 방법
+description: Langfuse에서 SSO 인증 문제가 발생했을 때 여러 브라우저에서 HAR 파일을 내보내는 단계별 가이드
+tags: [administration]
+sourceRevision: 9c0d419484845ffbd56805fd068677856e5d764c
+translationStatus: machine
+---
+
+# SSO 문제 해결을 위한 HAR 파일 내보내기 방법
+
+Langfuse에서 Single Sign-On(SSO) 문제가 발생하는 경우, Langfuse 지원팀이 문제를 진단할 수 있도록 HAR 파일을 내보내야 합니다.
+
+## HAR 파일이란?
+
+[HAR 파일](<https://en.wikipedia.org/wiki/HAR_(file_format)>)은 브라우저가 수행한 모든 HTTP 요청을 기록하는 JSON 형식의 아카이브로, 다음 정보를 포함합니다.
+
+- 요청 및 응답 헤더
+- 쿠키 및 세션 데이터
+- 타이밍 정보
+- 응답 콘텐츠
+- 오류 세부 정보
+
+## 브라우저별 안내
+
+### Google Chrome
+
+1. **개발자 도구 열기**: `F12` 또는 `Ctrl+Shift+I`(Windows/Linux) 또는 `Cmd+Option+I`(Mac)를 누릅니다
+2. **Network 탭 접근**: "Network" 탭을 클릭합니다
+3. **설정 구성**:
+   - 빨간색 녹화 버튼이 활성화되어 있는지 확인합니다
+   - 탐색 중에도 로그를 유지하려면 "Preserve log"를 체크합니다
+4. **기존 로그 지우기**: 지우기 버튼(🚫)을 클릭합니다
+5. **문제 재현**: 페이지를 새로고침하고 문제를 일으키는 SSO 단계를 수행합니다
+6. **내보내기**: 네트워크 로그에서 마우스 우클릭 후 "Save all as HAR with content"를 선택합니다
+
+### Mozilla Firefox
+
+1. **개발자 도구 열기**: `F12` 또는 `Ctrl+Shift+I`를 누릅니다
+2. **Network 탭 접근**: "Network" 탭을 클릭합니다
+3. **설정 구성**: "Persist Logs"를 체크하고 기존 로그를 지웁니다
+4. **문제 재현**: 새로고침 후 문제가 되는 SSO 단계를 수행합니다
+5. **내보내기**: 네트워크 요청에서 마우스 우클릭 후 "Save All As HAR"를 선택합니다
+
+### Microsoft Edge
+
+1. **개발자 도구 열기**: `F12` 또는 `Ctrl+Shift+I`를 누릅니다
+2. **Network 탭 접근**: "Network" 탭을 클릭합니다
+3. **설정 구성**: 녹화가 활성화되어 있고 "Preserve log"가 체크되어 있는지 확인합니다
+4. **문제 재현**: 로그를 지우고, 새로고침한 뒤 SSO 단계를 수행합니다
+5. **내보내기**: 다운로드 아이콘(⬇️)을 클릭하거나 마우스 우클릭 후 "Save as HAR with Content"를 선택합니다
+
+### Safari
+
+1. **개발자 메뉴 활성화**: Safari → Preferences → Advanced → "Show Develop menu"를 체크합니다
+2. **Web Inspector 열기**: Develop → Show Web Inspector 또는 `Cmd+Option+I`를 누릅니다
+3. **Network 탭 접근**: "Network" 탭을 클릭합니다
+4. **설정 구성**: "Preserve Log"를 활성화합니다
+5. **문제 재현**: 로그를 지우고, 새로고침한 뒤 SSO 단계를 수행합니다
+6. **내보내기**: 내보내기 아이콘(📤)을 클릭하고 "Export HAR"를 선택합니다

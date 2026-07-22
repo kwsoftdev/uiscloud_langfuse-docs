@@ -5,6 +5,7 @@ import { GoogleTagManager } from "@next/third-parties/google";
 import localFont from "next/font/local";
 import { Inter } from "next/font/google";
 import { DevAriaHiddenConsoleFilter } from "@/components/DevAriaHiddenConsoleFilter";
+import { LocalePreferenceRedirect } from "@/components/LocalePreferenceRedirect";
 import {
   buildDefaultSiteOgImageUrl,
   SITE_DEFAULT_OG_DESCRIPTION,
@@ -83,6 +84,7 @@ export default function RootLayout({
         {process.env.NODE_ENV === "development" && (
           <DevAriaHiddenConsoleFilter />
         )}
+        <LocalePreferenceRedirect />
         <PostHogProvider>
           <AppRootProvider
             i18n={{

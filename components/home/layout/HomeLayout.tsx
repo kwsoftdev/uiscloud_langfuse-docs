@@ -14,6 +14,7 @@ type ContentColumnsProps = {
   rightSidebar?: ReactNode;
   className?: string;
   footerClassName?: string;
+  lang?: "en" | "ko";
 };
 
 /**
@@ -28,6 +29,7 @@ export function ContentColumns({
   rightSidebar,
   className,
   footerClassName,
+  lang = "en",
 }: ContentColumnsProps) {
   return (
     <div
@@ -37,7 +39,7 @@ export function ContentColumns({
         className,
       )}
     >
-      {leftSidebar ?? <HomeSidebar />}
+      {leftSidebar ?? <HomeSidebar lang={lang} />}
       <HomeMainArea>
         {children}
         <Footer className={footerClassName} />
@@ -71,6 +73,7 @@ export function HomeLayout({
   className,
   footerClassName,
   forceLight = true,
+  lang = "en",
 }: HomeLayoutProps) {
   return (
     <PageChrome forceLight={forceLight}>
@@ -80,6 +83,7 @@ export function HomeLayout({
         rightSidebar={rightSidebar}
         className={className}
         footerClassName={footerClassName}
+        lang={lang}
       >
         {children}
       </ContentColumns>

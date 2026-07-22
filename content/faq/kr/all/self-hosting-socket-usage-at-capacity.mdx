@@ -1,0 +1,13 @@
+---
+title: 셀프 호스팅 Langfuse에서 발생하는 소켓 사용량 최대치 오류
+tags: [self-hosting]
+sourceRevision: 9c0d419484845ffbd56805fd068677856e5d764c
+translationStatus: machine
+---
+
+# 셀프 호스팅 Langfuse에서 발생하는 소켓 사용량 최대치 오류
+
+소켓 사용량이 최대치에 도달했다는 오류가 발생한다면, 이는 Langfuse Web 컨테이너가 더 이상 새로운 연결을 열 수 없다는 것을 의미합니다.
+요청을 처리하는 langfuse-web 컨테이너의 수를 늘리거나, 사용 가능한 소켓의 수를 늘려서 이 문제를 해결할 수 있습니다.
+후자의 방법을 적용하려면 `LANGFUSE_S3_CONCURRENT_WRITES`를 `50`보다 큰 값으로 설정하세요.
+소켓 수를 늘리면 컨테이너의 메모리 사용량이 증가할 수 있다는 점에 유의하시기 바랍니다.

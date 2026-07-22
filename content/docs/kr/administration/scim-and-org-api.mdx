@@ -1,0 +1,159 @@
+---
+title: SCIM 및 조직 API
+sidebarTitle: SCIM 및 조직 API
+description: Langfuse는 개방적이며 사용자 지정 워크플로와 통합을 통해 확장할 수 있도록 설계되었습니다. 이 엔드포인트를 사용하여 Langfuse 조직의 프로젝트 및 사용자 관리를 자동화할 수 있습니다.
+sourceRevision: 43b5ea71e7f3eb548b08fdd69c8baabedeaaabf5
+translationStatus: machine
+---
+
+# SCIM 및 조직 키 범위 API 라우트
+
+<AvailabilityBanner
+  availability={{
+    hobby: "not-available",
+    core: "not-available",
+    pro: "not-available",
+    enterprise: "full",
+    selfHosted: "ee",
+  }}
+/>
+
+조직 범위 API 키를 통해 프로젝트, 사용자, 프로젝트/조직 멤버십을 관리할 수 있습니다 ([RBAC 문서](/docs/administration/rbac) 참조).
+
+Langfuse는 개방적이며 사용자 지정 워크플로와 통합을 통해 확장할 수 있도록 설계되었습니다.
+이 엔드포인트를 사용하여 Langfuse 조직의 프로젝트 및 사용자 관리를 자동화할 수 있습니다.
+
+이 문서는 조직 관리 API, SCIM 호환 사용자 프로비저닝 엔드포인트를 다루며, Langfuse에서 Okta 인증 및 사용자 프로비저닝을 설정하는 방법에 대한 종합 가이드를 포함합니다.
+
+<Callout type="info">
+
+Langfuse를 셀프 호스팅하는 경우, [인스턴스 관리 API](/self-hosting/administration/instance-management-api)를 사용하여 인스턴스 전체의 조직을 관리할 수 있습니다.
+
+</Callout>
+
+## 인증
+
+[기본 인증(Basic Auth)](https://en.wikipedia.org/wiki/Basic_access_authentication)을 사용하여 API를 인증합니다.
+조직 범위 API 키는 [인스턴스 관리 API](/self-hosting/administration/instance-management-api)를 통해 생성하거나 Langfuse UI의 조직 설정에서 생성할 수 있습니다.
+
+예시:
+
+```bash
+curl -u public-key:secret-key https://cloud.langfuse.com/api/public/projects/{projectId}/apiKeys
+```
+
+## 조직 관리
+
+해당되는 모든 엔드포인트는 `(requires organization-scoped API key)`로 표시되어 있습니다.
+여기에는 다음 라우트가 포함됩니다.
+
+- `POST /api/public/projects`
+- `PUT /api/public/projects/{projectId}`
+- `DELETE /api/public/projects/{projectId}`
+- `GET /api/public/projects/{projectId}/apiKeys`
+- `POST /api/public/projects/{projectId}/apiKeys`
+- `DELETE /api/public/projects/{projectId}/apiKeys/{apiKeyId}`
+- `PUT /api/public/organizations/memberships`
+- `GET /api/public/organizations/memberships`
+- `PUT /api/public/projects/{projectId}/memberships`
+- `DELETE /api/public/projects/{projectId}/memberships`
+
+자세한 내용은 [API 레퍼런스](https://api.reference.langfuse.com)를 참조하세요.
+
+## SCIM을 통한 사용자 관리
+
+또한, 다음과 같은 [SCIM](https://datatracker.ietf.org/doc/html/rfc7642) 호환 엔드포인트를 제공합니다.
+기본 URI로 `/api/public/scim`을 사용하세요.
+
+Langfuse 내에서 새 사용자를 생성하려면 SCIM 스타일 엔드포인트인 `POST /Users`를 사용할 수 있습니다.
+이 엔드포인트는 해당 이메일이 아직 존재하지 않는 경우 새 사용자를 생성합니다.
+그런 다음 역할 `NONE`으로 사용자를 조직에 추가합니다 (`roles` 속성이 제공된 경우는 제외, [아래 Okta 가이드](#okta) 참조).
+
+이후, 멤버십 엔드포인트를 통해 조직 또는 프로젝트 수준에서 역할을 업데이트할 수 있습니다 (위 참조).
+
+<Callout type="warn">
+  SCIM이 사용자를 프로비저닝 해제하고 다시 프로비저닝하면(예: 초기 SCIM 설정 또는 IdP 동기화 시), 사용자의 조직 역할이 SCIM `roles` 속성에 설정된 역할(기본값 `NONE`)로 덮어써질 수 있습니다.
+  실수로 인한 역할 강등을 방지하려면, SCIM 프로비저닝을 활성화하기 **전에** IdP의 `roles` 속성이 올바른 값(예: 조직 소유자의 경우 `OWNER`)으로 설정되어 있는지 확인하세요.
+</Callout>
+
+조직에서 사용자를 제거하려면 `DELETE /Users/{id}` 엔드포인트를 호출하세요.
+이는 사용자 자체를 삭제하지 않고, 조직과의 멤버십만 삭제합니다.
+
+API를 통해 사용자에게 초기 비밀번호를 제공하고 이를 공유하거나, 싱글 사인온(SSO)을 사용하여 사용자를 인증할 수 있습니다.
+후자의 경우 다음이 필요합니다.
+
+- Langfuse Cloud: Enterprise SSO 제공자를 설정합니다 ([문서](/security/auth)).
+- 셀프 호스팅: 사용자 계정이 올바르게 연결되도록 SSO 제공자에 대해 `AUTH_<PROVIDER>_ALLOW_ACCOUNT_LINKING`을 설정합니다 [SSO 문서](/self-hosting/security/authentication-and-sso#additional-configuration).
+
+다음 SCIM 엔드포인트를 사용할 수 있습니다.
+
+- `GET /ServiceProviderConfig`
+- `GET /ResourceTypes`
+- `GET /Schemas`
+- `GET /Users`
+- `POST /Users`
+- `GET /Users/{id}`
+- `DELETE /Users/{id}`
+
+### SCIM 벤더 가이드
+
+#### Okta
+
+이 가이드에서는 Langfuse용 Okta 사용자 프로비저닝을 설정하는 방법을 다룹니다. 먼저 [OIDC를 통한 인증](/docs/administration/authentication-and-sso)을 설정해야 합니다.
+
+<Video
+  src="https://static.langfuse.com/docs-videos/2025-08-06-okta-scim-setup.mov.mp4"
+  aspectRatio={647 / 463}
+  gifStyle
+/>
+
+사용자 프로비저닝을 위해 Langfuse는 SCIM 2.0 프로토콜을 지원합니다.
+Okta에서 사용자 프로비저닝을 설정하려면 다음 단계를 따르세요.
+
+1. **SAML/SCIM 애플리케이션 생성**:
+   - Okta 관리 콘솔에 로그인합니다.
+   - **Applications** > **Create App Integration**으로 이동합니다.
+   - 로그인 방법으로 **SAML 2.0**을 선택하고 **Next**를 클릭합니다.
+   - 애플리케이션 설정을 입력합니다. 셀프 호스팅 도메인이나 Langfuse Cloud 도메인 중 하나를 사용하세요.
+     - **App name**: `Langfuse SCIM`
+     - **Single sign-on URL**: `https://your-langfuse-domain.com` (Langfuse는 위에서 설명한 대로 인증에 OIDC를 사용하므로 이 값은 사용되지 않습니다)
+     - **Audience URI**: `langfuse`
+   - **Next**를 클릭한 다음 **Finish**를 클릭합니다.
+2. **SCIM 설정 구성**:
+   - **General** 탭에서 `Provisioning`을 SCIM으로 설정합니다.
+   - **Provisioning** 탭에서 **SCIM Connection**을 편집합니다.
+   - 자격 증명을 입력합니다.
+     - **SCIM connector base URL**: `https://your-langfuse-domain.com/api/public/scim`
+     - **Unique identifier field for users**: `userName`
+     - **Supported provisioning actions**: `Import new Users and Profile Updates`, `Push New Users`, `Push Profile Updates`
+     - **Basic Auth - Username**: 조직 설정의 공개 키를 사용하세요.
+     - **Basic Auth - Password**: 조직 설정의 비공개 키를 사용하세요.
+   - API 자격 증명을 테스트하고 **Save**를 누릅니다.
+3. **프로비저닝 구성**:
+   - **Provisioning** 탭에서 다음 옵션을 활성화합니다.
+     - **Create Users**
+     - **Update User Attributes**
+     - **Deactivate Users**
+   - **Save**를 클릭합니다.
+4. **기본 사용자 권한 추가** (선택 사항):
+   - **Provisioning** 탭에서 Profile Editor로 이동하여 새 `roles` 속성을 추가합니다.
+     - **Data type**: `string array`
+     - **Display Name**: Langfuse Roles
+     - **Variable Name**: `roles`
+     - **External Name**: `roles`
+     - **External Namespace**: `urn:ietf:params:scim:schemas:core:2.0:User`
+     - **Attribute members**: `NONE`, `VIEWER`, `MEMBER`, `ADMIN`, `OWNER`
+     - **Attribute type**: `Personal`
+   - **Provisioning** 탭에서 `roles` 속성을 수정하여 신규 사용자의 기본 권한을 설정합니다.
+   - 애플리케이션의 모든 사용자에 대해 기본값을 제공하도록 설정할 수 있습니다. "NONE", "VIEWER", "MEMBER", "ADMIN" 또는 "OWNER"로 설정하세요.
+5. **사용자 할당**:
+   - **Assignments** 탭으로 이동합니다.
+   - **Assign** > **Assign to People**을 클릭합니다.
+   - Langfuse SCIM 애플리케이션에 할당할 사용자를 선택합니다. 여기서 역할을 재정의할 수 있습니다.
+   - **Done**을 클릭한 다음 **Save**를 클릭합니다.
+   - 사용자는 Langfuse 조직 내에서 Member로 표시되어야 합니다.
+
+##### 문제 해결
+
+- **사용자가 의도한 `role` 대신 NONE/VIEWER 권한으로 프로비저닝됨**: 이는 일반적으로 `roles` 속성의 attribute type이 `Personal`이 아닌 `Group`으로 설정된 경우 발생합니다.
+- **SCIM 활성화 후 사용자가 역할을 잃음**: 초기 SCIM 설정 중에 사용자가 프로비저닝 해제되고 다시 프로비저닝되면, 조직 역할이 SCIM `roles` 속성의 값으로 덮어써집니다. IdP에 역할이 구성되어 있지 않으면 기본값은 `NONE`입니다. 이를 해결하려면 프로비저닝 전에 IdP 프로필에 올바른 역할(조직 소유자의 경우 `OWNER` 포함)이 설정되어 있는지 확인하세요.

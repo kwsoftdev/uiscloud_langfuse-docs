@@ -1,0 +1,24 @@
+---
+title: 셀프 호스팅 Langfuse에서 POST /api/public/ingestion 이후 이벤트가 보이지 않는 경우
+tags: [self-hosting]
+sourceRevision: 9c0d419484845ffbd56805fd068677856e5d764c
+translationStatus: machine
+---
+
+# 셀프 호스팅 Langfuse에서 POST /api/public/ingestion 이후 이벤트가 보이지 않는 경우
+
+`/api/public/ingestion`에 이벤트를 전송한 후 몇 분 이내에 이벤트가 보이지 않는다면, 이벤트가 올바르게 수집(ingest)되지 않았을 가능성이 있습니다.
+이벤트는 비동기적으로 처리되기 때문에 UI에 즉시 표시되지 않습니다.
+몇 분이 지나도 이벤트가 표시되지 않는다면 다음 사항을 확인해 보세요.
+
+- **Langfuse Web 로그 확인**: 이벤트를 수집한 시점을 전후로 Langfuse Web 컨테이너에 오류가 있는지 확인합니다.
+  오류가 발견된다면 이벤트 형식이 잘못되었거나 [Redis](/self-hosting/deployment/infrastructure/cache) 또는 [S3](/self-hosting/deployment/infrastructure/blobstorage)를 사용할 수 없는 상태임을 의미합니다.
+  이 경우 애플리케이션에서 207이 아닌 상태 코드도 함께 확인할 수 있을 것입니다.
+- **S3/Blob Storage 버킷 확인**: 이벤트가 블롭 스토리지에 올바르게 업로드되었는지 확인합니다.
+  이벤트는 `/<projectId>/<type>/<eventId>/<randomId>.json`과 같은 경로에 존재해야 합니다.
+  Langfuse Web 컨테이너에서 이벤트가 정상적으로 수신되었지만 S3에서 찾을 수 없다면, S3 설정에 문제가 있음을 의미합니다.
+- **Langfuse Worker 로그 확인**: 이벤트를 수집한 후 0~60초 이내에 Langfuse Worker 컨테이너에 오류가 있는지 확인합니다.
+  이벤트가 전혀 처리되지 않는다면 대개 Redis 또는 S3 관련 설정 문제를 의미합니다.
+- **ClickHouse 테이블 확인**: 이전 처리 과정이 정상적으로 보인다면, ClickHouse의 `traces`, `observations`, `scores` 테이블에서 해당 이벤트를 찾을 수 있는지 확인합니다.
+  해당하는 `projectId`와 `eventId`로 검색해 보세요.
+  ClickHouse에서 이벤트를 찾을 수 없지만 워커는 해당 이벤트가 처리되었다고 표시하는 경우, 또는 ClickHouse에서는 이벤트를 찾을 수 있지만 API를 통해 반환되지 않는 경우에는 [이슈를 등록](https://github.com/langfuse/langfuse/issues)해 주세요.

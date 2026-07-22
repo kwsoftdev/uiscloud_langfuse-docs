@@ -40,6 +40,16 @@ const ASK_AI_BAR_HIDDEN_PATHS: ReadonlyArray<RegExp> = [
   /^\/cn(\/|$)/,
   /^\/kr(\/|$)/,
   /^\/wrapped(\/|$)/,
+  // Translated content Inkeep's search/AI index does not (yet) cover.
+  // (/faq(\/|$) above already covers /faq/kr.)
+  /^\/academy\/japan(\/|$)/,
+  /^\/academy\/kr(\/|$)/,
+  /^\/guides\/kr(\/|$)/,
+  /^\/docs\/kr(\/|$)/,
+  /^\/handbook\/kr(\/|$)/,
+  /^\/security\/kr(\/|$)/,
+  /^\/resources\/kr(\/|$)/,
+  /^\/self-hosting\/kr(\/|$)/,
 ];
 
 function isBarHidden(pathname: string): boolean {

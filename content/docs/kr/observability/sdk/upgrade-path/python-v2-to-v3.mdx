@@ -1,0 +1,527 @@
+---
+title: "Python v2 → v3"
+description: Langfuse Python SDK를 v2에서 v3로 업그레이드하기 위한 마이그레이션 가이드입니다.
+category: SDKs
+sourceRevision: ecc69b1d83e5a0e352ad0c067e6483ce87e579d5
+translationStatus: machine
+---
+
+# Python v2 → v3
+
+<Callout type="info">
+Python SDK v2를 사용 중이라면 최신 메이저 버전인 v4로 바로 업그레이드하는 것을 권장합니다. [Python v3 → v4 마이그레이션 가이드](/docs/observability/sdk/upgrade-path/python-v3-to-v4)를 참고하세요. 아래의 v2 → v3 변경 사항은 여전히 적용되므로, 먼저 이 내용을 완료한 후 v3 → v4 가이드를 따르세요.
+</Callout>
+
+Python SDK v3는 레거시 v2 SDK 대비 상당한 개선 사항과 변경 사항을 도입했습니다. **완전한 하위 호환성은 제공되지 않습니다**. 이 종합 가이드는 현재 사용 중인 통합 방식에 따라 마이그레이션하는 데 도움을 드립니다.
+
+<Callout type="info">
+  v2 SDK 문서의 스냅샷은 [여기](https://python-sdk-v2.docs-snapshot.langfuse.com/docs/observability/sdk/python/decorators)에서 확인할 수 있습니다.
+</Callout>
+
+<Callout type="warning" title="중요: 업그레이드 전 서드파티 OpenTelemetry 스팬을 검토하세요">
+  Langfuse SDK는 이제 OpenTelemetry 네이티브입니다. 업그레이드 후에는 Langfuse가 애플리케이션 내 다른 OpenTelemetry 계측 라이브러리(예: 데이터베이스, HTTP, 프레임워크 계측)에서 발생하는 스팬도 캡처할 수 있습니다.
+
+이로 인해 LLM 관측성과 관련 없는 인프라 스팬이 많이 추가되어 Langfuse 청구 금액이 크게 늘어날 수 있습니다. 업그레이드를 전면적으로 적용하기 전에 트레이스를 검토하고, [계측 스코프별 필터링 가이드](/docs/observability/sdk/advanced-features#filtering-by-instrumentation-scope)를 사용해 불필요한 스팬을 계측 스코프 기준으로 필터링하세요.
+
+</Callout>
+
+**SDK v2 대비 핵심 변경 사항:**
+
+- **OpenTelemetry 기반**: v3는 OpenTelemetry 표준을 기반으로 구축되었습니다
+- **트레이스 입력/출력**: 이제 기본적으로 루트 관찰 항목(root observation)에서 파생됩니다
+- **트레이스 속성** (`user_id`, `session_id` 등): 이를 감싸는 스팬을 통해 설정하거나, 통합 대상(OpenAI 호출, Langchain invocation)의 메타데이터 필드를 사용해 직접 설정할 수 있습니다
+- **컨텍스트 관리**: 자동 OTEL [컨텍스트 전파(context propagation)](https://opentelemetry.io/docs/concepts/context-propagation/)
+
+## 통합 유형별 마이그레이션 경로
+
+**`@observe` 데코레이터 사용자**
+
+**v2 패턴:**
+
+```python
+from langfuse.decorators import langfuse_context, observe
+
+@observe()
+def my_function():
+    # 이것이 트레이스였습니다
+    langfuse_context.update_current_trace(user_id="user_123")
+    return "result"
+```
+
+**v3 마이그레이션:**
+
+```python
+from langfuse import observe, get_client # 새로운 import
+
+@observe()
+def my_function():
+    # 이제 이것은 트레이스가 아니라 루트 스팬입니다
+    langfuse = get_client()
+
+    # 트레이스를 명시적으로 업데이트
+    langfuse.update_current_trace(user_id="user_123")
+    return "result"
+```
+
+**[OpenAI 통합](/integrations/model-providers/openai-py)**
+
+**v2 패턴:**
+
+```python
+from langfuse.openai import openai
+
+response = openai.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "Hello"}],
+    # 트레이스 속성을 호출에 직접 지정
+    user_id="user_123",
+    session_id="session_456",
+    tags=["chat"],
+    metadata={"source": "app"}
+)
+```
+
+**v3 마이그레이션:**
+
+추가 트레이스 속성을 설정하지 않는다면 변경할 필요가 없습니다.
+
+추가 트레이스 속성을 설정한다면 다음 두 가지 옵션 중 하나를 사용할 수 있습니다.
+
+**옵션 1: 메타데이터 필드 사용 (가장 간단한 마이그레이션):**
+
+```python
+from langfuse.openai import openai
+
+response = openai.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "Hello"}],
+    metadata={
+        "langfuse_user_id": "user_123",
+        "langfuse_session_id": "session_456",
+        "langfuse_tags": ["chat"],
+        "source": "app"  # 일반 메타데이터는 그대로 동작합니다
+    }
+)
+```
+
+**옵션 2: 감싸는 스팬 사용 (더 세밀한 제어):**
+
+```python
+from langfuse import get_client, propagate_attributes
+from langfuse.openai import openai
+
+langfuse = get_client()
+
+with langfuse.start_as_current_observation(as_type="span", name="chat-request") as span:
+
+    with propagate_attributes(
+        user_id="user_123",
+        session_id="session_456",
+        tags=["chat"],
+    ):
+
+        response = openai.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": "Hello"}],
+            metadata={"source": "app"}
+        )
+
+        # 트레이스 입력과 출력을 명시적으로 설정
+        span.update_trace(
+            output={"response": response.choices[0].message.content},
+            input={"query": "Hello"},
+            )
+```
+
+<Callout type="warning">
+  `update_trace()`는 Python SDK v4에서 더 이상 사용되지 않습니다(deprecated). [v3 → v4 마이그레이션
+  가이드](/docs/observability/sdk/upgrade-path/python-v3-to-v4)를 참고하세요.
+</Callout>
+
+**[LangChain 통합](/integrations/frameworks/langchain)** [#langchain-integration]
+
+**v2 패턴:**
+
+```python
+from langfuse.callback import CallbackHandler
+
+handler = CallbackHandler(
+    user_id="user_123",
+    session_id="session_456",
+    tags=["langchain"]
+)
+
+response = chain.invoke({"input": "Hello"}, config={"callbacks": [handler]})
+```
+
+**v3 마이그레이션:**
+
+트레이스 속성을 설정하는 방법에는 두 가지 옵션이 있습니다.
+
+**옵션 1: 체인 invocation의 메타데이터 필드 사용 (가장 간단한 마이그레이션):**
+
+```python
+from langfuse.langchain import CallbackHandler
+
+handler = CallbackHandler()
+
+response = chain.invoke(
+    {"input": "Hello"},
+    config={
+        "callbacks": [handler],
+        "metadata": {
+            "langfuse_user_id": "user_123",
+            "langfuse_session_id": "session_456",
+            "langfuse_tags": ["langchain"]
+        }
+    }
+)
+```
+
+**옵션 2: 감싸는 스팬 사용 (더 세밀한 제어):**
+
+```python
+from langfuse import get_client, propagate_attributes
+from langfuse.langchain import CallbackHandler
+
+langfuse = get_client()
+
+with langfuse.start_as_current_observation(as_type="span", name="langchain-request") as span:
+
+    with propagate_attributes(
+        user_id="user_123",
+        session_id="session_456",
+        tags=["langchain"],
+    ):
+
+        handler = CallbackHandler()
+        response = chain.invoke({"input": "Hello"}, config={"callbacks": [handler]})
+
+        # 트레이스 입력과 출력을 명시적으로 설정
+        span.update_trace(
+            input={"query": "Hello"},
+            output={"response": response}
+            )
+```
+
+<Callout type="warning">
+  `update_trace()`는 Python SDK v4에서 더 이상 사용되지 않습니다(deprecated). [v3 → v4 마이그레이션
+  가이드](/docs/observability/sdk/upgrade-path/python-v3-to-v4)를 참고하세요.
+</Callout>
+
+**[LlamaIndex 통합](/integrations/frameworks/llamaindex) 사용자**
+
+**v2 패턴:**
+
+```python
+from langfuse.llama_index import LlamaIndexCallbackHandler
+
+handler = LlamaIndexCallbackHandler()
+Settings.callback_manager = CallbackManager([handler])
+
+response = index.as_query_engine().query("Hello")
+```
+
+**v3 마이그레이션:**
+
+```python
+from langfuse import get_client, propagate_attributes
+from openinference.instrumentation.llama_index import LlamaIndexInstrumentor
+
+# 서드파티 OTEL 계측 사용
+LlamaIndexInstrumentor().instrument()
+
+langfuse = get_client()
+
+with langfuse.start_as_current_observation(as_type="span", name="llamaindex-query") as span:
+
+    with propagate_attributes(
+        user_id="user_123",
+    ):
+        response = index.as_query_engine().query("Hello")
+
+    span.update_trace(
+        input={"query": "Hello"},
+        output={"response": str(response)}
+        )
+```
+
+<Callout type="warning">
+  `update_trace()`는 Python SDK v4에서 더 이상 사용되지 않습니다(deprecated). [v3 → v4 마이그레이션
+  가이드](/docs/observability/sdk/upgrade-path/python-v3-to-v4)를 참고하세요.
+</Callout>
+
+**Low-Level SDK 사용자**
+
+**v2 패턴:**
+
+```python
+from langfuse import Langfuse
+
+langfuse = Langfuse()
+
+trace = langfuse.trace(
+    name="my-trace",
+    user_id="user_123",
+    input={"query": "Hello"}
+)
+
+generation = trace.generation(
+    name="llm-call",
+    model="gpt-4o"
+)
+generation.end(output="Response")
+```
+
+**v3 마이그레이션:**
+
+<Callout type="info">
+  v3에서는 모든 스팬/제너레이션을 반환된 객체에서 `.end()`를 호출해 종료해야
+  합니다.
+</Callout>
+
+```python
+from langfuse import get_client, propagate_attributes
+
+langfuse = get_client()
+
+# 수동 객체 대신 컨텍스트 매니저를 사용
+with langfuse.start_as_current_observation(
+    as_type="span",
+    name="my-trace",
+    input={"query": "Hello"}  # 자동으로 트레이스 입력이 됩니다
+) as root_span:
+
+    # 트레이스 속성을 모든 하위 관찰 항목에 전파
+    with propagate_attributes(
+        user_id="user_123",
+    ):
+
+        with langfuse.start_as_current_observation(
+            as_type="generation",
+            name="llm-call",
+            model="gpt-4o"
+        ) as generation:
+            generation.update(output="Response")
+
+        # 필요한 경우 트레이스 출력을 재정의
+        root_span.update_trace(
+            input={"query": "Hello"},
+            output={"response": "Response"}
+            )
+```
+
+<Callout type="warning">
+  `update_trace()`는 Python SDK v4에서 더 이상 사용되지 않습니다(deprecated). [v3 → v4 마이그레이션
+  가이드](/docs/observability/sdk/upgrade-path/python-v3-to-v4)를 참고하세요.
+</Callout>
+
+## 주요 마이그레이션 체크리스트
+
+1. **Import 업데이트**:
+   - 환경 변수로 구성된 전역 클라이언트 인스턴스에 접근하려면 `from langfuse import get_client`를 사용하세요
+   - 생성자 매개변수로 구성된 새 클라이언트 인스턴스를 만들려면 `from langfuse import Langfuse`를 사용하세요
+   - observe 데코레이터를 import하려면 `from langfuse import observe`를 사용하세요
+   - 통합 관련 import 업데이트: `from langfuse.langchain import CallbackHandler`
+
+2. **트레이스 속성 패턴**:
+   - **옵션 1**: 통합 호출에서 직접 메타데이터 필드(`langfuse_user_id`, `langfuse_session_id`, `langfuse_tags`)를 사용
+   - **옵션 2**: `user_id`, `session_id`, `tags`를 `propagate_attributes()`로 이동
+
+3. **트레이스 입력/출력**:
+   - **[LLM-as-a-judge](/docs/evaluation/evaluation-methods/llm-as-a-judge)에서 특히 중요**: 트레이스 입력/출력을 명시적으로 설정하세요
+   - 특정 값이 필요하다면 루트 관찰 항목에서 자동으로 파생되는 값에 의존하지 마세요
+
+4. **컨텍스트 매니저**:
+   - 사용하려는 경우 수동 `langfuse.trace()`, `trace.span()`을 컨텍스트 매니저로 교체하세요
+   - 대신 [`with langfuse.start_as_current_observation()`](https://python.reference.langfuse.com/langfuse#Langfuse.start_as_current_observation)을 사용하세요
+
+5. **LlamaIndex 마이그레이션**:
+   - Langfuse 콜백을 서드파티 OTEL 계측으로 교체하세요
+   - 설치: `pip install openinference-instrumentation-llama-index`
+
+6. **ID 관리**:
+   - **커스텀 관찰 항목 ID 불가**: v3는 W3C Trace Context 표준을 사용하므로 커스텀 관찰 항목 ID를 설정할 수 없습니다
+   - **트레이스 ID 형식**: 32자리 소문자 16진수(16바이트)여야 합니다
+   - **외부 ID 연계**: 외부 시스템에서 결정적(deterministic) 트레이스 ID를 생성하려면 [`Langfuse.create_trace_id(seed=external_id)`](https://python.reference.langfuse.com/langfuse#Langfuse.create_trace_id)를 사용하세요
+
+   ```python
+   from langfuse import Langfuse, observe
+
+   # v3: 외부 시스템으로부터 결정적 트레이스 ID 생성
+   external_request_id = "req_12345"
+   trace_id = Langfuse.create_trace_id(seed=external_request_id)
+
+   @observe(langfuse_trace_id=trace_id)
+   def my_function():
+       # 이 트레이스는 결정적 ID를 갖게 됩니다
+       pass
+   ```
+
+7. **초기화**:
+   - 생성자 매개변수 교체:
+     - `enabled` → `tracing_enabled`
+     - `threads` → `media_upload_thread_count`
+
+8. **데이터셋**
+
+데이터셋 아이템 객체의 `link` 메서드는 데이터셋 아이템의 `run` 메서드를 통해 접근할 수 있는 컨텍스트 매니저로 대체되었습니다. 이는 트레이스 생성과 데이터셋 아이템을 결과 트레이스에 연결하는 작업을 관리하는 더 상위 수준의 추상화입니다.
+
+자세한 내용은 [데이터셋 문서](/docs/evaluation/dataset-runs/remote-run)를 참고하세요.
+
+## 상세 변경 사항 요약
+
+1.  **핵심 변경: OpenTelemetry 기반**
+    - 더 나은 생태계 호환성을 위해 OpenTelemetry 표준을 기반으로 구축
+
+2.  **트레이스 입력/출력 동작**
+    - **v2**: 통합 대상이 트레이스 입력/출력을 직접 설정할 수 있었습니다
+    - **v3**: 기본적으로 트레이스 입력/출력이 루트 관찰 항목에서 파생됩니다
+    - **마이그레이션**: `span.update_trace(input=..., output=...)`를 통해 명시적으로 설정
+
+3.  **트레이스 속성 위치**
+    - **v2**: 통합 호출에 직접 설정할 수 있었습니다
+    - **v3**: 감싸는 스팬에 설정해야 합니다
+    - **마이그레이션**: [`langfuse.start_as_current_observation()`](https://python.reference.langfuse.com/langfuse#Langfuse.start_as_current_observation)으로 통합 호출을 감싸세요
+
+4.  **관찰 항목 생성**:
+    - **v2**: `langfuse.trace()`, `langfuse.span()`, `langfuse.generation()`
+    - **v3**: `langfuse.start_as_current_observation()`
+    - **마이그레이션**: 컨텍스트 매니저를 사용하고, `.end()`가 호출되도록 하거나 `with` 문을 사용하세요
+
+5.  **ID 및 컨텍스트**:
+
+- **v3**: W3C Trace Context 형식, 자동 [컨텍스트 전파(context propagation)](https://opentelemetry.io/docs/concepts/context-propagation/)
+- **마이그레이션**: `get_trace_id()` 대신 [`langfuse.get_current_trace_id()`](https://python.reference.langfuse.com/langfuse#Langfuse.get_current_trace_id)를 사용하세요
+
+6.  **이벤트 크기 제한**:
+    - **v2**: 이벤트 크기가 1MB로 제한되었습니다
+    - **v3**: SDK 측에서 이벤트 크기 제한을 두지 않습니다
+
+## v2에 대한 향후 지원
+
+당분간 v2 SDK에 대해 중요한 버그 수정과 보안 패치를 계속 지원할 예정입니다. v2 SDK에 새로운 기능은 추가하지 않습니다. v2 SDK 문서의 스냅샷은 [여기](https://python-sdk-v2.docs-snapshot.langfuse.com/docs/observability/sdk/python/decorators)에서 확인할 수 있습니다.
+
+## JS/TS SDK v3 → v4
+
+아래 각 섹션을 따라 애플리케이션을 v3에서 v4로 업그레이드하세요.
+
+업그레이드 중 궁금한 점이나 문제가 발생하면 GitHub에 [이슈](/issues)를 등록해 주세요.
+
+<Callout type="warning" title="중요: 업그레이드 전 서드파티 OpenTelemetry 스팬을 검토하세요">
+  Langfuse SDK는 이제 OpenTelemetry 네이티브입니다. 업그레이드 후에는 Langfuse가 애플리케이션 내 다른 OpenTelemetry 계측 라이브러리(예: 데이터베이스, HTTP, 프레임워크 계측)에서 발생하는 스팬도 캡처할 수 있습니다.
+
+이로 인해 LLM 관측성과 관련 없는 인프라 스팬이 많이 추가되어 Langfuse 청구 금액이 크게 늘어날 수 있습니다. 업그레이드를 전면적으로 적용하기 전에 트레이스를 검토하고, [계측 스코프별 필터링 가이드](/docs/observability/sdk/advanced-features#filtering-by-instrumentation-scope)를 사용해 불필요한 스팬을 계측 스코프 기준으로 필터링하세요.
+
+</Callout>
+
+### 초기화
+
+Langfuse 기본 URL 환경 변수는 이제 `LANGFUSE_BASEURL`이 아니라 `LANGFUSE_BASE_URL`입니다. 다만 하위 호환성을 위해 v4에서는 기존 변수도 계속 동작하지만, 향후 버전에서는 지원되지 않습니다.
+
+### 트레이싱
+
+v4 SDK의 트레이싱은 OpenTelemetry를 기반으로 한 대규모 재작성이며, 여러 가지 호환성이 깨지는 변경 사항(breaking changes)을 포함합니다.
+
+1.  **OTEL 기반 아키텍처**: SDK가 이제 OpenTelemetry 위에 구축됩니다. 이제 OpenTelemetry 설정이 필요하며, OpenTelemetry `NodeSDK`에 [`LangfuseSpanProcessor`](https://langfuse-js-git-main-langfuse.vercel.app/classes/_langfuse_otel.LangfuseSpanProcessor.html)를 등록해 수행합니다.
+2.  **새로운 트레이싱 함수**: `langfuse.trace()`, `langfuse.span()`, `langfuse.generation()` 메서드는 `@langfuse/tracing` 패키지의 [`startObservation`](https://langfuse-js-git-main-langfuse.vercel.app/functions/_langfuse_tracing.startObservation.html), [`startActiveObservation`](https://langfuse-js-git-main-langfuse.vercel.app/functions/_langfuse_tracing.startActiveObservation.html) 등으로 대체되었습니다.
+3.  **관심사 분리**:
+    - **`@langfuse/tracing`** 및 **`@langfuse/otel`** 패키지는 트레이싱을 담당합니다.
+    - **`@langfuse/client`** 패키지와 [`LangfuseClient`](https://langfuse-js-git-main-langfuse.vercel.app/classes/_langfuse_client.LangfuseClient.html) 클래스는 이제 스코어링, 프롬프트 관리, 데이터셋과 같은 트레이싱 이외의 기능만을 위한 것입니다.
+
+각 항목에 대한 자세한 내용은 [SDK v4 문서](/docs/observability/sdk/overview)를 참고하세요.
+
+### 프롬프트 관리
+
+- **Import**: Langfuse 클라이언트의 import는 이제 다음과 같습니다.
+
+  ```typescript
+  import { LangfuseClient } from "@langfuse/client";
+  ```
+
+- **사용법**: Langfuse 클라이언트의 사용법은 이제 다음과 같습니다.
+
+  ```typescript
+  const langfuse = new LangfuseClient();
+
+  const prompt = await langfuse.prompt.get("my-prompt");
+
+  const compiledPrompt = prompt.compile({ topic: "developers" });
+
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [{ role: "user", content: compiledPrompt }],
+  });
+  ```
+
+- `version`은 이제 `langfuse.prompt.get()`의 위치 인수가 아니라 옵션 객체의 선택적 속성입니다.
+
+  ```typescript
+  const prompt = await langfuse.prompt.get("my-prompt", { version: "1.0" });
+  ```
+
+### OpenAI 통합
+
+- **Import**: OpenAI 통합의 import는 이제 다음과 같습니다.
+
+  ```typescript
+  import { observeOpenAI } from "@langfuse/openai";
+  ```
+
+- 이제 `LANGFUSE_TRACING_ENVIRONMENT` 및 `LANGFUSE_TRACING_RELEASE` 환경 변수를 통해 `environment`와 `release`를 설정할 수 있습니다.
+
+### Vercel AI SDK
+
+v3와 매우 유사하게 동작하지만, `langfuse-vercel`의 `LangfuseExporter`가 `@langfuse/otel`의 일반 `LangfuseSpanProcessor`로 대체되었습니다.
+
+자세한 내용은 [AI SDK 사용에 대한 전체 예제](/docs/observability/sdk/instrumentation#framework-third-party-telemetry)를 참고하세요.
+
+<Callout>
+
+LLM에 제공된 도구 정의(tool definitions)는 이제 `input.tools`가 아니라 `metadata.tools`에 매핑된다는 점에 유의하세요. 이는 제너레이션에 대해 평가를 실행하는 경우 관련이 있습니다.
+
+</Callout>
+
+### Langchain 통합
+
+- **Import**: Langchain 통합의 import는 이제 다음과 같습니다.
+
+  ```typescript
+  import { CallbackHandler } from "@langfuse/langchain";
+  ```
+
+- 이제 `LANGFUSE_TRACING_ENVIRONMENT` 및 `LANGFUSE_TRACING_RELEASE` 환경 변수를 통해 `environment`와 `release`를 설정할 수 있습니다.
+
+### `langfuseClient.getTraceUrl`
+
+- 이 메서드는 이제 비동기이며 프로미스(promise)를 반환합니다
+
+  ```typescript
+  const traceUrl = await langfuseClient.getTraceUrl(traceId);
+  ```
+
+### 스코어링
+
+- **Import**: Langfuse 클라이언트의 import는 이제 다음과 같습니다.
+
+  ```typescript
+  import { LangfuseClient } from "@langfuse/client";
+  ```
+
+- **사용법**: Langfuse 클라이언트의 사용법은 이제 다음과 같습니다.
+
+  ```typescript
+  const langfuse = new LangfuseClient();
+
+  await langfuse.score.create({
+    traceId: "trace_id_here",
+    name: "accuracy",
+    value: 0.9,
+  });
+  ```
+
+새로운 스코어링 방법은 [커스텀 점수 문서](/docs/evaluation/evaluation-methods/custom-scores)를 참고하세요.
+
+### 데이터셋
+
+새로운 데이터셋 관련 메서드는 [데이터셋 문서](/docs/evaluation/dataset-runs/remote-run#setup--run-via-sdk)를 참고하세요.

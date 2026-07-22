@@ -1,0 +1,209 @@
+---
+title: 사용자 트래킹
+description: 토큰 사용량, 사용 볼륨, 개별 사용자 피드백을 추적하는 사용자 수준 LLM 관측성.
+sidebarTitle: 사용자 트래킹
+sourceRevision: ebd88776f7a2585db353a96b9309ff06a258a8fa
+translationStatus: machine
+---
+
+import { PropagationRestrictionsCallout } from "@/components/PropagationRestrictionsCallout";
+
+# 사용자 트래킹
+
+Users 뷰는 모든 사용자에 대한 개요를 제공합니다. 또한 개별 사용자에 대한 심층적인 정보도 제공합니다. Langfuse의 데이터를 개별 사용자에 매핑하는 것은 간단합니다. 관측값(observation) 전반에 `userId` 속성을 전파하기만 하면 됩니다. 이는 사용자 이름, 이메일 또는 기타 고유 식별자가 될 수 있습니다. `userId`는 선택 사항이지만, 이를 사용하면 `userId`별 LLM 사용 비용과 같은 메트릭을 집계하여 Langfuse를 더 효과적으로 활용할 수 있습니다. 자세한 내용은 통합 문서를 참고하세요.
+
+<LangTabs items={["Python SDK", "JS/TS SDK", "OpenAI (Python)", "Langchain (Python)", "Langchain (JS/TS)"]}>
+<Tab>
+`@observe()` 데코레이터를 사용하는 경우:
+
+```python /propagate_attributes(user_id="user_12345")/
+from langfuse import observe, propagate_attributes
+
+@observe()
+def process_user_request(user_query):
+    # 모든 하위 관측값에 user_id 전파
+    with propagate_attributes(user_id="user_12345"):
+        # 여기서 중첩된 모든 관측값은 자동으로 user_id를 상속받습니다
+        result = process_query(user_query)
+        return result
+```
+
+관측값을 직접 생성하는 경우:
+
+```python /propagate_attributes(user_id="user_12345")/
+from langfuse import get_client, propagate_attributes
+
+langfuse = get_client()
+
+with langfuse.start_as_current_observation(
+    as_type="span",
+    name="process-user-request"
+) as root_span:
+    # 모든 하위 관측값에 user_id 전파
+    with propagate_attributes(user_id="user_12345"):
+        # 여기서 생성된 모든 관측값은 자동으로 user_id를 가집니다
+        with root_span.start_as_current_observation(
+            as_type="generation",
+            name="generate-response",
+            model="gpt-4o"
+        ) as gen:
+            # 이 관측값은 자동으로 user_id를 가집니다
+            pass
+```
+
+</Tab>
+<Tab title="JS/TS SDK">
+
+컨텍스트 매니저를 사용하는 경우:
+
+```ts /propagateAttributes/
+import { startActiveObservation, propagateAttributes } from "@langfuse/tracing";
+
+await startActiveObservation("context-manager", async (span) => {
+  span.update({
+    input: { query: "What is the capital of France?" },
+  });
+
+  // 모든 하위 관측값에 userId 전파
+  await propagateAttributes(
+    {
+      userId: "user-123",
+    },
+    async () => {
+      // 여기서 생성된 모든 관측값은 자동으로 userId를 가집니다
+      // ... your logic ...
+    }
+  );
+});
+```
+
+`observe` 래퍼를 사용하는 경우:
+
+```ts /propagateAttributes/
+import { observe, propagateAttributes } from "@langfuse/tracing";
+
+// An existing function
+const processUserRequest = observe(
+  async (userQuery: string) => {
+    // 모든 하위 관측값에 userId 전파
+    return await propagateAttributes({ userId: "user-123" }, async () => {
+      // 여기서 중첩된 모든 관측값은 자동으로 userId를 상속받습니다
+      const result = await processQuery(userQuery);
+      return result;
+    });
+  },
+  { name: "process-user-request" }
+);
+
+const result = await processUserRequest("some query");
+```
+
+자세한 내용은 [JS/TS SDK 문서](/docs/sdk/typescript/guide)를 참고하세요.
+
+</Tab>
+<Tab>
+
+```python /propagate_attributes(user_id="user_12345")/
+from langfuse import get_client, propagate_attributes
+from langfuse.openai import openai
+
+langfuse = get_client()
+
+with langfuse.start_as_current_observation(as_type="span", name="openai-call"):
+    # OpenAI generation을 포함한 모든 관측값에 user_id 전파
+    with propagate_attributes(user_id="user_12345"):
+        completion = openai.chat.completions.create(
+            name="test-chat",
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a calculator."},
+                {"role": "user", "content": "1 + 1 = "}
+            ],
+            temperature=0,
+        )
+```
+
+</Tab>
+<Tab title="Langchain (Python)">
+
+CallbackHandler와 함께 `propagate_attributes()`를 사용하세요:
+
+```python /propagate_attributes(user_id="user_12345")/
+from langfuse import get_client, propagate_attributes
+from langfuse.langchain import CallbackHandler
+
+langfuse = get_client()
+handler = CallbackHandler()
+
+with langfuse.start_as_current_observation(as_type="span", name="langchain-call"):
+    # 모든 관측값에 user_id 전파
+    with propagate_attributes(user_id="user_12345"):
+        # 체인 호출에 핸들러 전달
+        chain.invoke(
+            {"animal": "dog"},
+            config={"callbacks": [handler]},
+        )
+```
+
+</Tab>
+<Tab title="Langchain (JS/TS)">
+
+CallbackHandler와 함께 `propagateAttributes()`를 사용하세요:
+
+```ts /propagateAttributes/
+import { startActiveObservation, propagateAttributes } from "@langfuse/tracing";
+import { CallbackHandler } from "@langfuse/langchain";
+
+const langfuseHandler = new CallbackHandler();
+
+await startActiveObservation("langchain-call", async () => {
+  // 모든 관측값에 userId 전파
+  await propagateAttributes(
+    {
+      userId: "user-123",
+    },
+    async () => {
+      // 체인 호출에 핸들러 전달
+      await chain.invoke(
+        { input: "<user_input>" },
+        { callbacks: [langfuseHandler] }
+      );
+    }
+  );
+});
+```
+
+</Tab>
+
+</LangTabs>
+
+<PropagationRestrictionsCallout attributes={["userId"]} />
+
+## 전체 사용자 보기
+
+사용자 목록은 Langfuse에서 추적된 모든 사용자에 대한 개요를 제공합니다. 이를 통해 전체 토큰 사용량, 트레이스 수, 사용자 피드백을 기준으로 세그먼트를 쉽게 나눌 수 있습니다.
+
+<Frame>
+![User List](/images/docs/users-list.png)
+</Frame>
+
+## 개별 사용자 보기
+
+개별 사용자 보기는 단일 사용자에 대한 심층적인 정보를 제공합니다. 집계된 메트릭을 살펴보거나 해당 사용자의 모든 트레이스와 피드백을 확인할 수 있습니다.
+
+<Frame>
+![User Detail View](/images/docs/user-detail-view.png)
+</Frame>
+
+다음 URL 형식을 통해 이 보기로 직접 링크할 수 있습니다: `https://<hostname>/project/{projectId}/users/{userId}`
+
+## 관련 리소스
+
+- 비용, 토큰 사용량, 트레이스 수와 같은 사용자 수준 메트릭을 시각화하려면 [커스텀 대시보드](/docs/metrics/features/custom-dashboards)를 구축하세요.
+- 비용, 토큰 사용량, 트레이스 수와 같은 사용자별 집계 메트릭을 프로그래밍 방식으로 조회하려면 [Metrics API](/docs/metrics/features/metrics-api)를 사용하세요.
+
+## GitHub Discussions
+
+import { GhDiscussionsPreview } from "@/components/gh-discussions/GhDiscussionsPreview";
+
+<GhDiscussionsPreview labels={["feat-users"]} />

@@ -1,0 +1,1275 @@
+---
+title: 지원 문의에 답변하는 방법
+description: 지원 엔지니어와 AI 에이전트가 Langfuse 지원 티켓에 답변할 때 사용하는 의사결정 트리입니다. 해당하는 분기로 이동해 트리아지 단계, 표준 답변 템플릿, 에스컬레이션 규칙을 확인하세요.
+sourceRevision: 1ffa57735c7176da786b2ac6a39d514f5ff1273d
+translationStatus: machine
+---
+
+# 지원 문의에 답변하는 방법
+
+이 페이지는 Langfuse의 인간 지원 엔지니어와 AI 지원 에이전트가 함께 사용하는 플레이북입니다. 아래 의사결정 트리의 각 분기는 반복적으로 발생하는 질문 패턴을 다룹니다: 어떻게 트리아지할지, 무엇을 확인할지, 참고해 조정할 수 있는 답변 템플릿, 그리고 언제 에스컬레이션할지를 포함합니다.
+
+이 트리는 이메일, Slack, MS Teams, 인앱 채팅 위젯, GitHub Discussions 전반에 걸친 약 1,500건의 종결된 Pylon 티켓을 분석하여 도출되었습니다. 패턴과 답변 문구는 팀이 실제로 해결한 사례에서 가져온 것입니다.
+
+<Callout type="info">
+
+대부분의 티켓에 답변할 때 사용할 도구:
+
+- **Pylon**: 기본 인박스, 티켓 메타데이터, 고객 등급, 내부 노트
+- **Metabase**: 사용량 통계, 수집 볼륨, ClickHouse 쿼리
+- **PostHog**: 제품 분석, 사용자 활동, 세션 리플레이
+- **Stripe**: 구독, 인보이스, 청구, 환불 이력
+- **Impersonation View**: 고객이 보는 것과 동일한 Langfuse UI 확인
+- **Google Forms**: 스타트업 할인 신청(폼이 신뢰할 수 있는 원본 데이터)
+- **DataDog**: 수집 큐 깊이, 워커 상태, ClickHouse 지연 시간
+- **status.langfuse.com**: 공개 장애 타임라인
+
+</Callout>
+
+## 답변 전 확인 사항 (프리플라이트)
+
+답변 창을 열기 전에 아래 네 가지를 순서대로 수행하세요. 이 페이지의 나머지 대부분은 이 작업을 이미 완료했다고 가정합니다.
+
+1. **고객과 등급을 확인합니다.** Pylon 사이드바에 조직명, 플랜 등급(Hobby / Core / Pro / Pro + Teams Add-on / Enterprise / 셀프 호스팅 EE), 데이터 리전, 계약 관련 메모가 표시됩니다. 등급에 따라 SLA와 에스컬레이션의 적극성이 달라집니다.
+2. **고객의 환경을 파악합니다.** Langfuse Cloud(어느 리전인지: EU `cloud.langfuse.com`, US `us.cloud.langfuse.com`, HIPAA `hipaa.cloud.langfuse.com`, Japan `jp.cloud.langfuse.com`)인지 셀프 호스팅인지 확인합니다. 셀프 호스팅이라면 어떤 버전인지도 확인합니다. 같은 증상이라도 Cloud와 셀프 호스팅에서는 원인이 다른 경우가 많습니다.
+3. **`status.langfuse.com`과 DataDog을 확인합니다.** 고객이 오류나 지연을 보고한다면, 디버깅에 앞서 알려진 진행 중인 장애가 아닌지 먼저 배제하세요.
+4. **지난 7일간 같은 증상이 없었는지 Pylon에서 검색합니다.** 지금 다른 세 명의 고객이 같은 문제를 보고하고 있다면 이는 장애(incident) 상황일 가능성이 높으므로, 개별적으로 답변하기보다 엔지니어링 팀으로 에스컬레이션하세요.
+
+네 가지를 모두 확인했다면 아래 트리를 따라가세요.
+
+## 의사결정 트리
+
+아래 제목들은 최상위 질문 카테고리입니다. 각 항목을 클릭하면 구체적인 하위 질문으로 들어갈 수 있으며, 각 하위 질문에는 트리아지 단계, 답변 템플릿, 에스컬레이션 규칙이 포함되어 있습니다. 고객 메시지의 키워드로 바로 이동하려면 Cmd/Ctrl-F를 사용하세요.
+
+---
+
+### 1. 계정, 로그인, 접근 권한
+
+<details>
+
+<summary>"로그인이 안 돼요" / "잘못된 자격 증명" / "계정을 찾을 수 없음"</summary>
+
+**가장 흔한 원인은 잘못된 데이터 리전입니다.** 사용자가 한 리전에서 가입한 뒤 다른 리전으로 로그인을 시도하는 경우입니다. 비밀번호 재설정 흐름에서 "계정이 없습니다"라는 메시지가 뜨는 것은 계정이 실제로 존재하지 않아서가 아니라, _해당 사용자가 보고 있는 리전에는_ 존재하지 않기 때문입니다.
+
+**트리아지 단계:**
+
+1. 고객이 어느 리전에서 가입했는지 물어보거나(또는 이메일 서명/도메인에서 확인), 확인합니다. 모른다면 다음 리전들을 모두 시도해보게 하세요: EU `cloud.langfuse.com`, US `us.cloud.langfuse.com`, HIPAA `hipaa.cloud.langfuse.com`, Japan `jp.cloud.langfuse.com`.
+2. 원래 SSO(Google, GitHub, Azure AD)로 로그인했다면 이메일+비밀번호 로그인은 "Please sign in with the identity provider that is linked to your account."라는 오류와 함께 실패합니다. SSO 제공자로 시도하게 하세요.
+3. 여전히 계정을 찾을 수 없다면 Impersonation View에서 이메일로 조회하여 어느 리전에 계정이 있는지 확인하세요.
+4. 리전이 맞고 SSO도 확인되었다면, 해당 이메일이 이메일 억제 목록(suppression list)에 있는지 확인하세요(아래 "비밀번호 재설정 이메일이 오지 않음" 참조).
+
+**답변 템플릿:**
+
+```text
+안녕하세요 {name}님,
+
+불편을 드려 죄송합니다. 가장 흔한 원인은 잘못된 데이터 리전에서 로그인을 시도하는 경우입니다. 저희는 네 개의 독립된 리전을 운영하며, 한 리전의 계정은 다른 리전에서 보이지 않습니다:
+
+- EU:    https://cloud.langfuse.com
+- US:    https://us.cloud.langfuse.com
+- HIPAA: https://hipaa.cloud.langfuse.com
+- Japan: https://jp.cloud.langfuse.com
+
+참고: https://langfuse.com/security/data-regions
+
+또 다른 가능성은, 원래 Google / GitHub / Azure AD SSO로 가입하셨다면 이메일+비밀번호 로그인은 실패합니다. 대신 SSO 제공자 버튼을 클릭해보세요.
+
+어느 리전과 로그인 방식을 사용하셨는지 확인해 주시면 거기서부터 살펴보겠습니다.
+
+감사합니다,
+{you}
+```
+
+**에스컬레이션 시점:** 고객이 리전과 제공자를 모두 확인했는데도 로그인이 안 될 경우 → 이메일과 조직 ID와 함께 엔지니어링 팀에 문의하세요. 계정 상태를 직접 조회해야 할 수 있습니다.
+
+관련 FAQ: [/faq/all/cannot-see-organization](/faq/all/cannot-see-organization), [/faq/all/forgot-password](/faq/all/forgot-password), [/faq/all/where-is-my-project](/faq/all/where-is-my-project).
+
+</details>
+
+<details>
+
+<summary>"비밀번호 재설정 이메일이 오지 않아요"</summary>
+
+**일반적인 원인은 이메일 억제 목록(suppression list)입니다.** 이전에 해당 주소로 보낸 이메일이 반송되었거나 수신자가 스팸으로 표시하면, 이메일 제공업체가 해당 주소로의 발송을 중단합니다. 이는 도메인 전체가 아니라 해당 사용자 한 명에게만 영향을 줍니다.
+
+**트리아지 단계:**
+
+1. 먼저 고객이 올바른 데이터 리전을 사용 중인지 확인합니다(위의 "로그인이 안 돼요" 참조). 잘못된 리전이라면 그곳에는 계정이 존재하지 않으므로 이메일도 오지 않습니다.
+2. 스팸함을 확인하도록 안내한 뒤, 엔지니어링 팀에 요청하여 해당 이메일을 억제 목록에서 제거합니다.
+3. 차단이 해제되면 비밀번호 재설정을 다시 시도하도록 안내합니다.
+
+**답변 템플릿:**
+
+```text
+안녕하세요 {name}님,
+
+확인 감사합니다. 먼저 간단히 확인할게요. 원래 가입하신 데이터 리전이 어디인가요(cloud.langfuse.com EU vs. us.cloud.langfuse.com US vs. hipaa.cloud.langfuse.com HIPAA vs. jp.cloud.langfuse.com Japan)?
+
+올바른 리전인데도 이메일이 계속 오지 않는다면, 저희 이메일 제공업체가 해당 주소를 억제 목록에 올렸을 수 있습니다(이전 반송이나 스팸 표시 이후 발생합니다). 저희 쪽에서 차단을 해제해드릴 테니, 약 10분 후 비밀번호 재설정을 다시 시도해 보시고 결과를 알려주세요.
+
+감사합니다,
+{you}
+```
+
+**에스컬레이션 시점:** 억제 목록이 원인이 아니고 고객이 어떤 Langfuse 이메일도 정말로 받을 수 없는 경우 → 엔지니어링 팀. 보안상의 이유로 저희가 비밀번호를 직접 재설정해드릴 수는 없다는 점에 유의하세요. 엔지니어링 팀은 계정 상태를 확인해줄 수 있지만, 재설정 자체는 사용자가 직접 완료해야 합니다.
+
+</details>
+
+<details>
+
+<summary>SSO 설정 (Okta / Azure AD / Entra / Google Workspace)</summary>
+
+Cloud에서 SSO는 Pro + Teams Add-on 이상 플랜에 포함되며, 설정은 화이트글러브 방식으로 진행됩니다(지원팀이 자격 증명을 수집하고 엔지니어링 팀이 적용). 셀프 호스팅(OSS 및 EE) 고객은 환경 변수를 통해 직접 SSO를 설정합니다.
+
+**트리아지 단계:**
+
+1. 고객이 SSO가 포함된 플랜 등급인지 확인합니다(Cloud에서는 Pro + Teams Add-on 이상, 셀프 호스팅 OSS에는 기본 포함이며 SCIM / Org Management API만 EE 전용입니다). 해당하지 않으면 영업팀으로 안내하고, 할인을 약속하지 마세요.
+2. 다음 네 가지 정보를 수집합니다: 인스턴스 URL, 발급자(issuer) URL, 클라이언트 ID, 클라이언트 시크릿.
+3. 고객에게 시크릿을 비밀번호 관리자 공유 링크(1Password 공유 링크, Bitwarden Send 등)를 통해 전달하도록 권장합니다. 평문 이메일로는 시크릿을 받지 마세요.
+4. 수집한 정보를 엔지니어링 팀에 전달하여 적용합니다.
+
+**답변 템플릿:**
+
+```text
+안녕하세요 {name}님,
+
+SSO 설정을 도와드리겠습니다. 다음 정보가 필요합니다:
+
+- 인스턴스 URL (어느 Langfuse 리전인지: cloud.langfuse.com, us.cloud.langfuse.com, hipaa.cloud.langfuse.com, jp.cloud.langfuse.com, 또는 셀프 호스팅 URL)
+- 발급자(Issuer) URL (예: https://example.okta.com)
+- 클라이언트 ID
+- 클라이언트 시크릿
+
+클라이언트 시크릿은 평문 이메일이 아닌 비밀번호 관리자 공유 링크(1Password / Bitwarden 등)로 전달해 주세요. 네 가지 정보를 모두 받으면 영업일 기준 1일 이내에 팀에서 적용해드립니다.
+
+IdP 쪽에서 궁금한 점이 있으면 언제든 알려주세요.
+
+감사합니다,
+{you}
+```
+
+**에스컬레이션 시점:** 고객이 SCIM, 커스텀 클레임 매핑, 또는 비표준 IdP를 요청하는 경우 엔지니어링 팀의 검토가 필요합니다.
+
+</details>
+
+<details>
+
+<summary>2FA 복구 / 인증 앱 분실 / 백업 코드</summary>
+
+2FA 복구는 신뢰도가 높은 작업으로 취급합니다. 고객은 소유권을 증명해야 합니다.
+
+**트리아지 단계:**
+
+1. 보조 신호를 통해 고객의 신원을 확인합니다: 이메일이 청구 기록과 일치하는지, 업무용 이메일 도메인이 조직 도메인과 일치하는지, 또는 이미 신뢰하는 Slack Connect 채널에 있는지 확인합니다.
+2. 신뢰가 확립되면 엔지니어링 팀이 계정의 2FA를 비활성화하여 사용자가 다시 등록할 수 있게 합니다. 직접 처리하지 마세요.
+3. 고객이 복구용 이메일에도 접근할 수 없다면 조직 소유자(org owner)가 나서야 합니다. 조직 소유자도 잠겨 있다면 전체 맥락과 함께 엔지니어링 팀에 에스컬레이션하세요. 이는 드문 케이스로 사안별로 처리합니다.
+
+**답변 템플릿:**
+
+```text
+안녕하세요 {name}님,
+
+2FA 복구를 위해서는 MFA를 비활성화하기 전에 소유권 확인이 필요합니다. 가장 빠른 방법은 다음과 같습니다:
+
+1. 이 문제가 발생한 조직/프로젝트를 확인해 주세요.
+2. 계정에 연결된 이메일이 현재도 사용 중인 이메일인지 확인해 주세요.
+
+확인이 완료되면 다음 로그인 시 다시 등록할 수 있도록 2FA를 비활성화해 드리겠습니다. 복구용 이메일에도 접근할 수 없으시다면, 같은 조직의 다른 인증된 주소로 회신하시거나 조직 소유자에게 직접 연락을 요청해 주세요.
+
+감사합니다,
+{you}
+```
+
+관련 FAQ: [/faq/all/enforcing-2fa](/faq/all/enforcing-2fa).
+
+</details>
+
+<details>
+
+<summary>"조직/프로젝트가 보이지 않아요" (RBAC, 뷰어 권한, 초대)</summary>
+
+보통 다음 중 하나입니다: 잘못된 리전(위 참조), 사용자가 같은 이메일로 다른 조직에 초대됨, 초대한 관리자가 사용자를 `VIEWER`로 설정하여 관리 화면이 숨겨짐, 또는 SCIM/SSO 그룹 매핑이 적용되지 않음.
+
+**트리아지 단계:**
+
+1. 리전 확인(이 섹션 상단 참조).
+2. Impersonation View에서 사용자를 조회하여 어느 조직에 속해 있는지 확인합니다.
+3. 역할을 확인합니다: VIEWER, MEMBER, ADMIN, OWNER. 더 높은 권한이 필요하다면 조직의 OWNER가 변경해야 하며, 조직 소유자의 승인 없이는 고객을 대신해 역할을 변경하지 않습니다.
+4. 셀프 호스팅 EE의 경우: 내장된 "인스턴스 관리자/슈퍼유저" 역할은 없습니다. 프로젝트 전반에 대한 관리 권한을 부여하려면 [Instance Management API](https://langfuse.com/self-hosting/administration/instance-management-api)를 사용하여 관리자 사용자를 모든 조직에 일회성으로 초대하는 스크립트를 작성하세요.
+
+**답변 템플릿 (cloud):**
+
+```text
+안녕하세요 {name}님,
+
+먼저 간단히 확인해 주세요. 초대받으신 데이터 리전과 동일한 곳에 로그인되어 있나요(EU cloud.langfuse.com vs. US us.cloud.langfuse.com vs. HIPAA hipaa.cloud.langfuse.com vs. Japan jp.cloud.langfuse.com)?
+
+맞다면, 조직 관리자에게 (a) 사용자님의 이메일이 올바른 조직에 초대되어 있는지, (b) 최소 MEMBER 역할을 가지고 있는지 확인을 요청해 주실 수 있을까요? 소유자는 Organization Settings → Members에서 확인할 수 있습니다.
+
+감사합니다,
+{you}
+```
+
+관련 FAQ: [/faq/all/cannot-see-organization](/faq/all/cannot-see-organization), [/faq/all/inviting-in-langfuse](/faq/all/inviting-in-langfuse), [/docs/administration/rbac](/docs/administration/rbac).
+
+</details>
+
+---
+
+### 2. 청구, 가격, 계약
+
+<details>
+
+<summary>"평소보다 비용이 많이 나왔어요 / 예상치 못한 요금이 청구됐어요"</summary>
+
+이는 가장 민감한 청구 관련 질문입니다. 공감을 표하고 *사실*에 근거해 답변하며, 원인을 추측하지 마세요.
+
+**트리아지 단계:**
+
+1. Stripe를 열어 이메일 도메인 또는 조직으로 검색 → 최근 인보이스, 구독, 청구 이력을 확인합니다.
+2. 증가의 원인을 파악합니다: 플랜 변경, 사용량 증가(트레이스/관찰 수 증가), 시트 증가, 또는 일회성 청구.
+3. Impersonation View → Usage 탭에서 조직을 교차 확인하여 해당 청구 기간의 트레이스/관찰 볼륨을 확인합니다.
+4. **고객의 OTEL 설정이 LLM이 아닌 스팬까지 내보내고 있는지 확인합니다.** 흔한 사례로, 고객이 기존 OTEL 설정을 Langfuse에 연결했는데 내보내기(export) 필터가 HTTP/DB/프레임워크 스팬까지 통과시키는 경우가 있습니다. 이런 스팬들도 다른 관찰(observation)과 마찬가지로 수집되어 과금됩니다. 고객은 SDK의 `should_export_span`을 통해 무엇을 내보낼지 제어할 수 있습니다(예전 `blocked_instrumentation_scopes` 파라미터는 지원 중단됨). [/faq/all/existing-otel-setup#unwanted-spans-in-langfuse](/faq/all/existing-otel-setup#unwanted-spans-in-langfuse) 참조.
+5. 구체적인 원인을 답변하고 인보이스 또는 사용량 화면 링크를 첨부합니다.
+
+**답변 템플릿:**
+
+```text
+안녕하세요 {name}님,
+
+알려주셔서 감사합니다. {period} 청구 내역을 확인해 보았습니다:
+
+- {plan tier} → {tier with seat/feature breakdown}
+- 해당 기간 사용량: {N} observations / {M} events
+- 지난달 대비: {delta}
+
+이번 증가는 {specific cause}에 의한 것입니다. {Invoice link / Usage tab screenshot}
+
+여전히 맞지 않는 부분이 있다면 알려주시면 추가로 확인해 드리겠습니다.
+
+감사합니다,
+{you}
+```
+
+</details>
+
+<details>
+
+<summary>구독 해지 / 다운그레이드 / 갱신하지 않음</summary>
+
+고객이 혼동하기 쉬운 두 가지 별개의 사안이 있습니다:
+
+1. **Stripe 구독** (Hobby/Core/Pro Cloud, Teams Add-on 포함 여부 무관): 청구 UI에서 직접 해지할 수 있지만, 고객이 이메일로 문의하는 경우가 많습니다. 정중히 응대하고 Stripe에서 해지를 확인해 주세요. 다운그레이드는 청구 기간 종료 시점에 적용된다는 점을 알려주세요.
+2. **셀프 호스팅 EE 라이선스**: 이는 _계약상_ 사안이며, **`LANGFUSE_EE_LICENSE_KEY` 환경 변수를 제거해도 계약이 해지되지 않습니다.** 별도의 서면 해지 절차가 필요합니다. 고객이 이 부분을 종종 오해합니다.
+
+**답변 템플릿 (Cloud 해지):**
+
+```text
+안녕하세요 {name}님,
+
+처리 완료했습니다. Pro 구독이 해지되었습니다. 현재 청구 기간 종료일({date})까지는 계속 이용하실 수 있으며, 이후 조직은 Hobby로 다운그레이드됩니다. 데이터는 새 플랜의 보존 정책에 따라 유지됩니다.
+
+떠나신다니 아쉽습니다. Langfuse가 다르게 했으면 좋았을 부분이 있다면 몇 줄이라도 남겨주시면 큰 도움이 됩니다. 저희는 모든 의견을 읽습니다.
+
+감사합니다,
+{you}
+```
+
+**답변 템플릿 (셀프 호스팅 EE, 고객이 이미 해지되었다고 착각한 경우):**
+
+```text
+안녕하세요 {name}님,
+
+한 가지 짚어드리자면, EE 라이선스 키를 제거하는 것만으로는 계약이 해지되지 않으며, 런타임에서 EE 기능만 비활성화됩니다. 구독은 Langfuse Support에 서면 해지 요청이 접수될 때까지 계속 갱신됩니다.
+
+현재 {canceled the subscription / refunded invoice {ID} / both} 처리를 완료했습니다. 환불은 영업일 기준 5~10일 내에 반영될 예정입니다.
+
+앞으로 참고하실 수 있도록 안내드리면, 다음 갱신일 전에 support@langfuse.com(또는 담당 계정 연락처)으로 해지 통지를 보내주시면 됩니다.
+
+감사합니다,
+{you}
+```
+
+**에스컬레이션 시점:** 표준 등급을 초과하는 EE 계약은 엔터프라이즈 팀으로 라우팅하세요. 환불은 비공개 핸드북에 명시된 승인 한도를 따르세요.
+
+</details>
+
+<details>
+
+<summary>환불 요청</summary>
+
+**트리아지 단계:**
+
+1. Stripe를 통해 언제 무엇이 청구되었는지 확인합니다.
+2. 스레드에서 환불 여부를 확정, 거절, 또는 추정하지 마세요. 청구 건이 환불이나 선의의 크레딧 대상인지, 승인 한도는 얼마인지, 언제 팀을 참여시켜야 하는지는 모두 비공개 핸드북의 내부 환불 처리 가이드라인을 따릅니다.
+3. 요청을 접수하고, 재무팀에 필요한 세부 정보를 수집한 뒤 해당 가이드라인에 따라 라우팅합니다. 본인의 권한 범위를 넘는 환불을 독단적으로 승인하지 마세요.
+
+**답변 템플릿:**
+
+```text
+안녕하세요 {name}님,
+
+불편을 드려 죄송합니다. {refunded invoice {ID} for ${amount} / canceled the upcoming renewal / both} 처리를 완료했습니다. 환불은 보통 영업일 기준 5~10일 내에 카드에 반영됩니다.
+
+{If goodwill credit: "다음 인보이스에 선의의 표시로 {amount} 크레딧도 추가해드렸습니다."}
+
+다른 문의가 있으시면 언제든 알려주세요.
+
+감사합니다,
+{you}
+```
+
+</details>
+
+<details>
+
+<summary>"스타트업 할인 / 50% 할인을 받을 수 있나요?"</summary>
+
+저희는 표준 스타트업 프로그램을 운영합니다. 승인된 신청자는 폼 제출 후 예외 없이 이메일로 50% 할인 코드를 받습니다. 폼을 통해 진행하는 것은 기록을 남기기 위함입니다.
+
+**트리아지 단계:**
+
+1. 고객을 [langfuse.com/startups](https://langfuse.com/startups)로 안내합니다.
+2. [https://forms.gle/eJAYjRWeCZU1Mn6j8](https://forms.gle/eJAYjRWeCZU1Mn6j8) 작성을 요청합니다.
+3. 페이지에 명시된 것 이상으로 일정이나 승인을 약속하지 마세요.
+4. 승인된 신청자는 이메일로 자동으로 할인 코드를 받습니다.
+5. 포트폴리오 전체 할인을 요청하는 VC/벤처 스튜디오의 경우도 동일한 프로그램이 적용되며, 각 포트폴리오 회사가 개별적으로 폼을 제출해야 합니다.
+
+**답변 템플릿:**
+
+```text
+안녕하세요 {name}님,
+
+기꺼이 도와드리겠습니다. 프로그램 관련 자세한 내용은 여기에 있습니다: https://langfuse.com/startups
+
+신청하시려면 다음 폼을 작성해 주세요: https://forms.gle/eJAYjRWeCZU1Mn6j8
+
+승인되면 이메일로 할인 코드를 받으실 수 있으며, 업그레이드 시 결제 화면에서 또는 이미 구독 중이시라면 청구 설정에서 적용하실 수 있습니다.
+
+감사합니다,
+{you}
+```
+
+</details>
+
+<details>
+
+<summary>엔터프라이즈 견적 / 계약 / 상용 라이선스</summary>
+
+"enterprise", "POC", "Account Manager", "MSA", "DPA signature", "NDA", "PO", "quote for X seats", "OSS 컴플라이언스를 위한 셀프 호스팅 상용 라이선스" 등이 언급되면 엔터프라이즈 팀으로 라우팅하세요.
+
+**트리아지 단계:**
+
+1. 신속히 접수를 확인하고 라우팅합니다. 지원 스레드에서 가격을 협상하지 마세요.
+2. 고객을 [영업 문의 폼](/talk-to-us)으로 안내합니다.
+3. OSS 컴플라이언스 도구(예: `ee/` 디렉토리를 플래그하는 Black Duck)를 만족시키기 위한 셀프 호스팅 상용 라이선싱의 경우, 고객이 실제로 EE 기능을 _사용하고 있는지_ 확인하세요. 이런 티켓의 상당수는 거버넌스 목적일 뿐이며, 확인 이메일과 라이선스 조건 사본으로 해결됩니다.
+
+**답변 템플릿:**
+
+```text
+안녕하세요 {name}님,
+
+문의 감사합니다. [영업 문의 폼](https://langfuse.com/talk-to-us)을 이용해 주시면 저희 엔터프라이즈 팀이 가격 및 계약 세부 사항을 안내해 드리겠습니다.
+
+감사합니다,
+{you}
+```
+
+**에스컬레이션 시점:** 연간 계약 금액(ACV)이 $50k를 초과하거나, 규제 대상(HIPAA BAA, 금융 서비스)이거나, 고객 스레드에 법무팀이 참여한 경우입니다.
+
+</details>
+
+<details>
+
+<summary>인보이스 / 영수증 / PO / "인보이스가 어디 있나요"</summary>
+
+**트리아지 단계:**
+
+1. Stripe → 고객 검색 → 인보이스/영수증. PDF 직접 링크를 전송합니다.
+2. 대형 엔터프라이즈에서 온 것처럼 보이는 커스텀 PO("Purchase Order PO… 가장 경쟁력 있는 가격을 보내주세요" 형식)는 대부분 스팸이나 피싱입니다. 발신 도메인이 알려진 고객과 일치하지 않으면 스팸으로 간주하고 응답하지 마세요.
+3. 활성 고객으로부터 온 정상적인 PO는 재무팀으로 라우팅합니다.
+
+**답변 템플릿 (Stripe 인보이스 다운로드):**
+
+```text
+안녕하세요 {name}님,
+
+{period} 인보이스는 여기 있습니다: {Stripe-hosted invoice URL}. 영수증은 Langfuse 청구 설정에서도 직접 확인하실 수 있습니다.
+
+다른 형식이나 VAT 정보가 필요하시면 알려주세요.
+
+감사합니다,
+{you}
+```
+
+</details>
+
+---
+
+### 3. 셀프 호스팅
+
+<details>
+
+<summary>설치 / Docker Compose / Kubernetes / Helm 관련 질문</summary>
+
+대부분의 셀프 호스팅 설정 관련 질문은 저희 문서에서 이미 답변하고 있으므로, 다시 유도할 필요가 없습니다. 링크를 전달하고 어느 문서 페이지에서 막혔는지 물어본 뒤 자세히 살펴보세요.
+
+**트리아지 단계:**
+
+1. 물어보세요: 어떤 배포 대상인가요(Docker Compose dev, Kubernetes via Helm, ECS, Cloud Run 등)? 어떤 Langfuse 버전인가요?
+2. [langfuse.com/self-hosting](https://langfuse.com/self-hosting)로 안내합니다. K8s의 경우 Helm 차트 README와 [langfuse.com/self-hosting/deployment/kubernetes-helm](https://langfuse.com/self-hosting/deployment/kubernetes-helm)을 안내하세요.
+3. 특정 오류에서 막혔다면 전체 스택/로그 출력, values.yaml 또는 `docker-compose.yml`, `kubectl get pods` 또는 `docker ps` 출력을 요청하세요.
+
+관련 FAQ: [/faq/all/self-hosting-langfuse](/faq/all/self-hosting-langfuse), [/faq/all/debug-docker-deployment](/faq/all/debug-docker-deployment), [/faq/all/self-host-with-load-balancer](/faq/all/self-host-with-load-balancer).
+
+**에스컬레이션 시점:** 고객의 환경이 지원되지 않는 백엔드를 포함하는 경우(예: ClickHouse 대체재로서의 Tencent TCHouse-C — 저희는 ClickHouse Cloud와 OSS ClickHouse만 테스트합니다), 특이한 인그레스(서비스 메시, mTLS 전용), 또는 인터넷이 없는 에어갭 환경. 이런 경우 엔지니어링 팀의 검토가 필요합니다.
+
+</details>
+
+<details>
+
+<summary>ClickHouse: 대체 백엔드, 사이징, 마이그레이션</summary>
+
+**절대 원칙:** ClickHouse가 유일하게 지원되는 OLAP 백엔드입니다. Elasticsearch, BigQuery 등을 대체재로 지원하지 않습니다. 이에 대해 문의하는 고객은 기능 요청 채널로 안내하고, 지원을 약속하지 마세요.
+
+**흔한 ClickHouse 관련 질문의 트리아지 단계:**
+
+- **"\<대체재\>를 사용할 수 있나요?"** 불가능합니다. 기능 요청 아이디어나 기존 GitHub Discussion(있는 경우)으로 안내하세요.
+- **"마이그레이션 실패 / 마이그레이션 데드락"** → [/faq/all/self-hosting-clickhouse-handling-failed-migrations](/faq/all/self-hosting-clickhouse-handling-failed-migrations) 참조. 큰 버전 점프의 경우, 마이그레이션 중간에 컨테이너가 종료되지 않도록 readiness/liveness 프로브 대기 시간을 일시적으로 늘리고 마이그레이션 중 web 레플리카를 1개로 줄이도록 안내하세요.
+- **"웹/API를 우회하는 직접 DB 수집이 가능한가요?"** 지원되지 않습니다. web/worker 계층이 유일하게 보장되는 인터페이스입니다. 지금은 동작하더라도 스키마는 어떤 마이너 릴리스에서든 변경될 수 있습니다.
+- **디스크 사용량이 너무 높음** → [/faq/all/reduce-clickhouse-disk-size](/faq/all/reduce-clickhouse-disk-size).
+
+**답변 템플릿 (대체 백엔드 문의):**
+
+```text
+안녕하세요 {name}님,
+
+현재 ClickHouse가 저희가 지원하는 유일한 OLAP 백엔드입니다. Langfuse에 필요한 트레이스/평가/점수 쿼리 패턴을 위해 의도적으로 ClickHouse에 집중하고 있으며, 대체 백엔드는 단기 로드맵에 없습니다.
+
+OSS 컴플라이언스나 단일 데이터베이스 환경을 위한 현실적인 방법은 다음과 같습니다:
+- ClickHouse Cloud(관리형)를 사용하여 직접 운영하지 않기
+- Langfuse 전용의 소규모 전용 ClickHouse 클러스터 구축
+
+이 문제가 도입에 걸림돌이 된다면 기존 GitHub Discussion에 upvote / 댓글을 남겨주세요: {link if exists}. 제품 팀이 그것들을 확인합니다.
+
+감사합니다,
+{you}
+```
+
+</details>
+
+<details>
+
+<summary>Postgres: 마이그레이션 실패, 테이블 소유권, RDS 관련 이슈</summary>
+
+**트리아지 단계:**
+
+1. **"마이그레이션 시 테이블 소유권 오류"** → [/faq/all/self-hosting-postgresql-table-ownership-migration-failures](/faq/all/self-hosting-postgresql-table-ownership-migration-failures). non-superuser DB 역할로 RDS를 사용할 때 흔히 발생합니다.
+2. **여러 레플리카에서 발생하는 마이그레이션 데드락** → 마이그레이션은 web 레플리카 1개로 실행해야 합니다. 적용 전에 `web`을 1로 스케일 다운하고, 적용 후 다시 늘리세요.
+3. **연결 문제** → `DATABASE_URL`, `connection_limit`을 확인하고, Langfuse 사용자가 스키마에 대한 CREATE/ALTER 권한을 가지고 있는지 확인하세요.
+
+관련 FAQ: [/faq/all/self-hosting-postgresql-table-ownership-migration-failures](/faq/all/self-hosting-postgresql-table-ownership-migration-failures).
+
+</details>
+
+<details>
+
+<summary>Redis / BullMQ / 큐 / Valkey / Elasticache</summary>
+
+**트리아지 단계:**
+
+1. Redis에 접근 가능한지 확인합니다: `redis-cli -h $REDIS_HOST ping`. Redis 7 이상 또는 호환 버전(Valkey, ElastiCache)이 필요합니다.
+2. 관리형 아이덴티티/Workload Identity를 사용하는 Azure Redis의 경우 GitHub discussion #13268을 참조하세요. TLS/SNI 설정이 중요합니다.
+3. Redis Sentinel의 경우 GitHub discussion #13359를 참조하세요(선택적 TLS 환경 변수 플래그).
+4. 큐 관리 엔드포인트(BullMQ admin API)는 [/faq/all/self-hosting-queue-management-bullmq-admin-api](/faq/all/self-hosting-queue-management-bullmq-admin-api)에 문서화되어 있으며, 수집이 멈췄을 때 유용합니다.
+5. 비정상 큐의 증상: API가 이벤트를 수락했지만 UI에는 표시되지 않습니다. 워커 로그에 재시도가 표시됩니다.
+
+관련 FAQ: [/faq/all/self-hosting-queue-management-bullmq-admin-api](/faq/all/self-hosting-queue-management-bullmq-admin-api), [/faq/all/self-hosting-socket-usage-at-capacity](/faq/all/self-hosting-socket-usage-at-capacity).
+
+</details>
+
+<details>
+
+<summary>S3 / 블롭 스토리지 / 미디어 업로드 / 이벤트 내보내기</summary>
+
+Langfuse는 원시 이벤트 업로드와 미디어에 S3 호환 스토리지를 사용합니다. 여기서 발생하는 문제는 보통 수집 실패(이벤트는 수락되었지만 처리되지 않음) 또는 "블롭 스토리지 내보내기 실패" 이메일로 나타납니다.
+
+**트리아지 단계:**
+
+1. `LANGFUSE_S3_EVENT_UPLOAD_*` 환경 변수가 설정되어 있고 버킷이 존재하는지 확인합니다.
+2. IAM 주체(principal)가 `s3:PutObject`, `s3:GetObject`, `s3:ListBucket` 권한을 가지고 있는지 확인합니다. MinIO의 경우 `LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE=true`를 설정하세요.
+3. "블롭 스토리지 내보내기 실패" 알림의 경우, 버킷 정책과 라이프사이클 규칙이 최근에 변경되지 않았는지 확인하세요.
+4. 미디어 업로드의 경우 `LANGFUSE_S3_MEDIA_UPLOAD_*`도 설정하세요.
+
+관련 FAQ: [/faq/all/self-hosting-missing-events-after-ingestion](/faq/all/self-hosting-missing-events-after-ingestion).
+
+</details>
+
+<details>
+
+<summary>Langfuse 버전 간 업그레이드 (셀프 호스팅)</summary>
+
+**트리아지 단계:**
+
+1. 현재 버전(`docker images | grep langfuse`, 또는 Helm의 `appVersion`)과 목표 버전을 확인합니다.
+2. 각 중간 메이저 버전의 업그레이드 노트를 따라갑니다. 대부분의 v3.x → v3.x 업그레이드는 매끄럽게 진행됩니다. v2 → v3 및 v3 → v4는 마이그레이션 가이드를 따라야 합니다.
+3. 아주 큰 버전 점프(예: v3.132 → v3.175)의 경우 마이그레이션에 몇 분 걸릴 수 있습니다. K8s readiness/liveness 프로브 대기 시간을 일시적으로 늘리고, **마이그레이션 중에는 web 레플리카를 1개로 스케일 다운**하여 Prisma/Postgres 마이그레이션 데드락을 방지하세요.
+4. 고객에게 스테이징 환경이 있다면 먼저 테스트하도록 안내하세요.
+
+**답변 템플릿:**
+
+```text
+안녕하세요 {name}님,
+
+그 정도로 큰 버전 점프에서는 마이그레이션 소요 시간이 가장 큰 리스크입니다. 업그레이드 전 다음 두 가지를 해주세요:
+
+1. web 컨테이너의 readiness/liveness 프로브 initial-delay와 failure-threshold를 일시적으로 늘려서 마이그레이션 도중 종료되지 않도록 하세요.
+2. 마이그레이션 중에는 `web`을 1개 레플리카로 스케일 다운하세요. 여러 레플리카가 동시에 있으면 Prisma/Postgres 마이그레이션에서 데드락이 발생할 수 있습니다. 마이그레이션 완료 후 다시 스케일 업하세요.
+
+메이저 버전 내에서는 완전한 호환성을 목표로 하고 있으며, v3.132와 최신 v3.x 사이에 알려진 breaking change는 없습니다.
+
+문서: https://langfuse.com/self-hosting/upgrade
+
+감사합니다,
+{you}
+```
+
+관련 FAQ: [/faq/all/upgrade-langfuse](/faq/all/upgrade-langfuse).
+
+</details>
+
+<details>
+
+<summary>EE 라이선스 사용 / "프로덕션에 EE 라이선스가 필요한가요?"</summary>
+
+이는 기술적인 질문이 아니라 거버넌스/컴플라이언스 질문입니다. 고객은 보통 내부 OSS 검토를 준비 중입니다.
+
+**핵심 사실:**
+
+- Langfuse 코어(트레이싱, 관측성, 프롬프트 관리, 평가, 대시보드)는 MIT 라이선스입니다. 이러한 기능들의 프로덕션 사용에는 EE 라이선스가 필요하지 않습니다.
+- EE 기능에는 `LANGFUSE_EE_LICENSE_KEY`가 필요합니다. 전체 목록은 [/self-hosting/license-key](/self-hosting/license-key)를 참조하세요.
+
+**답변 템플릿:**
+
+```text
+안녕하세요 {name}님,
+
+기꺼이 확인해 드리겠습니다:
+
+1. Langfuse의 핵심 기능(트레이싱, 관측성, 프롬프트 관리, 평가, 대시보드)은 MIT 라이선스이며 EE 라이선스 없이도 프로덕션에서 무료로 사용할 수 있습니다.
+2. EE 기능에는 LANGFUSE_EE_LICENSE_KEY가 필요합니다. 해당 환경 변수가 설정되지 않으면 EE 코드 경로는 실행되지 않습니다. 전체 목록: https://langfuse.com/self-hosting/license-key
+
+컴플라이언스 검토를 위해 공식 문서가 필요하시면 [영업 문의 폼](https://langfuse.com/talk-to-us)을 이용해 주세요.
+
+감사합니다,
+{you}
+```
+
+</details>
+
+<details>
+
+<summary>Docker 이미지의 CVE / 취약점 보고</summary>
+
+컨테이너 스캐너(Wiz, Snyk, Trivy, Black Duck)는 종종 전이적(transitive) Node.js 의존성에 대한 긴 CVE 목록을 만들어냅니다. 대부분은 저희 사용 방식에서는 악용 가능하지 않습니다. 올바른 대응은 다음과 같습니다:
+
+**트리아지 단계:**
+
+1. 고객이 스캔한 버전을 확인합니다. 최신 버전이 아니라면, 먼저 현재 이미지를 다시 스캔해달라고 요청하세요. 많은 CVE가 이미 다음 릴리스에서 패치되었을 수 있습니다.
+2. 실제로 우려되는 사안이라면 고객을 [ClickHouse Bugcrowd 프로그램](https://bugcrowd.com/engagements/clickhouse)으로 안내하여 범위 검토와 제출을 진행하도록 하세요. 민감한 개념 증명(PoC) 세부 정보를 지원 채널로 보내달라고 요청하지 마세요.
+3. 보고서가 실제 악용이나 고객 데이터 노출을 시사한다면, 동시에 Slack `#security`에서 엔지니어링 팀을 호출하세요.
+4. 수정 일정을 약속하지 마세요. 저희는 매 릴리스마다 순차적으로 패치합니다.
+
+**답변 템플릿:**
+
+```text
+안녕하세요 {name}님,
+
+스캔 결과 감사합니다. 최신 이미지({current_version}, {date} 릴리스)로 다시 스캔해 주실 수 있을까요? 보고서에 있는 심각도 높은 CVE 중 다수가 최근 릴리스에서 이미 해결되었습니다.
+
+그럼에도 남아 있는 항목이 있다면 저희 보안팀이 검토하고 우선순위를 정하겠습니다. 전이적 Node.js 의존성의 CVE 대부분은 Langfuse가 실행하지 않는 코드 경로에 있어, 모든 CVE에 대해 수정본을 배포하지는 않지만 도달 가능한 것에 대해서는 수정합니다.
+
+남은 발견 사항이 실제로 악용 가능하다고 판단되시면 ClickHouse Bugcrowd 프로그램을 통해 범위를 검토하고 제출해 주세요: https://bugcrowd.com/engagements/clickhouse
+
+감사합니다,
+{you}
+```
+
+</details>
+
+---
+
+### 4. 수집 (Cloud 및 셀프 호스팅)
+
+<details>
+
+<summary>"트레이스가 안 보여요 / 느려요 / 나타나지 않아요"</summary>
+
+**순서대로 진행하는 트리아지 단계:**
+
+1. **status.langfuse.com**: 먼저 현재 발생 중인 장애가 아닌지 배제합니다.
+2. **DataDog**: 수집 큐 깊이, ClickHouse 지연 시간을 확인합니다. 큐가 깊다면 이는 플랫폼 이슈이므로 개별 고객별로 디버깅하지 말고 에스컬레이션해야 합니다.
+3. **고객의 SDK 버전**: 물어보세요. 오래된 SDK(Python pre-v3, JS pre-v4)는 알려진 성능 문제가 있는 레거시 엔드포인트를 사용합니다. 최신 스코프 패키지(`@langfuse/client`, `@langfuse/tracing`, `@langfuse/otel` 또는 `langfuse` Python v3+)로 업그레이드를 권장하세요.
+4. **고객의 flush 동작**: 단기 실행 프로세스(Lambda, CLI, 엣지 런타임)는 종료 전에 `langfuse.flush()`를 호출해야 합니다. 그렇지 않으면 처리 중이던 이벤트가 유실됩니다.
+5. **고객의 필터/시간 범위**: 올바른 프로젝트, 올바른 환경 태그, 그리고 "지금-5분"을 포함하는 시간 범위를 보고 있는지 확인하세요(정상적인 운영에서도 수집은 약 1~2분 지연될 수 있습니다).
+
+**답변 템플릿 (cloud, 상태 확인 후):**
+
+```text
+안녕하세요 {name}님,
+
+상태 페이지는 정상이며 저희 쪽 큐도 정상으로 보입니다. 몇 가지 확인해 주세요:
+
+1. 최신 SDK를 사용 중이신가요? Python은 `langfuse` v3+, JS는 v4+ 스코프 패키지(`@langfuse/client` / `@langfuse/tracing` / `@langfuse/otel`)입니다. 레거시 `langfuse` JS v3 패키지와 Python v2 SDK는 모두 알려진 지연이 있는 구버전 엔드포인트를 사용했습니다.
+2. 트레이스를 보내는 프로세스가 단기 실행(Lambda, CLI, 엣지 런타임, 배치 작업)이라면, 종료 전에 langfuse.flush() / shutdown()을 호출하도록 확인해 주세요. 그렇지 않으면 처리 중인 이벤트가 유실됩니다.
+3. UI에서 어떤 시간 범위와 환경 태그를 보고 계신가요?
+
+누락된 traceId나 sessionId 예시를 공유해 주시면 직접 확인해 드리겠습니다.
+
+감사합니다,
+{you}
+```
+
+관련 FAQ: [/faq/all/missing-traces](/faq/all/missing-traces), [/faq/all/aws-lambda-and-serverless-functions](/faq/all/aws-lambda-and-serverless-functions), [/faq/all/self-hosting-missing-events-after-ingestion](/faq/all/self-hosting-missing-events-after-ingestion).
+
+**에스컬레이션 시점:** 고객의 SDK가 최신이고, flush가 설정되어 있고, 시간 범위도 올바른데 여전히 트레이스가 나타나지 않는 경우 → traceId, 프로젝트 ID, 타임스탬프와 함께 엔지니어링 팀에 전달하세요.
+
+</details>
+
+<details>
+
+<summary>OTEL / OpenTelemetry: 원치 않는 스팬, 이중 집계, 시맨틱 컨벤션</summary>
+
+흔한 OTEL 설정 문제입니다: 고객의 기존 OTEL 설정이 LLM 스팬과 함께 모든 HTTP 요청, DB 쿼리, 프레임워크 스팬을 Langfuse로 내보냅니다. 내보내진 모든 스팬은 관찰(observation)로 수집되어 과금되므로, 내보내기 필터를 조정하기 전까지는 비용과 UI 혼잡이 함께 증가합니다.
+
+**트리아지 단계:**
+
+1. 고객이 Langfuse를 OTEL 제공자에 어떻게 연결했는지 물어보세요(TracerProvider를 공유하는지, exporter만 사용하는지, 자동 계측인지).
+2. HTTP / DB / 프레임워크 자동 계측과 함께 전역 TracerProvider를 공유하고 있다면, LLM이 아닌 스팬을 제외하도록 `should_export_span` 필터(Python SDK, 지원 중단된 `blocked_instrumentation_scopes`를 대체) 또는 `shouldExportSpan`(JS SDK)을 권장하세요.
+3. 에이전트 프레임워크(특히 pydantic-ai, 이슈 #1819 참조)의 비용 이중 집계의 경우, 저희가 추적 중인 알려진 버그입니다. 인지하고 이슈를 파일링/링크해 드리되, 수정 일정을 약속하지 마세요.
+4. `langfuse.experiment.*` 속성의 경우, non-Python SDK를 사용하는 고객이 실험 속성을 수동으로 전파하려다 평가기가 실행되지 않는 경우가 있습니다. LLM-as-a-Judge는 현재 OTEL로 수집된 트레이스에서만 실행되므로, 레거시 SDK 경로가 사용되고 있지 않은지 확인하세요.
+
+**답변 템플릿 (원치 않는 스팬):**
+
+```text
+안녕하세요 {name}님,
+
+기존 OTEL 설정에서 흔히 발생하는 문제입니다. 전역 TracerProvider가 LLM 스팬과 함께 HTTP/DB/프레임워크 스팬을 내보내고 있어 볼륨이 높은 것입니다.
+
+해결 방법 (Python):
+  from langfuse import Langfuse
+  from langfuse.span_filter import is_default_export_span
+
+  blocked = {
+      "opentelemetry.instrumentation.fastapi",
+      "opentelemetry.instrumentation.asgi",
+      "opentelemetry.instrumentation.httpx",
+      # ... 필요한 항목 추가
+  }
+  langfuse = Langfuse(
+      should_export_span=lambda span: (
+          is_default_export_span(span)
+          and (
+              span.instrumentation_scope is None
+              or span.instrumentation_scope.name not in blocked
+          )
+      ),
+  )
+
+이렇게 하면 보통 수집 볼륨이 50~90% 줄어들며 LLM/에이전트 스팬만 Langfuse에 남게 됩니다.
+
+전체 문서: https://langfuse.com/faq/all/existing-otel-setup#unwanted-spans-in-langfuse
+
+감사합니다,
+{you}
+```
+
+관련 FAQ: [/faq/all/existing-otel-setup](/faq/all/existing-otel-setup), [/faq/all/unwanted-http-database-spans](/faq/all/unwanted-http-database-spans).
+
+</details>
+
+<details>
+
+<summary>비용 / 토큰 추적 불일치 ("비용이 이상해요")</summary>
+
+**트리아지 단계:**
+
+1. 저희가 지원하는 가격 목록에 있는 모델인가요? UI의 "Model" 정의에서 모델을 확인하세요. 커스텀 모델은 Langfuse가 비용을 계산할 수 있도록 입력/출력 토큰 가격이 포함된 `Model` 항목이 필요합니다.
+2. SDK/프레임워크가 토큰 수를 전송하나요? 그렇다면 Langfuse가 이를 사용하고, 그렇지 않다면 저희가 모델의 토크나이저로 입력/출력을 자체적으로(best-effort) 토큰화합니다.
+3. 에이전트 프레임워크(특히 pydantic-ai)의 경우, 부모 에이전트 스팬과 자식 LLM 스팬이 모두 사용량을 보고할 때 토큰 이중 집계가 발생할 수 있습니다. 알려진 이슈이므로 트레이스 링크와 함께 에스컬레이션하세요.
+4. 프레임워크도 비용을 보고함에도 Langfuse가 비용을 계산하는 경우, 프레임워크의 `otel operation.cost` 속성이 오버라이드됩니다. 저희의 가격표가 신뢰할 수 있는 소스입니다.
+
+**답변 템플릿:**
+
+```text
+안녕하세요 {name}님,
+
+비용 불일치는 보통 다음 세 가지 중 하나에서 발생합니다:
+
+1. 커스텀 또는 지원되지 않는 모델: Langfuse가 비용을 계산하려면 올바른 입력/출력 토큰 가격이 포함된 Model 항목(Project Settings → Models)이 필요합니다. 모델이 목록에 없으면 비용이 0으로 표시되거나 일반 추정치를 사용합니다.
+2. 사용 중인 프레임워크가 부모와 자식 스팬 모두에서 사용량을 중복 보고하는 경우(일부 에이전트 프레임워크에서 발생합니다). 트레이스 링크를 공유해 주시면 이중 집계 여부를 확인해 드리겠습니다.
+3. 사용량이 전송되지 않을 때 제공업체의 청구 방식과 저희 내부 토크나이저 간의 토큰화 차이: 미세한 수치 오차이며 버그가 아닙니다.
+
+이상해 보이는 구체적인 트레이스와 모델명을 공유해 주시겠어요?
+
+감사합니다,
+{you}
+```
+
+관련 FAQ: [/faq/all/costs-tokens-langfuse](/faq/all/costs-tokens-langfuse), [/faq/all/cutting-costs](/faq/all/cutting-costs).
+
+</details>
+
+---
+
+### 5. SDK 및 통합
+
+<details>
+
+<summary>Python SDK</summary>
+
+**흔한 이슈:**
+
+- **레거시 `langfuse` Python v2 패키지 사용.** `@observe` 데코레이터와 OTEL 기반 수집은 v3+부터 제공됩니다. 업그레이드를 권장하세요.
+- **단기 실행 프로세스**: 종료 전에 `langfuse.flush()`를 호출해야 합니다.
+- **`get_prompt()` 오류**: 보통 잘못된 리전, 누락된 API 키, 또는 잘못된 `label`을 참조하는 경우입니다.
+
+업그레이드 문서: [/docs/observability/sdk/upgrade-path](/docs/observability/sdk/upgrade-path).
+
+</details>
+
+<details>
+
+<summary>JS / TypeScript SDK</summary>
+
+**흔한 이슈:**
+
+- **레거시 `langfuse` npm 패키지는 v3.x에 머물러 있습니다.** v4+는 `@langfuse/*` 스코프 패키지(`@langfuse/client`, `@langfuse/tracing`, `@langfuse/otel`) 아래에 있습니다. 인앱 평가기 경고 "JS SDK v4+ required"는 이 스코프 패키지들로 전환하라는 의미입니다.
+- **엣지 런타임/서버리스**: `flushAsync()`를 반드시 await 해야 합니다.
+- **브라우저 사용**: public key만 사용하고 secret은 절대 사용하지 마세요. 백엔드 프록시를 권장합니다.
+
+**답변 템플릿 (레거시 패키지 혼동):**
+
+```text
+안녕하세요 {name}님,
+
+"JS SDK v4+" 메시지는 새로운 스코프 패키지(@langfuse/client, @langfuse/tracing, @langfuse/otel)를 가리키는 것이며, 레거시 `langfuse` npm 패키지를 의미하는 것이 아닙니다. 레거시 패키지는 v3.x로 고정하고, 신규 기능(관찰 단위 평가기 포함)은 모두 스코프 패키지에 출시하고 있습니다.
+
+업그레이드 가이드: https://langfuse.com/docs/observability/sdk/upgrade-path
+
+감사합니다,
+{you}
+```
+
+</details>
+
+<details>
+
+<summary>LangChain / LangGraph</summary>
+
+- `langfuse.langchain`의 `CallbackHandler`를 사용하세요. LangGraph의 경우 동일한 콜백을 사용하지만, 노드별로 트레이스 이름을 명시적으로 설정하고 싶을 수 있습니다. GitHub discussion #13261을 참조하세요.
+- **"LangChain 도구에서 LLM이 아닌 서비스 비용을 어떻게 추적하나요?"**: 도구 내부에서 `update_current_generation(...usage_details=...)`를 사용하세요. GitHub discussion #13514를 참조하세요.
+- **전역 콜백 등록**은 반복적으로 요청되는 기능입니다(GitHub #13583). 지원을 약속하지 마세요.
+
+</details>
+
+<details>
+
+<summary>LlamaIndex / LiteLLM / Vercel AI SDK / Pydantic-AI / CrewAI / Dify / 기타</summary>
+
+- **LiteLLM**: 표준 Langfuse 콜백을 사용합니다. 가격 설정은 LiteLLM의 `model_list`에 있습니다.
+- **Vercel AI SDK**: 저희 OTEL exporter를 사용합니다. `experimental_telemetry: { isEnabled: true }`가 설정되어 있는지 확인하세요.
+- **Pydantic-AI**: 알려진 비용 이중 집계 버그(이슈 #1819)가 있습니다. 인지하되 수정 일정을 약속하지 마세요.
+- **Dify**: 2026년 5월에 스팬을 잘못된 Langfuse 프로젝트로 라우팅하는 Dify 측 버그(langgenius/dify #36107)가 있었습니다. 영향을 받은 데이터는 2026-05-12T09:42:00Z ~ 2026-05-13T09:54:00Z 사이에 삭제되었습니다. 이 문제를 다시 발견한 고객에게는 업스트림에서 이미 해결되었다고 안내하세요.
+- **LlamaIndex**: 생성 스팬에서 토큰 수가 중복되는 알려진 이슈가 있습니다(#12897).
+- **OpenAI Agent SDK**: 일부 경우 reasoning summary가 누락되는 이슈가 있습니다(#12876).
+- **Google ADK / Strands / Mastra / Agno / Haystack / Instructor**: [/integrations](/integrations) 아래 관련 문서 페이지로 안내하세요.
+
+통합이 문서화되어 있지 않다면 어떤 프레임워크/버전인지 물어보고 문서 이슈를 등록해드리겠다고 안내하세요. 요청에 맞춰 통합을 커스텀 개발하지는 않습니다.
+
+</details>
+
+---
+
+### 6. 프롬프트 관리
+
+<details>
+
+<summary>프롬프트 관리: 버전 관리, 라벨, 캐싱, get_prompt 관련 이슈</summary>
+
+**흔한 이슈:**
+
+- **캐시에서 오래된 프롬프트 버전이 제공됨**: SDK는 기본적으로 캐싱합니다. 우회하려면 `get_prompt(name, cache_ttl_seconds=0)`을 사용하세요.
+- **연결된 프롬프트 라벨이 잘못된 버전을 가리킴**: 라벨은 변경 가능하므로 Audit log / Prompt history를 확인하세요.
+- **MCP 서버는 현재 프롬프트 관리를 지원합니다**(기본적으로 읽기/쓰기 도구가 제공되며, 클라이언트는 읽기 전용 허용목록을 선택할 수 있습니다). 데이터셋/트레이스는 로드맵에 있습니다.
+- **조건부/템플릿 프롬프트**: [/faq/all/conditional-prompt-embedding](/faq/all/conditional-prompt-embedding) 참조.
+
+관련 FAQ: [/faq/all/old-prompt-version-caching](/faq/all/old-prompt-version-caching), [/faq/all/link-prompt-management-with-tracing](/faq/all/link-prompt-management-with-tracing), [/faq/all/using-external-templating-libraries](/faq/all/using-external-templating-libraries), [/faq/all/managing-skills-with-prompt-management](/faq/all/managing-skills-with-prompt-management).
+
+</details>
+
+---
+
+### 7. 평가
+
+<details>
+
+<summary>"평가기가 제 트레이스에서 실행되지 않아요"</summary>
+
+**가장 흔한 원인: 트레이스가 OTEL 이전의 레거시 SDK 경로를 통해 수집되었습니다.** LLM-as-a-Judge는 현재 OTEL 기반 관찰에 대해서만 실행됩니다.
+
+**진단 방법:** UI에서 트레이스를 열어보세요. `metadata.scope.*`와 `metadata.resourceAttributes.*` 필드가 존재하면 OTEL을 통해 수집된 것이며 평가기가 이를 처리해야 합니다. 이 필드들이 없다면 트레이스는 레거시 `/api/public/ingestion` 엔드포인트를 통해 들어온 것이며 점수가 매겨지지 않습니다.
+
+**트리아지 단계:**
+
+1. 고객의 최근 트레이스 중 하나를 확인하여 OTEL 메타데이터가 있는지 확인합니다.
+2. 레거시라면: SDK 업그레이드를 요청하세요(Python `langfuse` v3+, JS `@langfuse/*` v4+).
+3. OTEL이라면: 평가기 설정이 트레이스와 일치하는지 확인하세요(변수 매핑, 필터 조건, 대상 관찰 유형). 일부 평가기는 `traces`가 아니라 `observations`를 대상으로 합니다.
+4. UI → Evaluators → 해당 설정 클릭 → 최근 실행 이력에서 평가기 로그를 확인하세요.
+
+**답변 템플릿:**
+
+```text
+안녕하세요 {name}님,
+
+LLM-as-a-Judge는 현재 OTEL로 수집된 관찰만 평가합니다. 점수가 매겨지지 않은 트레이스 중 하나를 열어서 metadata.scope.* / metadata.resourceAttributes.* 필드가 있는지 확인해 주세요:
+
+- 있음 → OTEL 기반이며 점수가 매겨져야 함
+- 없음 → 레거시 SDK 경로로 수집되어 점수가 매겨지지 않음
+
+없음에 해당한다면, SDK를 업그레이드하는 것이 해결책입니다(Python langfuse v3+, JS @langfuse/* v4+). traceId 몇 개를 공유해 주시면 어떤 트레이스가 어느 경우에 해당하는지 함께 확인해 드리겠습니다.
+
+감사합니다,
+{you}
+```
+
+관련 FAQ: [/faq/all/observation-eval-not-executing](/faq/all/observation-eval-not-executing).
+
+</details>
+
+<details>
+
+<summary>데이터셋과 실험</summary>
+
+**흔한 이슈:**
+
+- **"수집 시 데이터셋 항목이 중복됨"**: 보통 고객 측 문제로, 동일한 소스 행이 다시 업로드되는 경우입니다. `create_dataset_item` 호출 시 `id`에 고유 제약 조건을 추가하세요.
+- **"데이터셋을 어떻게 버전 관리하나요?"**: 데이터셋은 자동으로 버전이 관리되며, 실험은 특정 스냅샷에 고정됩니다. 실험 문서를 참조하세요.
+- **Java / non-Python SDK**로 실험을 실행하는 경우, 트레이스에 올바른 OTEL 속성(`langfuse.experiment.id`, `langfuse.experiment.dataset.id`, `langfuse.experiment.item.id`, `langfuse.experiment.item.root_observation_id`)을 전파해야 합니다. 공식 `langfuse-java` 클라이언트는 public API를 통해 프롬프트와 점수를 다루지만 네이티브 트레이싱은 제공하지 않으므로, 실험을 위해서는 수동으로 OTEL 속성을 전파해야 합니다. 정확한 속성 스키마는 엔지니어링 팀으로 라우팅하세요. GitHub #13438 참조.
+- **CI에서의 실험**: Langfuse Experiments용 GitHub Action으로 안내하세요.
+
+관련 FAQ: [/faq/all/langfuse-evaluators-on-dataset-runs](/faq/all/langfuse-evaluators-on-dataset-runs).
+
+</details>
+
+<details>
+
+<summary>점수: 점수 설정, 커스텀 점수, 점수 API 필터링</summary>
+
+- **커스텀 점수 유형 설정** → [/faq/all/manage-score-configs](/faq/all/manage-score-configs).
+- **`scores.get_many` 필터가 적용되지 않음**: 이는 알려진 버그였습니다. 고객이 최신 SDK를 사용 중인지 확인하세요. 그래도 계속 문제가 있다면 요청 본문과 예상 결과와 함께 에스컬레이션하세요.
+- **"점수란 무엇인가요?"** → [/faq/all/what-are-scores](/faq/all/what-are-scores).
+
+관련 FAQ: [/faq/all/manage-score-configs](/faq/all/manage-score-configs).
+
+</details>
+
+---
+
+### 8. 보안 및 컴플라이언스
+
+<details>
+
+<summary>SOC 2 / ISO 27001 보고서</summary>
+
+저희는 SOC 2 Type II와 ISO 27001을 보유하고 있습니다. 보고서는 검토 중인 고객에게 NDA 하에 전달됩니다.
+
+**트리아지 단계:**
+
+1. 요청자가 Langfuse를 실제로 검토 중인 조직 소속인지 확인합니다(도메인, 역할을 조회).
+2. 엔터프라이즈 팀이 이메일 답장에 PDF를 첨부하여 보고서를 전송합니다.
+3. 참고: 새 벤더와 감사가 진행 중일 수 있으므로, 그 경우 계약서(engagement letter)를 향후 참고 신호로 포함하세요.
+
+**답변 템플릿 (엔터프라이즈 팀으로 라우팅):**
+
+```text
+안녕하세요 {name}님,
+
+기꺼이 두 가지 모두 공유해 드리겠습니다. [영업 문의 폼](https://langfuse.com/talk-to-us)을 이용해 주시면 저희 엔터프라이즈 팀이 SOC 2 Type II와 ISO 27001 보고서를 전달해 드리겠습니다.
+
+참고로, 공개 보안 개요는 https://langfuse.com/security 에서 확인하실 수 있습니다.
+
+감사합니다,
+{you}
+```
+
+</details>
+
+<details>
+
+<summary>DPA (개인정보 처리 계약)</summary>
+
+**핵심 사실:** DPA는 가입 시 저희 이용약관을 통해 자동으로 적용됩니다. 엔터프라이즈에서 특별히 요구하지 않는 한 고객별로 별도 서명을 하지 않습니다.
+
+**트리아지 단계:**
+
+1. 현재 게시된 DPA가 있는 [langfuse.com/dpa](https://langfuse.com/dpa)로 고객을 안내합니다.
+2. 고객 템플릿에 별도 서명이 명시적으로 필요하다면 엔터프라이즈 팀으로 라우팅합니다.
+
+**답변 템플릿:**
+
+```text
+안녕하세요 {name}님,
+
+저희 DPA는 표준 약관에 따라 모든 가입에 자동으로 적용됩니다. 기록을 위해 현재 버전을 여기서 확인하실 수 있습니다:
+
+https://langfuse.com/dpa
+
+구매 절차상 귀사 템플릿에 별도 서명본이 필요하시다면 알려주세요. 저희 엔터프라이즈 팀을 연결해 드리겠습니다.
+
+감사합니다,
+{you}
+```
+
+</details>
+
+<details>
+
+<summary>BAA / HIPAA</summary>
+
+HIPAA는 전용 클라우드 리전인 `hipaa.cloud.langfuse.com`에서 제공됩니다. 고객은 PHI를 처리하기 전에 [DocuSign을 통해 BAA를 작성하고 서명](https://powerforms.docusign.net/39437499-4b13-4604-b373-2b1f2ae6f6fd?env=eu&acct=33986eaf-fde8-48d4-8d61-cf8c0f573e98&accountId=33986eaf-fde8-48d4-8d61-cf8c0f573e98)해야 합니다.
+
+**트리아지 단계:**
+
+1. 고객이 (표준 US/EU 리전이 아니라) `hipaa.cloud.langfuse.com`을 사용 중이거나 사용할 예정인지 확인합니다.
+2. **계정 마이그레이션:** EU/US에서 이전하는 고객은 `hipaa.cloud.langfuse.com`에 새 계정을 생성해야 합니다. 과거 트레이스 데이터는 [데이터 마이그레이션 쿡북](/guides/cookbook/example_data_migration)을 통해 이전할 수 있습니다.
+3. HIPAA 관련 법적 요구 사항에 대해서는 [DocuSign을 통해 BAA를 작성하고 서명](https://powerforms.docusign.net/39437499-4b13-4604-b373-2b1f2ae6f6fd?env=eu&acct=33986eaf-fde8-48d4-8d61-cf8c0f573e98&accountId=33986eaf-fde8-48d4-8d61-cf8c0f573e98)하도록 안내하세요. BAA가 자동으로 적용된다고 고객에게 말하지 마세요.
+4. HIPAA 리전의 IP 허용 목록(Langfuse에서 고객 인프라로의 아웃바운드, 예: LLM-as-a-judge)의 경우: 고정 IP는 `35.82.248.193`, `34.211.191.155`, `52.43.164.18`(us-west-2)입니다. 전체 목록은 [langfuse.com/security/networking](https://langfuse.com/security/networking)에 있습니다. `hipaa.cloud.langfuse.com`으로의 **인바운드**는 고정 IP가 없는 AWS ALB 뒤에 있으므로 안정적인 인바운드 IP 대역을 게시할 수 없습니다.
+
+**답변 템플릿:**
+
+```text
+안녕하세요 {name}님,
+
+HIPAA 사용을 위해서는 hipaa.cloud.langfuse.com(us./cloud.와는 별도 리전)에 있어야 하며 HIPAA 적격 플랜(Pro 이상)이어야 합니다. PHI를 처리하기 전에 BAA를 작성하고 서명해 주세요: https://powerforms.docusign.net/39437499-4b13-4604-b373-2b1f2ae6f6fd?env=eu&acct=33986eaf-fde8-48d4-8d61-cf8c0f573e98&accountId=33986eaf-fde8-48d4-8d61-cf8c0f573e98
+
+참고로, HIPAA 계정은 hipaa.cloud.langfuse.com에 새로 프로비저닝됩니다. 현재 us.cloud 또는 cloud.를 사용 중이시라면, 과거 트레이스 데이터는 저희 데이터 마이그레이션 쿡북을 통해 이전하실 수 있습니다: https://langfuse.com/guides/cookbook/example_data_migration
+
+감사합니다,
+{you}
+```
+
+</details>
+
+<details>
+
+<summary>네트워킹: IP 허용 목록, 아웃바운드 IP, 텔레메트리 방화벽 규칙</summary>
+
+- **아웃바운드(Langfuse → 고객 인프라, 예: LLM-as-a-judge 평가 호출이나 웹훅):** 고정 IP는 [langfuse.com/security/networking](https://langfuse.com/security/networking)에 게시되어 있습니다.
+- **인바운드(고객 SDK → Langfuse):** AWS ALB 뒤에 있어 고정 IP가 없습니다. 고객 방화벽은 호스트명 기준으로 허용해야 합니다.
+- **PostHog로의 텔레메트리**는 셀프 호스팅 Langfuse에서 기본적으로 활성화되어 있습니다. [langfuse.com/self-hosting/security/telemetry](https://langfuse.com/self-hosting/security/telemetry)를 참조하세요.
+  - **OSS(셀프 호스팅):** `TELEMETRY_ENABLED=false`로 비활성화할 수 있습니다. 저희 표준 셀프 호스팅 약관에서는 허용되며, 예전 EE 셀프 호스팅 약관에서는 이전에 별도 허가가 필요했지만 현재 약관에서는 필요하지 않습니다.
+  - **EE(셀프 호스팅):** 텔레메트리는 라이선스 컴플라이언스에 사용되며 비활성화할 수 없습니다. 고객이 예외가 필요하다면 엔터프라이즈 팀으로 라우팅하세요.
+
+</details>
+
+<details>
+
+<summary>버그 바운티 / 취약점 신고</summary>
+
+**Langfuse는 [ClickHouse Bugcrowd 프로그램](https://bugcrowd.com/engagements/clickhouse)에 포함되어 있습니다.** 관련 문의는 거의 항상 다음 중 하나입니다:
+
+1. 실제 보안 이슈에 대한 정당한 신고: Bugcrowd로 신고자를 안내하세요. 보고서가 실제 악용이나 고객 데이터 노출을 시사한다면 즉시 엔지니어링 팀에도 에스컬레이션하세요.
+2. 유료 보안 서비스를 제안하는 에이전시/프리랜서의 홍보: 정중히 거절하세요.
+3. 실제로는 의도된 동작인데 "취약점"으로 자동 생성된 보고서(서브도메인 리다이렉트, 비밀번호 길이 DoS 등): 의도된 동작임을 정중히 설명하세요.
+
+**트리아지 단계:**
+
+1. 취약점 신고는 [ClickHouse Bugcrowd 프로그램](https://bugcrowd.com/engagements/clickhouse)으로 안내하여, 신고자가 제출 전에 자격 요건, 범위, 보상 세부 사항을 검토할 수 있게 하세요. 민감한 개념 증명(PoC) 세부 정보를 지원 채널로 보내달라고 요청하지 마세요.
+2. 보고서가 실제 악용이나 고객 데이터 노출을 시사한다면, 동시에 Slack `#security`에서 엔지니어링 팀을 호출하세요.
+3. 에이전시의 홍보이거나 일반적인 템플릿 보고서라면 표준 답변을 사용하세요.
+
+**답변 템플릿 (취약점 신고 또는 버그 바운티 문의):**
+
+```text
+안녕하세요 {name}님,
+
+연락 주셔서 감사합니다. Langfuse는 ClickHouse Bugcrowd 프로그램에 참여하고 있습니다. 프로그램의 자격 요건, 범위, 보상 세부 사항을 검토하신 후 Bugcrowd를 통해 보고서를 제출해 주세요:
+
+https://bugcrowd.com/engagements/clickhouse
+
+감사합니다,
+{you}
+```
+
+**답변 템플릿 (오탐, 예: 서브도메인 리다이렉트를 탈취로 신고한 경우):**
+
+```text
+안녕하세요 {name}님,
+
+감사합니다. 보고 내용을 검토했습니다. 발견하신 동작은 의도된 것입니다. 보고서에 있는 각 서브도메인은 langfuse.com의 관리되는 랜딩 페이지 또는 하위 페이지로 리다이렉트됩니다. 방치된 DNS나 소유되지 않은 서드파티 리소스는 없습니다.
+
+향후 보고 전에 실제 동작을 다시 한번 확인해 주시면 감사하겠습니다.
+
+감사합니다,
+{you}
+```
+
+**즉시 에스컬레이션할 경우:** SSRF, IDOR, 크로스 테넌트 데이터 접근, 인증 우회, SCIM 인젝션, 자격 증명 노출에 대한 신뢰할 만한 신고가 있는 경우입니다. Slack `#security`에서 엔지니어링 팀을 호출하세요.
+
+</details>
+
+---
+
+### 9. 데이터 삭제 및 보존
+
+<details>
+
+<summary>"제 계정/조직/프로젝트를 삭제해주세요" / GDPR 삭제 요청</summary>
+
+컴플라이언스상의 이유로(사용자가 직접 승인했다는 명확한 기록을 남기기 위해) 저희는 사용자가 직접 삭제를 수행하도록 요구합니다. 고객을 대신하여 계정을 삭제하지 않습니다.
+
+**트리아지 단계:**
+
+1. 무엇을 삭제하고 싶은지 확인합니다(프로젝트/조직/전체 계정).
+2. 인앱 흐름을 안내합니다: 프로젝트는 Project Settings → Danger Zone, 조직은 Organization Settings → Danger Zone. 계정 삭제는 사용자 설정에서의 최종 전체 삭제 흐름입니다.
+3. HIPAA → 표준 리전 마이그레이션에서 고객이 이전 계정 삭제를 원하는 경우, 필요한 것을 모두 이전했는지 먼저 확인한 뒤 직접 삭제하도록 안내하세요.
+
+**답변 템플릿:**
+
+```text
+안녕하세요 {name}님,
+
+컴플라이언스 및 기록 유지를 위해 삭제는 고객님께서 직접 수행해 주시길 요청드립니다. 인앱 흐름은 다음과 같습니다:
+
+- 프로젝트: Project Settings → Danger Zone → Delete project
+- 조직: Organization Settings → Danger Zone → Delete organization
+- 계정: User Settings → Delete account
+
+삭제하기 전에 유지하고 싶은 데이터, 프로젝트, 설정을 모두 이전하셨는지 확인해 주세요.
+
+진행 중 오류가 발생하면 스크린샷을 보내주시면 확인해 드리겠습니다.
+
+감사합니다,
+{you}
+```
+
+관련 FAQ: [/faq/all/delete-account-langfuse](/faq/all/delete-account-langfuse).
+
+</details>
+
+<details>
+
+<summary>데이터 보존 정책 (EE 기능)</summary>
+
+데이터 보존은 Pro Cloud와 Enterprise(및 셀프 호스팅 EE)에서 설정 가능합니다. Hobby와 Core는 플랜별 고정 보존 기간을 가집니다.
+
+**트리아지 단계:**
+
+1. 플랜 등급을 확인합니다: Hobby와 Core는 고정 보존 기간이며, Pro Cloud, Enterprise, 셀프 호스팅 EE는 설정할 수 있습니다.
+2. EE의 경우: 보존 기간은 Project Settings 또는 [Instance Management API](https://langfuse.com/self-hosting/administration/instance-management-api)를 통해 프로젝트별로 설정됩니다.
+3. 참고: 보존은 백그라운드 작업으로 실행됩니다. 보존 기간이 지났는데도 데이터가 남아 있는 것으로 보이는 고객은 보통 해당 작업 주기 안에 있는 경우이며, 24시간이 지나도 지속되면 에스컬레이션하세요.
+
+관련 FAQ: [/faq/all/data-retention-timeouts-and-errors](/faq/all/data-retention-timeouts-and-errors), [/faq/all/cutting-costs](/faq/all/cutting-costs).
+
+</details>
+
+---
+
+### 10. API 오류
+
+<details>
+
+<summary>5xx 오류 (502 / 503 / 504 / 524 Bad Gateway / Gateway Timeout)</summary>
+
+**트리아지 단계:**
+
+1. **status.langfuse.com**을 먼저 확인합니다. 진행 중인 장애가 있다면 상태 페이지로 안내하고 인지했음을 알립니다.
+2. 상태가 정상이라면 지난 30분간 DataDog에서 오류율이 상승했는지 확인합니다. 짧은 장애가 발생했지만 상태 페이지에 아직 게시되지 않았을 수 있습니다. 짧은 순간의 문제는 정상적인 범위이지만, 반복된다면 내부적으로 기록해 두세요.
+3. 오직 한 고객만 겪고 있고 저희 쪽이 정상으로 보인다면, 타임스탬프, 리전, `cloud.langfuse.com` / `us.cloud.langfuse.com` 등 중 어디에 접속 중인지 또는 프록시를 거치는지 물어보세요.
+
+**답변 템플릿 (짧은 장애 발생 중/후):**
+
+```text
+안녕하세요 {name}님,
+
+{time} 무렵에 아주 짧은 장애가 있었습니다. 지금은 정상으로 복구되었을 것입니다. 여전히 오류가 발생하는지 확인해 주시겠어요? 만약 그렇다면 가장 최근 타임스탬프를 공유해 주시면 확인해 드리겠습니다.
+
+감사합니다,
+{you}
+```
+
+관련 FAQ: [/faq/all/api-524-http-errors](/faq/all/api-524-http-errors), [/faq/all/self-hosting-502-504-network-errors](/faq/all/self-hosting-502-504-network-errors).
+
+</details>
+
+<details>
+
+<summary>429 / 요청 제한(rate limit) 오류</summary>
+
+**트리아지 단계:**
+
+1. 어떤 엔드포인트에 요청 중인지 확인합니다. 트레이스 수집은 프롬프트/API 읽기보다 훨씬 관대한 제한을 가집니다.
+2. SDK에서 지수 백오프(exponential backoff)를 권장하세요(공식 SDK들은 기본적으로 이를 수행합니다).
+3. 실제로 높은 처리량이 필요한 경우 엔터프라이즈 팀으로 라우팅하세요. 계약에 따라 제한을 상향할 수 있습니다.
+
+관련 FAQ: [/faq/all/api-limits](/faq/all/api-limits).
+
+</details>
+
+---
+
+### 11. UI 버그 / 화면 깨짐
+
+<details>
+
+<summary>"X 화면이 안 보여요" / "페이지가 비어 있어요" / "Fast Mode"</summary>
+
+**트리아지 단계:**
+
+1. **가장 먼저 확인: Fast Mode(Preview)가 켜져 있는지 확인합니다.** 많은 화면이 Fast Mode 활성화 여부에 따라 게이팅됩니다.
+2. 강력 새로고침(Cmd-Shift-R / Ctrl-Shift-R)으로 오래된 캐시 자산을 제거합니다.
+3. Impersonation View로 시도해 보세요. 해당 사용자로 재현되나요?
+4. 브라우저, 버전, 콘솔 오류를 요청하세요.
+
+**답변 템플릿:**
+
+```text
+안녕하세요 {name}님,
+
+간단히 확인해 주세요. "Fast Mode"가 켜져 있나요? 최근에 추가된 여러 화면(Experiments, 새로 디자인된 Trace 화면 포함)은 Fast Mode 활성화 여부에 따라 게이팅됩니다.
+
+Fast Mode가 켜져 있는데도 보이지 않는다면, 강력 새로고침(Cmd-Shift-R)으로 대부분의 오래된 캐시 자산 문제가 해결됩니다. 둘 다 도움이 되지 않는다면 브라우저, 버전, 콘솔 오류를 공유해 주세요.
+
+감사합니다,
+{you}
+```
+
+**에스컬레이션 시점:** 고객이 Fast Mode가 켜져 있음을 확인했고, 강력 새로고침도 했으며, Impersonation View에서도 재현되는 경우 → 엔지니어링 팀.
+
+</details>
+
+---
+
+### 12. Langfuse 이탈 고객
+
+<details>
+
+<summary>"Langfuse 사용을 중단하기로 했습니다"</summary>
+
+**트리아지 단계:**
+
+1. 공감을 표하며 답변합니다. 해당 스레드에서 리텐션을 시도하지 마세요. 이는 별도의 영업 대화이며, 고객이 관심을 보일 때만 진행합니다.
+2. 짧은 피드백을 요청하세요. 불릿 포인트 형식도 괜찮습니다. 대가로 아무것도 약속하지 마세요.
+3. Cloud 사용자라면 해지가 처리되었는지 확인합니다(위 "구독 해지" 참조).
+4. 셀프 호스팅 EE라면 계약 절차가 적용되며, 서면으로 해지해야 합니다.
+
+**답변 템플릿:**
+
+```text
+안녕하세요 {name}님,
+
+알려주셔서 감사합니다. Langfuse가 기대에 미치지 못했다니 죄송합니다. 저희가 더 잘할 수 있었던 부분에 대해 몇 줄이라도 공유해 주시면 정말 감사하겠습니다. 모든 의견을 읽고 있습니다.
+
+{canceled your subscription / forwarded to the EE team for contract cancellation} 처리를 완료했습니다.
+
+앞으로 무엇을 선택하시든 잘 되시길 바랍니다.
+
+감사합니다,
+{you}
+```
+
+</details>
+
+---
+
+### 13. 기능 요청
+
+<details>
+
+<summary>"X 기능을 추가해 주실 수 있나요?" / "Langfuse가 …할 수 있으면 좋겠어요"</summary>
+
+기능 요청은 스레드에서 해결할 사안이 아니라 제품 팀이 수요를 파악할 수 있도록 라우팅할 사안입니다. 처리 방식은 요청이 어디서 왔는지에 따라 달라집니다.
+
+**유료 고객 (Pylon):**
+
+1. 요청을 인지하고 +1을 기록합니다. 예: "말씀하신 부분이 타당하다고 생각합니다! 이 기능 요청에 고객님의 +1을 추가하겠습니다."
+2. 새 Linear 티켓을 생성하거나, 기존 Linear 이슈를 Pylon 이슈에 연결하여 수요가 구체적인 작업 항목에 기록되도록 합니다.
+
+**커뮤니티 / GitHub 아이디어 보드:**
+
+1. 요청을 인지합니다. 예: "여기에 등록해 주셔서 감사합니다!"
+2. 해당 제품 영역을 담당하는 Langfuse 제품 엔지니어를 @-멘션하여([담당자 배정](/handbook/how-we-work/ownership) 참조) 올바른 사람에게 전달되도록 합니다. 예: "`@nimar` FYI - 더 빠른 평가에 대한 기능 요청입니다."
+
+**에스컬레이션 시점:** 요청이 거래나 갱신과 연관된 경우(엔터프라이즈 팀으로 라우팅), 또는 짧은 기간 안에 여러 고객이 동일한 것을 요청하는 경우, +1만 기록하지 말고 담당 제품 엔지니어에게 직접 알리세요.
+
+</details>
+
+---
+
+### 14. 실제로는 지원 문의가 아닌 인박스 (빠르게 걸러내기)
+
+<details>
+
+<summary>스팸 / 파트너십 / 스폰서십 / 게스트 포스트 / 링크 삽입</summary>
+
+인박스의 약 1~2%는 다음과 같은 홍보성 메일입니다: "게스트 포스트를 작성하고 싶습니다", "파트너십을 판매합니다", "저희 행사를 후원해 주세요", "백링크를 구매하세요". 정중히 거절하거나 응답하지 않고 종료하세요.
+
+**답변 템플릿:**
+
+```text
+안녕하세요 {name}님,
+
+연락 주셔서 감사합니다. 현재로서는 이러한 유형의 파트너십을 검토하고 있지 않습니다. 하시는 일에 좋은 결과가 있기를 바랍니다.
+
+감사합니다,
+{you}
+```
+
+또는 응답하지 않아도 됩니다. 명백한 스팸의 경우 이 방법도 허용됩니다.
+
+</details>
+
+<details>
+
+<summary>입사 지원 / 채용 관련 문의</summary>
+
+모든 지원서는 한 곳으로 라우팅합니다. 지원 스레드에서 직접 대응하지 마세요.
+
+**답변 템플릿:**
+
+```text
+안녕하세요 {name}님,
+
+Langfuse에 관심을 가져주셔서 감사합니다. 채용 담당팀이 확인할 수 있도록 공식 채용 페이지를 통해 지원해 주세요:
+
+https://langfuse.com/careers
+
+감사합니다,
+{you}
+```
+
+</details>
+
+<details>
+
+<summary>자동 응답 / 부재중 안내 / 저희가 다루지 않는 언어</summary>
+
+인바운드 메시지가 순수한 자동 응답(Zendesk의 "문의해 주셔서 감사합니다", 부재중 알림 등)이라면, 별다른 조치 없이 티켓을 종료하세요.
+
+팀 내 누구도 모국어로 읽지 못하는 언어로 온 티켓은 영어로 답변하고 영어로 계속 진행할지 물어보세요. 대부분의 고객은 이중 언어를 구사합니다. 그렇지 않다면 팀 채널로 에스컬레이션하세요.
+
+</details>
+
+---
+
+## 확신이 서지 않을 때
+
+고객의 질문이 위의 어느 분기에도 맞지 않는다면:
+
+1. **이 페이지를 검색합니다**: Cmd/Ctrl-F로 고객 메시지의 키워드를 검색하세요.
+2. **Pylon을 검색합니다**: 지난 30일간 같은 증상이 있었는지 확인하세요. 누군가 이미 답변했을 가능성이 높습니다.
+3. **`#support` Slack 채널에 문의합니다**: 티켓 링크와 본인의 가설을 함께 남기세요. Pylon 티켓의 내부 노트도 유효합니다.
+4. **담당자에게 전달합니다**: [담당자 배정](/handbook/how-we-work/ownership)을 참조하세요. 담당자를 알 수 없다면 기술적인 사안은 엔지니어링 팀으로, 상업적/법적 사안은 엔터프라이즈 팀으로 에스컬레이션하세요.
+
+동일한 질문에 세 번째로 답변하고 있다는 것을 깨달으면, 이 페이지에 추가하거나 `content/faq/all/` 아래에 FAQ 항목을 추가하고 여기서 링크하세요. 저희가 문서화하는 반복적인 질문 하나하나가 Inkeep, Dosu, 그리고 앞으로의 지원 엔지니어가 사람의 개입 없이 답변할 수 있는 질문이 됩니다.

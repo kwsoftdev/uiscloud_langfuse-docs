@@ -1,0 +1,20 @@
+---
+title: 셀프 호스팅된 Langfuse에서 발생하는 타임존 오류
+tags: [self-hosting]
+sourceRevision: 9c0d419484845ffbd56805fd068677856e5d764c
+translationStatus: machine
+---
+
+# 셀프 호스팅된 Langfuse에서 발생하는 타임존 오류
+
+**Langfuse는 모든 인프라 구성 요소(ClickHouse 및 Postgres)가 UTC 타임존에서 실행될 것을 요구합니다.** UTC가 아닌 타임존은 지원되지 않으며, 쿼리 결과가 잘못되거나 비어 있는 문제를 일으킵니다.
+
+트레이스나 관측(observation)이 누락되는 것으로 보인다면, ClickHouse 인스턴스가 UTC로 실행되고 있는지 확인하세요.
+
+```sql
+SELECT timezone()
+```
+
+이 쿼리는 `UTC`를 반환해야 합니다. 다른 타임존이 반환된다면, ClickHouse 서버 설정에서 커스텀 [`timezone`](https://clickhouse.com/docs/en/operations/server-configuration-parameters/settings#timezone) 설정을 제거한 후 서버를 재시작하세요. [Postgres 타임존 설정](/self-hosting/deployment/infrastructure/postgres)에도 동일하게 적용됩니다.
+
+다른 타임존 지원을 검토해 주었으면 한다면, 이 [GitHub Discussion](https://github.com/orgs/langfuse/discussions/5046)에 투표해 주세요.

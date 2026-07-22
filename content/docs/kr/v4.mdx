@@ -1,0 +1,186 @@
+---
+title: "Langfuse Fast Preview: 더 빠르고 Observation 중심으로"
+description: Langfuse "Fast Preview"는 더 빠른 성능과 observation 중심 데이터 모델을 제공합니다. 프리뷰를 활성화하고 SDK를 업그레이드하여 시작하세요.
+sourceRevision: dfca55f698615475291f342e672b94973b699339
+translationStatus: machine
+---
+
+import {
+  BarChart3,
+  Book,
+  Github,
+  LayoutDashboard,
+  Table,
+  Zap,
+} from "lucide-react";
+
+# Langfuse Cloud: Fast Preview
+
+## 한눈에 보기
+
+이제 Langfuse는 observation 중심으로 동작합니다. 이전에는 비용이 큰 조인이 필요했던 쿼리들이 이제 훨씬 더 빠르게 실행됩니다. 이 변경은 에이전틱 애플리케이션에 맞춰 Langfuse를 확장하기 위해 필요했습니다.
+
+**변경 사항:** 트레이스와 observation을 별도 엔티티로 다루던 방식에서 observation만 다루는 방식으로 전환합니다. 트레이스 ID는 여전히 observation 그룹을 연관 짓는 식별자로 남습니다. 효율적인 쿼리와 집계를 위해 트레이스 속성(`user_id`, `session_id` 등)은 _모든_ observation에 설정되어야 합니다. 트레이스는 더 이상 별도의 입력(input)과 출력(output)을 갖지 않습니다.
+
+**적용 방법:**
+
+- **SDK:** [Python SDK v4.7.0 이상](/docs/observability/sdk/upgrade-path/python-v3-to-v4) / [JS/TS SDK v5.4.0 이상](/docs/observability/sdk/upgrade-path/js-v4-to-v5)으로 업그레이드하세요. 트레이스 업데이트 호출을 `propagate_attributes()`로 교체하세요.
+- **OTEL:** 스팬 익스포터에 `x-langfuse-ingestion-version: 4` HTTP 헤더를 설정하세요. 트레이스 속성을 _모든_ observation에 전파하세요. [설정 가이드 보기](/integrations/native/opentelemetry)
+- **UI:** 조직이 2026년 4월 14일 14:00 UTC(15:00 CET) 이전에 생성되었다면, 왼쪽 하단의 **Preview** 토글을 활성화하여 옵트인할 수 있습니다. 이 기준일 이후에 생성된 조직은 이미 "Fast Preview"가 적용되어 있으며 토글이 표시되지 않습니다. 새로운 통합 테이블에서 observation을 직접 필터링하고, 생산적인 기본값을 위한 저장된 뷰(saved view)를 만들 수 있습니다. [저장된 뷰 가이드 보기](/faq/all/explore-observations-in-v4)
+- **Evals:** LLM-as-a-Judge 평가를 observation 레벨로 마이그레이션하세요. [평가 마이그레이션 가이드 보기](/faq/all/llm-as-a-judge-migration)
+
+---
+
+## 개요
+
+이제 Langfuse는 대규모 환경에서 더 빠른 제품 성능을 제공합니다. 차트 로딩 시간이 훨씬 짧아졌고, 트레이스, 사용자, 세션을 탐색하는 속도도 더 빨라졌습니다. 새로운 Observations API v2와 Metrics API v2는 대규모 환경에서 더 빠르게 쿼리됩니다. Observation 레벨 평가는 평가마다 ClickHouse 쿼리를 실행할 필요 없이 몇 초 만에 실행됩니다.
+
+관련 기능을 추가로 출시하고 OSS 및 셀프 호스팅 지원 관련 업데이트를 공유하면서 이 페이지를 계속 업데이트할 예정입니다.
+
+<Callout type="info">
+  이번 버전의 Langfuse(v4)는 모든 입력, 출력, 컨텍스트 속성이 observation에 직접 존재하는 **단일 통합
+  observations 테이블**을 도입합니다. 마이그레이션 전후 워크플로우와 저장된 뷰 설정에 대해서는 [observation
+  중심 데이터 모델로 작업하기 가이드](/faq/all/explore-observations-in-v4)를 참고하세요.
+</Callout>
+
+## 왜 observation 중심인가?
+
+에이전틱 애플리케이션이 점점 더 복잡해지면서, 하나의 트레이스가 수백에서 수천 개의 작업 — LLM 호출, 도구 실행, 검색 단계, 에이전트 핸드오프 —을 포함할 수 있습니다. 기존 트레이스 테이블은 요청당 한 행만 보여주었기 때문에, 엔지니어가 실제로 신경 써야 할 작업들이 그 안에 숨겨져 있었습니다. Observation 중심 모델에서는 모든 작업을 가로질러 직접 쿼리할 수 있습니다 — 컨테이너("어떤 트레이스 안에 느린 호출이 있는가?")가 아니라 질문("어떤 LLM 호출이 느린가?")에서 시작할 수 있습니다.
+
+<Cards num={1}>
+  <Card
+    title="가이드: Observation으로 작업하기"
+    href="/faq/all/explore-observations-in-v4"
+    icon={<Table />}
+  />
+</Cards>
+
+## 프리뷰 접근 및 롤아웃 일정
+
+| 조직 생성일 (Langfuse Cloud)                         | Fast Preview 기본값 | "Preview" 토글 표시 여부       |
+| ---------------------------------------------------- | ------------------- | ------------------------------ |
+| 2026년 4월 14일 14:00 UTC(15:00 CET) 이전            | 선택 사항           | 표시됨(켜기/끄기 전환 가능)    |
+| 2026년 4월 14일 14:00 UTC(15:00 CET) 이후(당일 포함) | 기본 활성화         | 숨김(이미 Fast Preview 적용됨) |
+
+최근에 가입했는데 토글이 보이지 않는다면, 해당 조직은 이미 기본적으로 새로운 환경을 사용하고 있는 것입니다.
+기준일 이전에 생성된 조직의 경우, UI 왼쪽 하단 코너에서 "Preview" 토글을 통해 "Fast Preview"에 옵트인할 수 있습니다.
+
+<Frame className="max-w-xs mx-auto">
+  ![Beta toggle in Langfuse
+  UI](/images/changelog/2026-03-10-v4-preview/v4-beta-togle.png)
+</Frame>
+
+기준일 이전에 생성된 조직의 경우 이 토글은 계속해서 되돌릴 수 있습니다.
+
+**Export 소스 기준일(2026-05-20):** 이 날짜 이후에 생성된 Cloud 프로젝트는 blob storage, PostHog, Mixpanel 통합의 export 소스로 **Enriched observations(권장)**만 사용하도록 고정됩니다. 레거시 export 소스는 이러한 프로젝트의 UI에서 숨겨집니다. 이 날짜 이전에 생성된 프로젝트는 모든 export 소스를 계속 선택할 수 있습니다.
+
+<Callout type="info">
+`langfuse-js` 5.0.0 미만, `langfuse-python` 4.0.0 미만인 SDK, 또는 `x-langfuse-ingestion-version: 4`를 전송하지 않는 직접 OpenTelemetry 익스포터로 수집된 데이터는 새로운 UI에서 최대 10분까지 지연될 수 있습니다. 최신 SDK로 업그레이드하거나 OTEL 스팬 익스포터에 해당 헤더를 설정하면 새로운 데이터를 실시간으로 확인할 수 있습니다.
+</Callout>
+
+### 새로운 환경으로 마이그레이션하기
+
+<Steps>
+
+### 호환되는 수집 경로 사용하기
+
+새로운 데이터 모델을 활용하고 데이터를 실시간으로 탐색하려면 다음 수집 경로 중 하나를 사용하세요.
+
+- **Python SDK:** v4.7.0 이상 ([마이그레이션 가이드](/docs/observability/sdk/upgrade-path/python-v3-to-v4))
+- **JS/TS SDK:** v5.4.0 이상 ([마이그레이션 가이드](/docs/observability/sdk/upgrade-path/js-v4-to-v5))
+- **직접 OpenTelemetry 수집:** OTEL 스팬 익스포터에 `x-langfuse-ingestion-version: 4`를 설정 ([OpenTelemetry 설정](/integrations/native/opentelemetry))
+
+SDK 사용자에게 핵심 변경 사항은 `update_current_trace()`와 `updateActiveTrace()`가 `propagate_attributes()`로 대체된다는 점입니다. 이 함수는 `user_id`, `session_id`, `metadata`, `tags`, 그리고 (Python SDK의 경우) 요청 범위의 `environment`와 같은 속성을 모든 자식 observation에 자동으로 전파합니다.
+
+### 선택 사항: LLM-as-a-judge 평가 마이그레이션하기
+
+훨씬 더 빠른 실행을 위해 LLM-as-a-judge 평가를 트레이스 레벨 대신 observation 레벨에서 실행하도록 업그레이드하세요. 자세한 내용은 [LLM-as-a-judge 마이그레이션 가이드](/faq/all/llm-as-a-judge-migration)에서 확인하세요.
+
+### 선택 사항: 새로운 observations 및 metrics API 엔드포인트 도입하기
+
+[Observations API v2](/docs/api-and-data-platform/features/observations-api#v2)와 [Metrics API v2](/docs/metrics/features/metrics-api#v2)는 새로운 데이터 모델을 기반으로 상당한 성능 개선을 제공합니다.
+
+- **선택적 필드 조회:** 전체 행 대신 필요한 필드 그룹만 요청할 수 있습니다.
+- **커서 기반 페이지네이션:** 결과 집합의 크기와 관계없이 일관된 성능을 제공합니다.
+- **최적화된 쿼리:** 조인이 필요 없는 새로운 불변(immutable) 이벤트 테이블을 기반으로 합니다.
+
+마이그레이션 안내와 상세한 기능 비교는 [v2 API 발표](/changelog/2025-12-17-v2-metrics-and-observations-api)를 참고하세요.
+
+</Steps>
+
+## 지금 더 빨라진 부분
+
+### UI의 더 빠른 제품 성능
+
+차트 로딩 시간이 크게 단축되었습니다. 이제 긴 기간에 걸친 차트도 안심하고 불러올 수 있습니다. 트레이스, 사용자, 세션을 탐색하는 속도 또한 훨씬 빨라졌으며, 대규모 프로젝트에서 필터 반응 속도도 더 빨라졌습니다. [UI의 새로운 통합 트레이싱 테이블에 대해 더 알아보기](/faq/all/explore-observations-in-v4)
+
+### 더 빠른 API 워크플로우
+
+새로운 [Observations API v2](/docs/api-and-data-platform/features/observations-api#v2)와 [Metrics API v2](/docs/metrics/features/metrics-api#v2)는 대규모 환경에서 더 빠른 쿼리와 집계를 위해 설계되었습니다.
+
+### 더 빠른 평가 워크플로우
+
+[Observation 레벨 평가](/docs/evaluation/evaluation-methods/llm-as-a-judge)는 더 이상 평가마다 ClickHouse를 쿼리할 필요가 없기 때문에 몇 초 만에 실행됩니다.
+
+Observation 레벨 평가기는 실행 대상이 되는 observation의 데이터만 사용합니다. 같은 트레이스에 속한 형제(sibling) observation이나 자식 observation을 자동으로 읽지 않습니다. 애플리케이션이나 에이전트 호출 전체를 평가해야 한다면, 전체 입력과 출력을 기록하는 루트 observation을 대상으로 지정하고, 평가기가 필요로 하는 추가 컨텍스트를 해당 observation에 함께 기록하세요.
+
+## 내부 동작 [#under-the-hood]
+
+<Frame fullWidth>
+  ![Langfuse data model
+  overview](/images/changelog/2026-03-10-v4-preview/data-model.png)
+</Frame>
+
+이 프리뷰는 단순화된 observation 중심 데이터 모델을 기반으로 동작합니다. `user_id`, `session_id`, `metadata`와 같은 트레이스 레벨 속성은 이제 observation에 자동으로 전파되며, 이는 비용이 큰 조인을 제거하고 더 큰 규모에서도 제품 성능을 빠르게 유지하는 데 도움이 됩니다. 자세한 내용은 [데이터 모델 문서](/docs/observability/data-model)와 [Observation 탐색하기](/faq/all/explore-observations-in-v4)에서 확인하세요.
+
+### 무엇이 달라지는가
+
+|                        | 기존 모델                                                 | Observation 중심 모델                                                                                                                                                                          |
+| ---------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **저장 방식**          | 별도의 변경 가능한(mutable) Traces 및 Observations 테이블 | 단일 불변(immutable) Observations 테이블                                                                                                                                                       |
+| **컨텍스트 속성**      | 트레이스에 저장되며, 쿼리 시점에 조인됨                   | SDK 단에서 모든 observation에 전파됨                                                                                                                                                           |
+| **트레이스 입력/출력** | 트레이스에 직접 설정                                      | 제거되었으며, 대신 observation IO를 사용합니다. (트레이스 입력/출력에 의존하는 레거시 LLM-as-a-judge 평가기의 경우, SDK의 사용 중단(deprecated)된 `set_trace_io` 메서드를 사용할 수 있습니다.) |
+| **변경 가능성**        | 트레이스와 observation 모두 변경 가능                     | Observation은 변경 불가(한 번만 기록됨)                                                                                                                                                        |
+
+## OSS 및 셀프 호스팅
+
+이 프리뷰는 현재 Langfuse Cloud에서만 제공됩니다. OSS 배포를 위한 마이그레이션 경로를 준비 중이며, 진행 상황을 이 페이지와 [체인지로그](/changelog), 그리고 전용 [GitHub Discussion](https://github.com/orgs/langfuse/discussions/12518)에서 공유하겠습니다.
+
+## "Fast Preview"에 대해 궁금한 점이 있나요?
+
+롤아웃, 마이그레이션 단계, SDK 업그레이드, 또는 새로운 환경에서 불명확한 점에 대해 궁금한 점이 있다면 전용 [GitHub Discussion](https://github.com/orgs/langfuse/discussions/12518)에 질문해 주세요. 롤아웃 업데이트와 답변은 해당 스레드에서 계속 제공됩니다.
+
+## 시작하기
+
+<Cards num={4}>
+  <Card
+    title="SDK 마이그레이션 가이드"
+    href="/docs/observability/sdk/upgrade-path"
+    icon={<Book />}
+  />
+  <Card
+    title="UI 트레이싱 테이블 설정"
+    href="/faq/all/explore-observations-in-v4"
+    icon={<Table />}
+  />
+  <Card
+    title="Observations API v2"
+    href="/docs/api-and-data-platform/features/observations-api#v2"
+    icon={<Zap />}
+  />
+  <Card
+    title="Metrics API v2"
+    href="/docs/metrics/features/metrics-api#v2"
+    icon={<BarChart3 />}
+  />
+  <Card
+    title="Fast Preview의 대시보드 변경 사항"
+    href="/faq/all/dashboard-changes-in-v4"
+    icon={<LayoutDashboard />}
+  />
+  <Card
+    title="Fast Preview에 대해 질문하기"
+    href="https://github.com/orgs/langfuse/discussions/12518"
+    icon={<Github />}
+  />
+</Cards>

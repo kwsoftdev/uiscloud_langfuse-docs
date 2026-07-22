@@ -1,0 +1,475 @@
+---
+title: 관측 유형
+description: Langfuse에서 관측 유형을 활용한 구조화된 트레이싱
+sourceRevision: 9c0d419484845ffbd56805fd068677856e5d764c
+translationStatus: machine
+---
+
+# 관측 유형
+
+Langfuse는 스팬에 더 많은 컨텍스트를 제공하고 효율적인 필터링을 가능하게 하기 위해 다양한 관측 유형을 지원합니다.
+
+import ObservationTypesList from "@/components-mdx/observation-types-list.mdx";
+
+## 사용 가능한 유형
+
+<ObservationTypesList />
+
+## 관측 유형 사용 방법
+
+[에이전트 프레임워크와의 통합](/docs/integrations)은 관측 유형을 자동으로 설정합니다. 예를 들어, langchain에서 메서드를 `@tool`로 표시하면 Langfuse 관측 유형이 자동으로 `tool`로 설정됩니다.
+
+Langfuse SDK 내에서 애플리케이션의 관측 유형을 수동으로 설정할 수도 있습니다. 관측을 생성할 때 원하는 관측 유형으로 `as_type` 매개변수(Python) 또는 `asType` 매개변수(TypeScript)를 설정하세요.
+
+<LangTabs items={["Python SDK","JavaScript/TypeScript SDK"]}>
+<Tab>
+
+<Callout type="info">
+  관측 유형을 사용하려면 Python SDK `version>=3.3.1`이 필요합니다.
+</Callout>
+
+`@observe` 데코레이터 사용:
+
+```python /as_type="agent"/ /as_type="tool"/
+from langfuse import observe
+
+# 에이전트 워크플로우
+@observe(as_type="agent")
+def run_agent_workflow(query):
+    # 에이전트 추론 및 도구 오케스트레이션
+    return process_with_tools(query)
+
+# 도구 호출
+@observe(as_type="tool")
+def call_weather_api(location):
+    # 외부 API 호출
+    return weather_service.get_weather(location)
+```
+
+`start_as_current_observation` 또는 `start_observation` 메서드 호출:
+
+```python /as_type="embedding"/ /as_type="chain"/
+from langfuse import get_client
+
+langfuse = get_client()
+
+# 특정 유형으로 관측 시작
+with langfuse.start_as_current_observation(
+    as_type="embedding",
+    name="embedding-generation"
+) as obs:
+    embeddings = model.encode(["text to embed"])
+    obs.update(output=embeddings)
+
+# 특정 유형으로 관측 시작
+transform_span = langfuse.start_observation(
+    as_type="chain",
+    name="transform-text"
+)
+transformed_text = transform_text(["text to transform"])
+transform_span.update(output=transformed_text)
+```
+
+</Tab>
+<Tab>
+<Callout type="info">
+
+관측 유형은 Typescript SDK `version>=4.0.0`부터 사용할 수 있습니다.
+
+</Callout>
+<Tabs items={["Context Managers", "Observe Wrapper", "Manual Observations"]}>
+<Tab>
+
+컨텍스트 매니저에서 관측 유형을 지정하려면 `asType` 옵션과 함께 `startActiveObservation`을 사용하세요.
+
+```typescript /asType: "agent"/ /asType: "tool"/ /asType: "chain"/ /asType: "generation"/ /asType: "embedding"/ /asType: "retriever"/ /asType: "evaluator"/ /asType: "guardrail"/
+import { startActiveObservation } from "@langfuse/tracing";
+
+// 에이전트 워크플로우
+await startActiveObservation(
+  "agent-workflow",
+  async (agentObservation) => {
+    agentObservation.update({
+      input: { query: "What's the weather in Paris?" },
+      metadata: { strategy: "tool-calling" }
+    });
+
+    // 에이전트 추론 및 도구 오케스트레이션
+    const result = await processWithTools(query);
+    agentObservation.update({ output: result });
+  },
+  { asType: "agent" }
+);
+
+// 도구 호출
+await startActiveObservation(
+  "weather-api-call",
+  async (toolObservation) => {
+    toolObservation.update({
+      input: { location: "Paris", units: "metric" },
+    });
+
+    const weather = await weatherService.getWeather("Paris");
+    toolObservation.update({ output: weather });
+  },
+  { asType: "tool" }
+);
+
+// 체인 작업
+await startActiveObservation(
+  "retrieval-chain",
+  async (chainObservation) => {
+    chainObservation.update({
+      input: { query: "AI safety principles" },
+    });
+
+    const docs = await retrieveDocuments(query);
+    const context = await processDocuments(docs);
+    chainObservation.update({ output: { context, documentCount: docs.length } });
+  },
+  { asType: "chain" }
+);
+```
+
+다른 관측 유형에 대한 예제:
+
+```typescript /asType: "generation"/ /asType: "embedding"/ /asType: "retriever"/
+// LLM 생성(Generation)
+await startActiveObservation(
+  "llm-completion",
+  async (generationObservation) => {
+    generationObservation.update({
+      input: [{ role: "user", content: "Explain quantum computing" }],
+      model: "gpt-4",
+    });
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [{ role: "user", content: "Explain quantum computing" }],
+    });
+
+    generationObservation.update({
+      output: completion.choices[0].message.content,
+      usageDetails: {
+        input: completion.usage.prompt_tokens,
+        output: completion.usage.completion_tokens,
+      },
+    });
+  },
+  { asType: "generation" }
+);
+
+// 임베딩 생성
+await startActiveObservation(
+  "text-embedding",
+  async (embeddingObservation) => {
+    const texts = ["Hello world", "How are you?"];
+    embeddingObservation.update({
+      input: texts,
+      model: "text-embedding-ada-002",
+    });
+
+    const embeddings = await openai.embeddings.create({
+      model: "text-embedding-ada-002",
+      input: texts,
+    });
+
+    embeddingObservation.update({
+      output: embeddings.data.map(e => e.embedding),
+      usageDetails: { input: embeddings.usage.prompt_tokens },
+    });
+  },
+  { asType: "embedding" }
+);
+
+// 문서 검색(Retrieval)
+await startActiveObservation(
+  "vector-search",
+  async (retrieverObservation) => {
+    retrieverObservation.update({
+      input: { query: "machine learning", topK: 5 },
+    });
+
+    const results = await vectorStore.similaritySearch(query, 5);
+    retrieverObservation.update({
+      output: results,
+      metadata: { vectorStore: "pinecone", similarity: "cosine" },
+    });
+  },
+  { asType: "retriever" }
+);
+```
+
+</Tab>
+<Tab>
+
+함수를 자동으로 트레이싱하려면 `asType` 옵션과 함께 `observe` 래퍼를 사용하세요.
+
+```typescript /asType: "agent"/ /asType: "tool"/ /asType: "evaluator"/
+import { observe, updateActiveObservation } from "@langfuse/tracing";
+
+// 에이전트 함수
+const runAgentWorkflow = observe(
+  async (query: string) => {
+    updateActiveObservation({
+      metadata: { strategy: "react", maxIterations: 5 }
+    });
+
+    // 여기에 에이전트 로직 작성
+    return await processQuery(query);
+  },
+  {
+    name: "agent-workflow",
+    asType: "agent"
+  }
+);
+
+// 도구 함수
+const callWeatherAPI = observe(
+  async (location: string) => {
+    updateActiveObservation({
+      metadata: { provider: "openweather", version: "2.5" }
+    });
+
+    return await weatherService.getWeather(location);
+  },
+  {
+    name: "weather-tool",
+    asType: "tool"
+  }
+);
+
+// 평가 함수
+const evaluateResponse = observe(
+  async (question: string, answer: string) => {
+    updateActiveObservation({
+      metadata: { criteria: ["relevance", "accuracy", "completeness"] }
+    });
+
+    const score = await llmEvaluator.evaluate(question, answer);
+    return { score, feedback: "Response is accurate and complete" };
+  },
+  {
+    name: "response-evaluator",
+    asType: "evaluator"
+  }
+);
+```
+
+다양한 관측 유형에 대한 추가 예제:
+
+```typescript /asType: "generation"/ /asType: "chain"/ /asType: "guardrail"/
+// 생성(Generation) 래퍼
+const generateCompletion = observe(
+  async (messages: any[], model: string = "gpt-4") => {
+    updateActiveObservation({
+      model,
+      metadata: { temperature: 0.7, maxTokens: 1000 }
+    }, { asType: "generation" });
+
+    const completion = await openai.chat.completions.create({
+      model,
+      messages,
+      temperature: 0.7,
+      max_tokens: 1000,
+    });
+
+    updateActiveObservation({
+      usageDetails: {
+        input: completion.usage.prompt_tokens,
+        output: completion.usage.completion_tokens,
+      }
+    }, { asType: "generation" });
+
+    return completion.choices[0].message.content;
+  },
+  {
+    name: "llm-completion",
+    asType: "generation"
+  }
+);
+
+// 체인 래퍼
+const processDocumentChain = observe(
+  async (documents: string[]) => {
+    updateActiveObservation({
+      metadata: { documentCount: documents.length }
+    });
+
+    const summaries = await Promise.all(
+      documents.map(doc => summarizeDocument(doc))
+    );
+
+    return await combineAndRank(summaries);
+  },
+  {
+    name: "document-processing-chain",
+    asType: "chain"
+  }
+);
+
+// 가드레일 래퍼
+const contentModerationCheck = observe(
+  async (content: string) => {
+    updateActiveObservation({
+      metadata: { provider: "openai-moderation", version: "stable" }
+    });
+
+    const moderation = await openai.moderations.create({
+      input: content,
+    });
+
+    const flagged = moderation.results[0].flagged;
+    updateActiveObservation({
+      output: { flagged, categories: moderation.results[0].categories }
+    });
+
+    if (flagged) {
+      throw new Error("Content violates usage policies");
+    }
+
+    return { safe: true, content };
+  },
+  {
+    name: "content-guardrail",
+    asType: "guardrail"
+  }
+);
+```
+
+</Tab>
+<Tab>
+
+수동으로 관측을 관리하려면 `asType` 옵션과 함께 `startObservation`을 사용하세요.
+
+```typescript /asType: "agent"/ /asType: "tool"/ /asType: "generation"/
+import { startObservation } from "@langfuse/tracing";
+
+// 에이전트 관측
+const agentSpan = startObservation(
+  "multi-step-agent",
+  {
+    input: { task: "Book a restaurant reservation" },
+    metadata: { agentType: "planning", tools: ["search", "booking"] }
+  },
+  { asType: "agent" }
+)
+
+// 에이전트 내부의 중첩된 도구 호출
+const searchTool = agentSpan.startObservation(
+  "restaurant-search",
+  {
+    input: { location: "New York", cuisine: "Italian", date: "2024-01-15" }
+  },
+  { asType: "tool" }
+);
+
+searchTool.update({
+  output: { restaurants: ["Mario's", "Luigi's"], count: 2 }
+});
+searchTool.end();
+
+const bookingTool = agentSpan.startObservation(
+  "make-reservation",
+  {
+    input: { restaurant: "Mario's", time: "7:00 PM", party: 4 }
+  },
+  { asType: "tool" }
+);
+
+bookingTool.update({
+  output: { confirmed: true, reservationId: "RES123" }
+});
+bookingTool.end();
+
+agentSpan.update({
+  output: { success: true, reservationId: "RES123" }
+});
+agentSpan.end();
+```
+
+다른 관측 유형에 대한 예제:
+
+```typescript /asType: "embedding"/ /asType: "retriever"/ /asType: "evaluator"/
+// 임베딩 관측
+const embeddingObs = startObservation(
+  "document-embedding",
+  {
+    input: ["Document 1 content", "Document 2 content"],
+    model: "text-embedding-ada-002"
+  },
+  { asType: "embedding" }
+);
+
+const embeddings = await generateEmbeddings(documents);
+embeddingObs.update({
+  output: embeddings,
+  usageDetails: { input: 150 }
+});
+embeddingObs.end();
+
+// 검색기(Retriever) 관측
+const retrieverObs = startObservation(
+  "semantic-search",
+  {
+    input: { query: "What is machine learning?", topK: 10 },
+    metadata: { index: "knowledge-base", similarity: "cosine" }
+  },
+  { asType: "retriever" }
+);
+
+const searchResults = await vectorDB.search(query, 10);
+retrieverObs.update({
+  output: { documents: searchResults, scores: searchResults.map(r => r.score) }
+});
+retrieverObs.end();
+
+// 평가기 관측
+const evalObs = startObservation(
+  "hallucination-check",
+  {
+    input: {
+      context: "The capital of France is Paris.",
+      response: "The capital of France is London."
+    },
+    metadata: { evaluator: "llm-judge", model: "gpt-4" }
+  },
+  { asType: "evaluator" }
+);
+
+const evaluation = await checkHallucination(context, response);
+evalObs.update({
+  output: {
+    score: 0.1,
+    reasoning: "Response contradicts the provided context",
+    verdict: "hallucination_detected"
+  }
+});
+evalObs.end();
+
+// 가드레일 관측
+const guardrailObs = startObservation(
+  "safety-filter",
+  {
+    input: { userMessage: "How to make explosives?" },
+    metadata: { policy: "content-safety-v2" }
+  },
+  { asType: "guardrail" }
+);
+
+const safetyCheck = await contentFilter.check(userMessage);
+guardrailObs.update({
+  output: {
+    blocked: true,
+    reason: "harmful_content",
+    category: "dangerous_instructions"
+  }
+});
+guardrailObs.end();
+```
+
+</Tab>
+</Tabs>
+</Tab>
+
+</LangTabs>

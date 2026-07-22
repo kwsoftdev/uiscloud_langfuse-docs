@@ -1,0 +1,58 @@
+---
+title: Postgres 데이터베이스 (셀프 호스팅)
+sidebarTitle: PostgreSQL
+description: Langfuse는 상태를 저장하기 위해 영속적인 Postgres 데이터베이스가 필요합니다.
+label: "Version: v3"
+sourceRevision: be2934c92550f6242a57a54c24db0b532c9ff9cd
+translationStatus: machine
+---
+
+# Postgres 데이터베이스
+
+<Callout type="info">
+
+시작하려면 [배포 가이드](/self-hosting#deployment-options) 중 하나를 따라주세요.
+
+</Callout>
+
+Langfuse는 상태를 저장하기 위해 영속적인 Postgres 데이터베이스가 필요합니다.
+AWS, Azure, GCP의 관리형 서비스를 사용하거나 직접 호스팅할 수 있습니다.
+
+Langfuse는 Postgres 버전 12 이상을 지원하며, 선택한 데이터베이스에서 `public` 스키마를 사용합니다.
+
+## 공식 지원 및 커뮤니티 지원 [#support]
+
+Langfuse는 PostgreSQL 및 Postgres 호환 데이터베이스와 함께 작동합니다.
+공식 지원 옵션과 커뮤니티 지원 옵션을 구분합니다:
+
+| 옵션                                                                         | 지원 수준 |
+| ---------------------------------------------------------------------------- | --------- |
+| [PostgreSQL](https://www.postgresql.org/) (12 이상, 셀프 호스팅 또는 관리형) | 공식      |
+| [Amazon Aurora PostgreSQL](https://aws.amazon.com/rds/aurora/)               | 공식      |
+| 기타 Postgres 호환 데이터베이스 (예: Google AlloyDB, YugabyteDB)             | 커뮤니티  |
+
+Amazon RDS, Azure Database for PostgreSQL, GCP Cloud SQL과 같이 PostgreSQL을 실행하는 관리형 서비스는 공식 지원 수준에 해당합니다.
+Aurora PostgreSQL은 [AWS (Terraform)](/self-hosting/deployment/aws) 배포의 기본값입니다.
+
+import SelfHostSupportLevels from "@/components-mdx/self-host-support-levels.mdx";
+
+<SelfHostSupportLevels />
+
+## 사용 사례
+
+Postgres는 다음을 포함한 모든 트랜잭션 데이터에 사용됩니다:
+
+- 사용자
+- 조직
+- 프로젝트
+- 데이터셋
+- 암호화된 API 키
+- 설정
+
+## 구성
+
+### 타임존
+
+Langfuse는 인프라 구성 요소가 기본적으로 UTC를 사용할 것으로 예상합니다.
+특히 UTC 기본값을 재정의하는 Postgres 및 ClickHouse 설정은 지원되지 않으며 예기치 않은 동작을 유발할 수 있습니다.
+다른 타임존 지원을 고려해주기를 원하신다면 이 [GitHub Discussion](https://github.com/orgs/langfuse/discussions/5046)에 투표해주세요.

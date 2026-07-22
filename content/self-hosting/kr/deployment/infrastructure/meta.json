@@ -1,0 +1,12 @@
+{
+  "title": "인프라",
+  "pages": [
+    "[아키텍처 개요 ↗](/self-hosting#architecture)",
+    "containers",
+    "clickhouse",
+    "cache",
+    "blobstorage",
+    "postgres",
+    "llm-api"
+  ]
+}

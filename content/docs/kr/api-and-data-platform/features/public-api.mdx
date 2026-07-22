@@ -1,0 +1,259 @@
+---
+title: 퍼블릭 API
+sidebarTitle: 퍼블릭 API
+description: 모든 Langfuse 데이터와 기능은 API를 통해 사용할 수 있습니다. 이 가이드를 따라 시작해보세요.
+sourceRevision: 0cbca16260b9aacf1351bdfef367612ae142ddbb
+translationStatus: machine
+---
+
+# 퍼블릭 API
+
+Langfuse는 개방적이며 커스텀 워크플로우와 통합을 통해 확장할 수 있도록 설계되었습니다. 모든 Langfuse 데이터와 기능은 API를 통해 사용할 수 있습니다.
+
+<Tabs items={["Path", "Cloud US", "Cloud EU", "Cloud Japan", "HIPAA US"]}>
+
+<Tab>
+
+```
+/api/public
+```
+
+</Tab>
+<Tab>
+
+```
+https://us.cloud.langfuse.com/api/public
+```
+
+</Tab>
+<Tab>
+
+```
+https://cloud.langfuse.com/api/public
+```
+
+</Tab>
+<Tab>
+
+```
+https://jp.cloud.langfuse.com/api/public
+```
+
+</Tab>
+<Tab>
+
+```
+https://hipaa.cloud.langfuse.com/api/public
+```
+
+</Tab>
+</Tabs>
+
+참고 자료:
+
+- API 레퍼런스: https://api.reference.langfuse.com
+- OpenAPI 스펙: https://cloud.langfuse.com/generated/api/openapi.yml
+
+<Callout type="info">
+
+API에는 3가지 그룹이 있습니다:
+
+- 이 페이지 -> 프로젝트 수준 API: 프로젝트 내에서 트레이스/평가/프롬프트/설정을 CRUD
+- [조직 수준 API](/docs/administration/scim-and-org-api): 프로젝트, 사용자(SCIM), 권한 프로비저닝
+- [인스턴스 관리 API](/self-hosting/administration/instance-management-api): 셀프 호스팅 설치 환경에서 조직 관리
+
+</Callout>
+
+## 인증
+
+[Basic Auth](https://en.wikipedia.org/wiki/Basic_access_authentication)를 사용해 API를 인증합니다.
+API 키는 Langfuse 프로젝트 설정에서 확인할 수 있습니다.
+
+- 사용자 이름: Langfuse Public Key
+- 비밀번호: Langfuse Secret Key
+
+예시:
+
+```bash
+curl -u public-key:secret-key https://cloud.langfuse.com/api/public/projects
+```
+
+## SDK를 통한 액세스
+
+Langfuse [Python SDK](/docs/sdk/python/sdk-v3)와 [JS/TS SDK](/docs/sdk/typescript/guide) 모두 편의를 위해 퍼블릭 REST API에 대한 강타입 래퍼를 제공합니다. 두 SDK 모두 Langfuse 클라이언트 인스턴스의 `api` 속성을 통해 API 메서드에 액세스할 수 있습니다.
+
+에디터의 인텔리센스를 사용해 API 메서드와 해당 파라미터를 탐색할 수 있습니다.
+
+<Callout type="info">
+
+Python SDK v4와 JS/TS SDK v5에서는 고성능 리소스가 기본값입니다: `api.observations`, `api.scores`, `api.metrics`. 레거시 v1 리소스는 `api.legacy.*`(Python: `*_v1`, JS/TS: `*V1`) 하위로 이동했습니다. SDK 예시는 [SDK를 통한 쿼리](/docs/api-and-data-platform/features/query-via-sdk)를 참고하세요.
+
+</Callout>
+
+<Callout type="info">
+
+[프롬프트](/docs/prompts/get-started#use-prompt)를 가져올 때는 Langfuse 클라이언트의 `get_prompt`(Python) / `getPrompt`(JS/TS) 메서드를 사용하여 클라이언트 측 캐싱, 자동 재시도, 폴백의 이점을 누리세요.
+
+</Callout>
+
+<LangTabs items={["Python SDK", "JS/TS SDK", "Java SDK"]}>
+<Tab>
+
+[Python SDK](/docs/sdk/python/sdk-v3)를 사용하는 경우:
+
+```python
+from langfuse import get_client
+
+langfuse = get_client()
+
+# Observations API v2를 통해 행 단위 관측치(observation) 조회
+observations = langfuse.api.observations.get_many(
+    trace_id="trace-id",
+    fields="core,basic,usage",
+    limit=100,
+)
+
+# Metrics API v2를 통해 집계 데이터 조회
+metrics = langfuse.api.metrics.get(query="""
+{
+  "view": "observations",
+  "metrics": [{"measure": "totalCost", "aggregation": "sum"}],
+  "dimensions": [{"field": "providedModelName"}],
+  "filters": [],
+  "fromTimestamp": "2025-05-01T00:00:00Z",
+  "toTimestamp": "2025-05-13T00:00:00Z"
+}
+""")
+
+# 인텔리센스를 통해 더 많은 엔드포인트 탐색
+langfuse.api.*
+await langfuse.async_api.*
+```
+
+</Tab>
+
+<Tab>
+
+```ts
+import { LangfuseClient } from '@langfuse/client';
+
+const langfuse = new LangfuseClient();
+
+// Observations API v2를 통해 행 단위 관측치(observation) 조회
+const observations = await langfuse.api.observations.getMany({
+  traceId: "trace-id",
+  fields: "core,basic,usage",
+  limit: 100,
+});
+
+// Metrics API v2를 통해 집계 데이터 조회
+const metrics = await langfuse.api.metrics.get({
+  query: JSON.stringify({
+    view: "observations",
+    metrics: [{ measure: "totalCost", aggregation: "sum" }],
+    dimensions: [{ field: "providedModelName" }],
+    filters: [],
+    fromTimestamp: "2025-05-01T00:00:00Z",
+    toTimestamp: "2025-05-13T00:00:00Z"
+  })
+});
+
+// 인텔리센스를 통해 더 많은 엔드포인트 탐색
+langfuse.api.*
+```
+
+</Tab>
+
+<Tab>
+
+`pom.xml`에 다음을 추가하여 Langfuse를 설치합니다:
+
+```xml
+<dependencies>
+  <dependency>
+    <groupId>com.langfuse</groupId>
+    <artifactId>langfuse-java</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+  </dependency>
+</dependencies>
+
+<repositories>
+  <repository>
+    <id>github</id>
+    <name>GitHub Package Registry</name>
+    <url>https://maven.pkg.github.com/langfuse/langfuse-java</url>
+  </repository>
+</repositories>
+```
+
+다음과 같이 Java SDK를 초기화하고 사용합니다:
+
+```java
+import com.langfuse.client.LangfuseClient;
+import com.langfuse.client.resources.prompts.types.PromptMetaListResponse;
+import com.langfuse.client.core.LangfuseClientApiException;
+
+LangfuseClient client = LangfuseClient.builder()
+  .url("https://cloud.langfuse.com") // 🇪🇺 EU 데이터 리전
+  // 다른 Langfuse 데이터 리전:
+  // .url("https://us.cloud.langfuse.com") // 🇺🇸 US
+  // .url("https://jp.cloud.langfuse.com") // 🇯🇵 Japan
+  // .url("https://hipaa.cloud.langfuse.com") // ⚕️ HIPAA
+  // .url("http://localhost:3000") // 🏠 로컬 배포
+  .credentials("pk-lf-...", "sk-lf-...")
+  .build();
+
+try {
+  PromptMetaListResponse prompts = client.prompts().list();
+} catch (LangfuseClientApiException error) {
+  System.out.println(error.getBody());
+  System.out.println(error.getStatusCode());
+}
+```
+
+</Tab>
+</LangTabs>
+
+## API를 통한 트레이스 수집
+
+<Callout type="info">
+  향후 OpenTelemetry 엔드포인트가 Ingestion API를 대체할 예정입니다.
+  따라서 트레이스 수집 시 OpenTelemetry 엔드포인트로 전환하는 것을 강력히
+  권장합니다. 자세한 내용은 [OpenTelemetry
+  문서](/integrations/native/opentelemetry)를 참고하세요.
+</Callout>
+
+- [OpenTelemetry 트레이스 수집 엔드포인트](https://api.reference.langfuse.com/#tag/opentelemetry/POST/api/public/otel/v1/traces)는 OTLP/HTTP 사양을 구현하여 Langfuse 관측성을 위한 트레이스 수집에 네이티브 OpenTelemetry 통합을 제공합니다.
+- (레거시) [Ingestion API](https://api.reference.langfuse.com/#tag/ingestion/POST/api/public/ingestion)는 API를 통한 트레이스 수집을 지원합니다.
+
+## API를 통한 데이터 조회
+
+새로운 데이터 추출 워크플로우에는 v2 데이터 API를 사용하세요:
+
+- [Observations API v2](/docs/api-and-data-platform/features/observations-api#v2) - 커스텀 워크플로우, 평가 파이프라인, 분석을 위해 Langfuse에서 관측치(스팬, 제너레이션, 이벤트) 데이터를 조회합니다.
+- [Metrics API v2](/docs/metrics/features/metrics-api#v2) - Langfuse 데이터에서 집계된 분석 및 메트릭을 조회합니다.
+
+<Callout type="info">
+
+기존 트레이스, 관측치, 메트릭 읽기 API는 계속 사용할 수 있지만, 대규모 환경에서 성능이 상대적으로 낮기 때문에 새로운 추출 워크플로우의 기본값으로는 권장하지 않습니다. 행 단위 데이터는 [Observations API v2](/docs/api-and-data-platform/features/observations-api#v2)를, 집계 데이터는 [Metrics API v2](/docs/metrics/features/metrics-api#v2)를 참고하세요.
+
+</Callout>
+
+## 대안
+
+다음을 통해 데이터를 내보낼 수도 있습니다:
+
+- [UI](/docs/api-and-data-platform/features/export-from-ui) - Langfuse UI에서 수동 일괄 내보내기
+- [Blob Storage](/docs/api-and-data-platform/features/export-to-blob-storage) - 클라우드 스토리지로 예약된 자동 내보내기
+
+## FAQ
+
+import { FaqPreview } from "@/components/faq/FaqPreview";
+
+<FaqPreview tags={["platform"]} />
+
+## GitHub 토론
+
+import { GhDiscussionsPreview } from "@/components/gh-discussions/GhDiscussionsPreview";
+
+<GhDiscussionsPreview labels={["feat-api"]} />

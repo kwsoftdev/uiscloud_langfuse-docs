@@ -1,0 +1,86 @@
+---
+title: Langfuse 어시스턴트
+description: Langfuse Cloud UI 내에서 자연어로 Langfuse 프로젝트 데이터에 대해 질문할 수 있습니다.
+sidebarTitle: 어시스턴트
+sourceRevision: 12da354c1b48d3f71e834931c2a29387d875f6bc
+translationStatus: machine
+---
+
+# Langfuse 어시스턴트
+
+<AvailabilityBanner
+  availability={{
+    hobby: "public-beta",
+    core: "public-beta",
+    pro: "public-beta",
+    enterprise: "public-beta",
+    selfHosted: "not-available",
+  }}
+/>
+
+Langfuse 어시스턴트는 Langfuse 프로젝트 데이터를 탐색하고, 사용자의 승인을 받아 Langfuse 내에서 선택된 작업을 수행할 수 있는 제품 내 어시스턴트입니다. 트레이스, observation, 세션, 메트릭, Langfuse 워크플로에 대해 자연어로 질문할 수 있습니다.
+
+<Video src="https://static.langfuse.com/docs-videos/in-app-agent.mp4" />
+
+## 무엇을 질문할 수 있나요 [#what-you-can-ask]
+
+어시스턴트에게 다음과 같은 질문을 할 수 있습니다:
+
+- "어제 지연 시간이 가장 길었던 트레이스는 무엇인가요?"
+- "지난 1시간 동안 실패한 generation을 보여주세요."
+- "이번 주 토큰 사용량을 모델별로 알려주세요."
+- "평가기는 어떻게 설정하나요?"
+- "오늘 발생한 오류로 필터링된 트레이스 테이블을 열어주세요."
+- "회귀 테스트 예시용 데이터셋을 만들어주세요."
+- "친절함(friendliness)에 대한 숫자형 점수 구성을 설정해주세요."
+
+## 작동 방식 [#how-it-works]
+
+어시스턴트는 Langfuse MCP 서버와 추가 도구를 사용하여 질문에 답하고, 프로젝트 데이터를 조회하며, Langfuse 내에서 작업을 수행할 수 있도록 돕습니다.
+
+어시스턴트가 할 수 있는 일:
+
+- Langfuse 도구를 통해 트레이스, observation, 세션, 메트릭 조회
+- Langfuse 문서 검색
+- 트레이스, 세션, 대시보드, 프롬프트, 데이터셋, 실험, 평가(evals), 모니터, 프로젝트 설정 등 Langfuse 페이지로의 링크 제안
+- Langfuse 리소스 생성 또는 수정과 같은 선택된 작업 지원
+
+어시스턴트는 기본적으로 안전하게 설계되었습니다:
+
+- 요청이 데이터나 구성을 변경하는 경우, 어시스턴트는 먼저 해당 특정 작업에 대해 명시적인 승인을 요청한 후 진행을 일시 중지합니다.
+
+어시스턴트는 현재 프로젝트에서 사용자의 계정이 이미 접근 권한을 가진 작업만 사용할 수 있습니다. 승인은 두 번째 안전장치를 추가하는 것일 뿐, 추가적인 권한을 부여하지는 않습니다.
+
+어시스턴트는 또한 현재 트레이스, observation, 세션, 대시보드 등 Langfuse UI 내에서 사용자의 현재 컨텍스트와, 이름, 브라우저 언어, 시간대와 같은 사용자 메타데이터를 인식합니다. 이 컨텍스트는 더 관련성 높은 답변을 제공하고 작업을 제안하는 데 사용됩니다.
+
+## 데이터 프라이버시 및 보안 [#data-privacy-and-security]
+
+어시스턴트는 다른 Langfuse AI 기능과 동일한 데이터 처리 모델을 따릅니다. 표준 보안 및 프라이버시 세부 사항은 [AI 기능](/security/ai-features)을 참조하세요.
+
+주요 사항:
+
+- 모델 요청은 사용자의 [Langfuse 데이터 리전](/security/data-regions)과 동일한 AWS 리전에서 처리됩니다.
+- 어시스턴트 접근 권한은 인증된 사용자와 현재 프로젝트로 범위가 제한됩니다.
+- 데이터를 변경할 수 있는 작업은 명시적인 승인이 필요하며, 로그인한 사용자의 권한 범위 내로 제한됩니다.
+- 제품 및 서비스 개선을 위한 AI 기능 트레이싱은 조직 관리자 및 소유자가 별도로 활성화하거나 비활성화할 수 있습니다.
+
+## 대화 기록 [#conversation-history]
+
+어시스턴트 대화는 사용자와 프로젝트별로 저장되므로 이전 대화로 다시 돌아갈 수 있습니다.
+
+## 피드백 [#feedback]
+
+어시스턴트의 응답에 대해 좋아요 또는 싫어요 피드백을 제출할 수 있습니다. AI 기능 트레이싱이 활성화되어 있는 경우, 피드백은 제품 및 서비스 개선에 사용될 수 있습니다.
+
+또한 [피드백 토론](https://github.com/orgs/langfuse/discussions/14196)에서 의견을 공유할 수도 있습니다.
+
+## 제한 사항 [#limitations]
+
+어시스턴트는 베타 기능입니다. 질문을 잘못 이해하거나 불완전한 결과를 반환할 수 있습니다. 중요한 답변은 반드시 확인하고, 작업을 실행하기 전에 작업 세부 사항을 신중히 검토하세요.
+
+## 관련 리소스 [#related-resources]
+
+- [AI 기능 보안](/security/ai-features)
+- [Langfuse MCP 서버](/docs/api-and-data-platform/features/mcp-server)
+- [Langfuse Agent Skill](/docs/api-and-data-platform/features/agent-skill)
+- [Langfuse 어시스턴트 발표](/changelog/2026-06-19-langfuse-assistant-public-beta)

@@ -1,0 +1,12 @@
+{
+  "title": "SDK",
+  "pages": [
+    "overview",
+    "instrumentation",
+    "advanced-features",
+    "troubleshooting-and-faq",
+    "upgrade-path",
+    "external:[Python 레퍼런스 ↗](https://python.reference.langfuse.com/)",
+    "external:[JS/TS 레퍼런스 ↗](https://js.reference.langfuse.com/)"
+  ]
+}

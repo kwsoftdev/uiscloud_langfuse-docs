@@ -1,0 +1,96 @@
+---
+title: Arize AX 대안? LLM 관측성을 위한 Langfuse vs. Arize AI 및 Arize Phoenix 비교
+description: 이 글에서는 LLM 관측성, 분석, 평가, 테스트, 주석 기능에 대해 Langfuse와 Arize AI, Arize Phoenix를 비교합니다.
+tags: [comparison]
+sourceRevision: f4e5e1edb9fa4c33680b0a37ca039a86a341cde0
+translationStatus: machine
+---
+
+# Langfuse vs. Arize AX / Arize Phoenix
+
+이 가이드는 엔지니어링 팀이 적합한 LLM 관측성 플랫폼을 선택할 수 있도록 **[Langfuse](/)**와 **[Arize AX](https://arize.com/llm-observability/)**의 주요 차이점을 설명합니다.
+
+**요약:**
+
+- 오픈소스의 유연성, 사용량 기반의 투명한 가격 정책, 광범위한 통합과 완전한 셀프 호스팅 기능을 갖춘 개발자 중심 경험을 중시한다면 **Langfuse를 선택**하세요.
+- 금융 규제 준수(PCI DSS)에 특화된 지원과 기존 ML 데이터 패브릭과의 긴밀한 통합이 필요한 관리형 SaaS 솔루션을 원한다면 **Arize AX를 선택**하세요.
+
+## 오픈 소스 및 배포
+
+Langfuse는 셀프 호스팅 버전과 클라우드 버전 간 기능 동등성을 보장하는 오픈소스 모델로 두각을 나타냅니다. Arize AX는 독점 엔터프라이즈 SaaS이며, 오픈소스 대응 제품([Arize Phoenix](https://docs.arize.com/phoenix))은 주로 로컬 테스트 및 디버깅용입니다(ClickHouse 대신 PostgreSQL 사용).
+
+| 기능               | Langfuse                                                                                                                                                                                  | Arize AX                                                                                                                                                                                               |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **모델**           | **[오픈 소스](https://github.com/langfuse/langfuse)** (MIT 라이선스)                                                                                                                      | **독점 SaaS** (오픈소스 "[Phoenix](https://github.com/arize-ai/phoenix)"는 로컬 개발용으로만 제공)                                                                                                     |
+| **GitHub 스타 수** | [![Langfuse GitHub stars](https://img.shields.io/github/stars/langfuse/langfuse?style=for-the-badge&label=%20&labelColor=black&color=orange)](https://github.com/langfuse/langfuse)       | [![Phoenix GitHub stars (Phoenix)](https://img.shields.io/github/stars/arize-ai/phoenix?style=for-the-badge&label=%20&labelColor=black&color=grey)](https://github.com/arize-ai/phoenix)               |
+| **PyPI 다운로드**  | [![Langfuse pypi downloads](https://img.shields.io/pypi/dm/langfuse?style=for-the-badge&label=%20&labelColor=black&color=orange)](https://pypi.org/project/langfuse/)                     | [![Phoenix pypi downloads (Phoenix)](https://img.shields.io/pypi/dm/arize-phoenix?style=for-the-badge&label=%20&labelColor=black&color=grey)](https://pypi.org/project/arize-phoenix)                  |
+| **npm 다운로드**   | [![Langfuse npm downloads](https://img.shields.io/npm/dm/langfuse?style=for-the-badge&label=%20&labelColor=black&color=orange)](https://www.npmjs.com/package/langfuse)                   | 해당 없음                                                                                                                                                                                              |
+| **Docker Pull 수** | [![Langfuse Docker Pulls](https://img.shields.io/docker/pulls/langfuse/langfuse?style=for-the-badge&label=%20&labelColor=black&color=orange)](https://hub.docker.com/r/langfuse/langfuse) | [![Phoenix Docker Pulls (Phoenix)](https://img.shields.io/docker/pulls/arizephoenix/phoenix?style=for-the-badge&label=%20&labelColor=black&color=grey)](https://hub.docker.com/r/arizephoenix/phoenix) |
+| **셀프 호스팅**    | **핵심 지원 대상**: 클라우드와 완전한 기능 동등성(ClickHouse 포함). [Docker를 통한 배포](/self-hosting)가 간편합니다.                                                                     | 제한적, [Phoenix에만 해당](https://docs.arize.com/phoenix/deployment). Arize AX 클라우드와 기능 동등성이 없습니다.                                                                                     |
+
+## 확장성 및 성능
+
+두 도구 모두 확장을 염두에 두고 구축되었지만, 아키텍처 접근 방식은 다릅니다. Langfuse는 ClickHouse의 일부이며 ClickHouse 아키텍처의 속도를 활용하는 반면, Arize AX는 독자적인 데이터베이스를 사용합니다.
+
+| 기능       | Langfuse                                                                                                                                          | Arize AX                                                                                                                                         |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **백엔드** | **[ClickHouse](https://clickhouse.com/)** ([Langfuse를 인수](https://langfuse.com/blog/joining-clickhouse)): 고처리량 OLAP에 최적화되어 있습니다. | **[adb (Arize Database)](https://arize.com/blog/introducing-adb-arizes-proprietary-olap-database)**: 에이전틱 텔레메트리를 위한 독점 엔진입니다. |
+
+## 통합
+
+Langfuse는 OpenTelemetry를 통한 폭넓고 커뮤니티 주도적인 호환성에 중점을 두는 반면, Arize AX는 자동 계측과 데이터 웨어하우스와의 긴밀한 연동을 강조합니다.
+
+| 기능           | Langfuse                                                                                                                | Arize AX                                                                                                                          |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| **표준**       | **[OpenTelemetry 네이티브](/docs/observability/overview)**: OTel 표준을 기반으로 구축되었습니다.                        | **[OpenTelemetry 네이티브](https://arize.com/docs/ax/integrations/opentelemetry/overview)**: OTel 표준을 기반으로 구축되었습니다. |
+| **프레임워크** | **[100개 이상의 프레임워크](/integrations)**: LangChain, LlamaIndex, OpenAI, Anthropic 등 인기 프레임워크를 지원합니다. | [OpenInference 라이브러리](https://github.com/Arize-ai/openinference)를 통해 통합을 유지 관리합니다.                              |
+
+## 가격
+
+Langfuse는 예측 가능하게 확장되는 투명한 사용량 기반 가격 모델을 제공합니다. Arize AX는 스팬 수와 데이터 볼륨을 기준으로 과금하며, 데이터 사용량이 많은 LLM 애플리케이션에서는 비용이 커질 수 있습니다.
+
+| 기능          | Langfuse                                                                                              | Arize AX                                                      |
+| ------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| **모델**      | **사용량 기반**: [과금 단위](/docs/administration/billable-units) = 트레이스, observation, 또는 점수. | **하이브리드**: 스팬 + 데이터 수집 볼륨(GB).                  |
+| **무료 티어** | 전체 플랫폼을 테스트할 수 있는 월 5만 트레이스 무료 제공.                                             | 월 2만 5천 스팬 및 1GB 데이터.                                |
+| **확장성**    | 단계별 가격 정책(예: 대규모 사용 시 10만 유닛당 6달러). 투명한 초과 사용 요금.                        | 해당 없음                                                     |
+| **플랜**      | [Free, Core ($29/mo), Pro ($199/mo), Teams, Enterprise](/pricing).                                    | [Free, Pro ($50/mo), Enterprise](https://arize.com/pricing/). |
+
+## 개방형 플랫폼 및 확장성
+
+Langfuse는 핵심 인프라 구성 요소로 설계되어, 팀이 해당 API 위에 커스텀 내부 도구를 구축할 수 있도록 지원합니다.
+
+| 기능             | Langfuse                                                                                                                       | Arize AX                                                |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
+| **API 접근**     | 트레이스, 평가, 프롬프트 등 모든 데이터와 플랫폼 기능에 대해 [API 우선](/docs/api-and-data-platform/features/public-api) 설계. | API를 제공하며, 데이터 웨어하우스로 내보낼 수 있습니다. |
+| **커스터마이징** | SDK/API를 사용하여 커스텀 워크플로, 평가, [대시보드](/docs/metrics/features/custom-dashboards)를 구축할 수 있습니다.           | SDK를 통한 커스텀 평가 및 파이프라인.                   |
+| **데이터 접근**  | API 및 [블롭 스토리지 내보내기](/docs/api-and-data-platform/features/export-to-blob-storage)를 통한 쿼리.                      | API 및 블롭 스토리지 내보내기를 통한 쿼리.              |
+
+## 엔터프라이즈 보안
+
+두 플랫폼 모두 대규모 엔터프라이즈를 지원하지만, Arize AX는 특정 금융 인증(PCI DSS)에서 약간의 우위를 보입니다. Langfuse는 PCI DSS 민감 데이터를 필터링하기 위한 [마스킹](https://langfuse.com/docs/observability/features/masking)을 지원합니다.
+
+| 기능          | Langfuse                                                                                                                                                                            | Arize AX                                                                                                               |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| **인증**      | **[SOC 2 Type II, ISO 27001](/security)**, GDPR, HIPAA 준비 리전.                                                                                                                   | [SOC 2 Type II, HIPAA, **PCI DSS 4.0**, CSA Star Level 1](https://arize.com/docs/ax/security-and-settings/compliance). |
+| **채택 현황** | **Fortune 50 기업 중 19곳**과 Fortune 500 기업 중 63곳이 신뢰하고 있습니다.                                                                                                         | 특히 핀테크 분야에서 강력한 엔터프라이즈 채택률을 보입니다.                                                            |
+| **거버넌스**  | Teams/Enterprise 플랜에서 [SSO](/docs/administration/authentication-and-sso), [RBAC](/docs/administration/rbac), [감사 로그](/docs/administration/audit-logs)를 이용할 수 있습니다. | Enterprise 플랜에서 SSO, RBAC를 이용할 수 있습니다.                                                                    |
+
+## 주요 기능
+
+**Langfuse:**
+
+- **[핵심 관측성](/docs/observability/overview):** 100개 이상의 모델에 대해 정확한 [토큰 및 비용 추적](/docs/observability/features/token-and-cost-tracking)을 제공하는 최고 수준의 트레이싱.
+- **[프롬프트 관리](/docs/prompt-management/overview):** 버전 관리, 캐싱, 폴백, 보호된 레이블을 갖춘 협업형 [플레이그라운드](/docs/prompt-management/features/playground).
+- **협업:** [주석 큐](/docs/evaluation/evaluation-methods/annotation-queues), @멘션이 가능한 [댓글](/docs/observability/features/comments), [감사 로그](/docs/administration/audit-logs).
+- **[평가](/docs/evaluation/overview):** UI 또는 SDK 파이프라인을 통해 실행할 수 있는 유연한 "[LLM-as-a-Judge](/docs/evaluation/evaluation-methods/llm-as-a-judge)" 평가기.
+
+**Arize AX:**
+
+- **[에이전틱 시각화](https://arize.com/docs/ax/observe/tracing/sessions-and-users):** 멀티 에이전트 대화 흐름을 위한 전문화된 뷰.
+- **[데이터 패브릭](https://arize.com/docs/ax/security-and-settings/data-fabric):** 엔터프라이즈 데이터 레이크(Snowflake/BigQuery)와의 원활한 통합.
+- **평가:** 세션 수준 평가 및 검색 진단(RAG)에 대한 강력한 집중.
+
+<Callout type="info">
+  이 비교 내용이 오래되었나요? 최신 정보로 [풀 리퀘스트를 제출](https://github.com/langfuse/langfuse-docs/tree/main/content/resources/engineering)해 주세요.
+</Callout>

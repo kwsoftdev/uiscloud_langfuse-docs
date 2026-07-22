@@ -1,0 +1,967 @@
+---
+title: 계측
+description: Python 및 JavaScript/TypeScript에서 네이티브 통합 또는 커스텀 계측 패턴을 사용하여 풍부한 트레이스를 캡처합니다.
+category: SDKs
+sourceRevision: dfca55f698615475291f342e672b94973b699339
+translationStatus: machine
+---
+
+import GetStartedJsLangchain from "@/components-mdx/get-started/js-langchain.mdx";
+import { PropagationRestrictionsCallout } from "@/components/PropagationRestrictionsCallout";
+
+# 계측
+
+Langfuse SDK로 애플리케이션을 계측하는 데는 크게 두 가지 방법이 있습니다:
+
+- OpenAI, LangChain, Vercel AI SDK와 같은 인기 있는 LLM 및 에이전트 라이브러리를 위한 **[네이티브 통합](/integrations)**을 사용하는 방법입니다. 이 방법은 관찰 항목(observation)과 트레이스를 자동으로 생성하고 프롬프트, 응답, 사용량, 오류를 캡처합니다.
+- Langfuse SDK로 애플리케이션을 수동으로 계측하는 방법입니다. SDK는 관찰 항목을 생성하는 3가지 방법을 제공합니다:
+  - **[컨텍스트 매니저](#context-manager)**
+  - **[Observe 래퍼](#observe-wrapper)**
+  - **[수동 관찰 항목](#manual-observations)**
+
+모든 방식은 상호 운용 가능합니다. 데코레이터로 생성한 관찰 항목을 컨텍스트 매니저 안에 중첩하거나, 수동 스팬을 [네이티브 통합](/integrations)과 혼합할 수 있습니다.
+
+## 커스텀 계측 [#custom]
+
+다음 방법을 사용하여 Langfuse SDK로 애플리케이션을 계측하세요:
+
+### 컨텍스트 매니저 [#context-manager]
+
+컨텍스트 매니저를 사용하면 새로운 스팬을 생성하고, 해당 스팬이 유지되는 동안 OTel 컨텍스트에서 현재 활성 관찰 항목으로 설정할 수 있습니다. 이 블록 내에서 생성되는 모든 새 관찰 항목은 자동으로 이 스팬의 자식이 됩니다.
+
+<LangTabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab title="Python SDK">
+[`start_as_current_observation()`](https://python.reference.langfuse.com/langfuse#Langfuse.start_as_current_observation)는 활성 OpenTelemetry 컨텍스트가 업데이트되도록 보장하면서 관찰 항목을 생성하는 기본적인 방법입니다. `with` 블록 내부에서 생성된 모든 자식 관찰 항목은 자동으로 부모를 상속받습니다.
+
+`as_type` 매개변수를 설정하여 관찰 항목에 서로 다른 [유형](/docs/observability/features/observation-types)을 지정할 수 있습니다.
+
+```python
+from langfuse import get_client, propagate_attributes
+
+langfuse = get_client()
+
+with langfuse.start_as_current_observation(
+    as_type="span",
+    name="user-request-pipeline",
+    input={"user_query": "Tell me a joke"},
+) as root_span:
+    with propagate_attributes(user_id="user_123", session_id="session_abc"):
+        with langfuse.start_as_current_observation(
+            as_type="generation",
+            name="joke-generation",
+            model="gpt-4o",
+        ) as generation:
+            generation.update(output="Why did the span cross the road?")
+
+    root_span.update(output={"final_joke": "..."})
+```
+
+</Tab>
+<Tab title="JS/TS SDK">
+[`startActiveObservation`](https://langfuse-js-git-main-langfuse.vercel.app/functions/_langfuse_tracing.startActiveObservation.html)는 콜백을 인자로 받아 콜백 스코프 동안 새 스팬을 활성 상태로 만들고, 비동기 경계를 넘나들더라도 자동으로 스팬을 종료합니다.
+
+`asType` 매개변수를 설정하여 관찰 항목에 서로 다른 [유형](/docs/observability/features/observation-types)을 지정할 수 있습니다.
+
+```ts /startActiveObservation/
+import { startActiveObservation, startObservation } from "@langfuse/tracing";
+
+await startActiveObservation("user-request", async (span) => {
+  span.update({ input: { query: "Capital of France?" } });
+
+  const generation = startObservation(
+    "llm-call",
+    { model: "gpt-4", input: [{ role: "user", content: "Capital of France?" }] },
+    { asType: "generation" }
+  );
+  generation.update({ output: { content: "Paris." } }).end();
+
+  span.update({ output: "Answered." });
+});
+```
+
+</Tab>
+</LangTabs>
+
+### Observe 래퍼 [#observe-wrapper]
+
+observe 데코레이터는 래핑된 함수의 내부 로직을 수정하지 않고도 입력, 출력, 시간, 오류를 자동으로 캡처하는 간편한 방법입니다.
+
+<LangTabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab title="Python SDK">
+
+[`observe()`](https://python.reference.langfuse.com/langfuse#observe)를 사용하여 함수를 데코레이트하면 입력, 출력, 시간, 오류를 자동으로 캡처합니다.
+
+`as_type` 매개변수를 설정하여 관찰 항목에 서로 다른 [유형](/docs/observability/features/observation-types)을 지정할 수 있습니다.
+
+```python /@observe/
+from langfuse import observe
+
+@observe()
+def my_data_processing_function(data, parameter):
+    return {"processed_data": data, "status": "ok"}
+
+@observe(name="llm-call", as_type="generation")
+async def my_async_llm_call(prompt_text):
+    return "LLM response"
+```
+
+<Callout type="info">
+큰 입력/출력을 캡처하면 오버헤드가 추가될 수 있습니다. 데코레이터별로 IO 캡처를 비활성화(`capture_input=False`, `capture_output=False`)하거나 `LANGFUSE_OBSERVE_DECORATOR_IO_CAPTURE_ENABLED` 환경 변수를 통해 비활성화할 수 있습니다.
+</Callout>
+</Tab>
+<Tab title="JS/TS SDK">
+
+[`observe()`](https://langfuse-js-git-main-langfuse.vercel.app/functions/_langfuse_tracing.observe.html)를 사용하여 함수를 래핑하면 입력, 출력, 시간, 오류를 자동으로 캡처합니다.
+
+`asType` 매개변수를 설정하여 관찰 항목에 서로 다른 [유형](/docs/observability/features/observation-types)을 지정할 수 있습니다.
+
+```ts /observe/ /updateActiveObservation/
+import { observe, updateActiveObservation } from "@langfuse/tracing";
+
+async function fetchData(source: string) {
+  updateActiveObservation({ metadata: { source: "API" } });
+  return { data: `some data from ${source}` };
+}
+
+const tracedFetchData = observe(fetchData, {
+  name: "fetch-data",
+  asType: "span",
+});
+
+const result = await tracedFetchData("API");
+```
+
+<Callout type="info">
+큰 입력/출력을 캡처하면 오버헤드가 추가될 수 있습니다. 데코레이터별로 IO 캡처를 비활성화(`captureInput=False`, `captureOutput=False`)하거나 `LANGFUSE_OBSERVE_DECORATOR_IO_CAPTURE_ENABLED` 환경 변수를 통해 비활성화할 수 있습니다.
+</Callout>
+
+</Tab>
+</LangTabs>
+
+### 수동 관찰 항목 [#manual-observations]
+
+관찰 항목을 수동으로 생성할 수도 있습니다. 이는 다음과 같은 경우에 유용합니다:
+
+- 독립적이거나 메인 실행 흐름과 병렬로 발생하지만 여전히 동일한 전체 트레이스의 일부여야 하는 작업을 기록해야 할 때(예: 요청에 의해 시작된 백그라운드 작업).
+- 시작과 종료가 연속되지 않은 이벤트에 의해 결정되는 등의 이유로 관찰 항목의 생명주기를 명시적으로 관리해야 할 때.
+- 특정 컨텍스트 블록에 연결되기 전에 관찰 항목 객체 참조를 얻어야 할 때.
+
+<LangTabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab title="Python SDK">
+활성 컨텍스트를 변경하지 않고 수동으로 제어해야 할 때 [`start_observation()`](https://python.reference.langfuse.com/langfuse#Langfuse.start_observation)을 사용하세요.
+
+생성할 [관찰 항목의 유형](/docs/observability/features/observation-types)을 지정하기 위해 `as_type` 매개변수를 전달할 수 있습니다.
+
+```python
+from langfuse import get_client
+
+langfuse = get_client()
+
+span = langfuse.start_observation(name="manual-span")
+span.update(input="Data for side task")
+child = span.start_observation(name="child-span", as_type="generation")
+child.end()
+span.end()
+```
+
+<Callout type="warning" title="Manual Ending Required">
+  [`start_observation()`](https://python.reference.langfuse.com/langfuse#Langfuse.start_observation)을 사용하는 경우,
+  반환된 관찰 항목 객체에 대해 `.end()`를 호출할 책임은 여러분에게 있습니다. 이를 호출하지 않으면
+  Langfuse에서 관찰 항목이 불완전하거나 누락될 수 있습니다. `with` 문과 함께 사용되는
+  `start_as_current_...` 대응 메서드는 이를 자동으로 처리합니다.
+</Callout>
+
+**주요 특징:**
+
+- **컨텍스트 전환 없음**: `start_as_current_...` 대응 메서드와 달리, 이 메서드들은 새 관찰 항목을 OpenTelemetry 컨텍스트에서 활성 상태로 설정하지 **않습니다**. 이전에 활성 상태였던 스팬(있는 경우)이 메인 실행 흐름의 후속 작업에 대해 여전히 현재 컨텍스트로 유지됩니다.
+- **부모 지정**: `start_observation()`으로 생성된 관찰 항목은 생성 당시 컨텍스트에서 활성 상태였던 스팬의 자식으로 계속 유지됩니다.
+- **수동 생명주기**: 이러한 관찰 항목은 `with` 블록으로 관리되지 않으므로 `.end()` 메서드를 호출하여 **명시적으로 종료해야 합니다**.
+- **자식 중첩**:
+  - 전역 `langfuse.start_as_current_observation()`(또는 유사한 전역 메서드)을 사용하여 생성된 이후의 관찰 항목은 이 "수동" 관찰 항목의 자식이 _되지 않습니다_. 대신 원래 활성 상태였던 스팬을 부모로 가집니다.
+  - "수동" 관찰 항목 바로 아래에 자식을 생성하려면, 해당 특정 관찰 항목 객체의 메서드(예: `manual_span.start_as_current_observation(...)`)를 사용해야 합니다.
+
+**더 복잡한 중첩 예시:**
+
+```python
+from langfuse import get_client
+
+langfuse = get_client()
+
+# This outer span establishes an active context.
+with langfuse.start_as_current_observation(as_type="span", name="main-operation") as main_operation_span:
+    # 'main_operation_span' is the current active context.
+
+    # 1. Create a "manual" span using langfuse.start_observation().
+    #    - It becomes a child of 'main_operation_span'.
+    #    - Crucially, 'main_operation_span' REMAINS the active context.
+    #    - 'manual_side_task' does NOT become the active context.
+    manual_side_task = langfuse.start_observation(name="manual-side-task")
+    manual_side_task.update(input="Data for side task")
+
+    # 2. Start another operation that DOES become the active context.
+    #    This will be a child of 'main_operation_span', NOT 'manual_side_task',
+    #    because 'manual_side_task' did not alter the active context.
+    with langfuse.start_as_current_observation(as_type="span", name="core-step-within-main") as core_step_span:
+        # 'core_step_span' is now the active context.
+        # 'manual_side_task' is still open but not active in the global context.
+        core_step_span.update(input="Data for core step")
+        # ... perform core step logic ...
+        core_step_span.update(output="Core step finished")
+    # 'core_step_span' ends. 'main_operation_span' is the active context again.
+
+    # 3. Complete and end the manual side task.
+    # This could happen at any point after its creation, even after 'core_step_span'.
+    manual_side_task.update(output="Side task completed")
+    manual_side_task.end() # Manual end is crucial for 'manual_side_task'
+
+    main_operation_span.update(output="Main operation finished")
+# 'main_operation_span' ends automatically here.
+
+# Expected trace structure in Langfuse:
+# - main-operation
+#   |- manual-side-task
+#   |- core-step-within-main
+#     (Note: 'core-step-within-main' is a sibling to 'manual-side-task', both children of 'main-operation')
+```
+
+</Tab>
+<Tab title="JS/TS SDK">
+
+[`startObservation`](https://langfuse-js-git-main-langfuse.vercel.app/classes/_langfuse_tracing.LangfuseSpan.html#startobservation)은 관찰 항목 생성을 완전히 제어할 수 있게 해줍니다.
+
+생성할 [관찰 항목의 유형](/docs/observability/features/observation-types)을 지정하기 위해 `asType` 매개변수를 전달할 수 있습니다.
+
+이 함수들 중 하나를 호출하면, 새 관찰 항목은 현재 OpenTelemetry 컨텍스트에서 활성 상태인 작업의 자식으로 자동 연결됩니다. 하지만 이 새 관찰 항목을 활성 상태로 만들지는 **않습니다**. 즉, 이후 트레이싱하는 모든 작업은 여러분이 방금 생성한 것이 아니라 _원래의_ 부모에 계속 연결됩니다.
+
+중첩된 관찰 항목을 수동으로 생성하려면, 반환된 객체의 메서드(예: `parentSpan.startObservation(...)`)를 사용하세요.
+
+```typescript /startObservation/ /end/ /asType/
+import { startObservation } from "@langfuse/tracing";
+
+// Start a root span for a user request
+const span = startObservation(
+  // name
+  "user-request",
+  // params
+  {
+    input: { query: "What is the capital of France?" },
+  }
+);
+
+// Create a nested span for, e.g., a tool call
+const toolCall = span.startObservation(
+  // name
+  "fetch-weather",
+  // params
+  {
+    input: { city: "Paris" },
+  },
+  // Specify observation type in asType
+  // This will type the attributes argument accordingly
+  // Default is 'span'
+  { asType: "tool" }
+);
+
+// Simulate work and end the tool call span
+await new Promise((resolve) => setTimeout(resolve, 100));
+toolCall.update({ output: { temperature: "15°C" } }).end();
+
+// Create a nested generation for the LLM call
+const generation = span.startObservation(
+  "llm-call",
+  {
+    model: "gpt-4",
+    input: [{ role: "user", content: "What is the capital of France?" }],
+  },
+  { asType: "generation" }
+);
+
+generation.update({
+  usageDetails: { input: 10, output: 5 },
+  output: { content: "The capital of France is Paris." },
+});
+
+generation.end();
+
+// End the root span
+span.update({ output: "Successfully answered user request." }).end();
+```
+
+<Callout type="warning" title="Manual Ending Required">
+  [`startObservation()`](https://langfuse-js-git-main-langfuse.vercel.app/functions/_langfuse_tracing.startObservation.html)을 사용하는 경우, 반환된 관찰 항목 객체에 대해 [`.end()`](https://langfuse-js-git-main-langfuse.vercel.app/classes/_langfuse_tracing.LangfuseSpan.html#end)를 호출할 책임은 여러분에게 있습니다. 이를 호출하지 않으면
+  Langfuse에서 관찰 항목이 불완전하거나 누락될 수 있습니다.
+</Callout>
+
+</Tab>
+</LangTabs>
+
+## 관찰 항목 중첩 [#nesting-observations]
+
+Langfuse SDK 메서드는 관찰 항목의 중첩을 자동으로 처리합니다.
+
+<LangTabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab title="Python SDK">
+
+**Observe 데코레이터**
+
+[observe 래퍼](#observe-wrapper)를 사용하면 함수 호출 계층이 자동으로 캡처되어 트레이스에 반영됩니다.
+
+```python
+from langfuse import observe
+
+@observe
+def my_data_processing_function(data, parameter):
+    # ... processing logic ...
+    return {"processed_data": data, "status": "ok"}
+
+
+@observe
+def main_function(data, parameter):
+    return my_data_processing_function(data, parameter)
+```
+
+**컨텍스트 매니저**
+
+[컨텍스트 매니저](#context-manager)를 사용하면, 중첩은 OpenTelemetry의 컨텍스트 전파에 의해 자동으로 처리됩니다. [`start_as_current_observation()`](https://python.reference.langfuse.com/langfuse#Langfuse.start_as_current_observation)을 사용하여 새 관찰 항목을 생성하면, 생성 시점에 컨텍스트에서 활성 상태였던 관찰 항목의 자식이 됩니다.
+
+```python
+from langfuse import get_client
+
+langfuse = get_client()
+
+with langfuse.start_as_current_observation(as_type="span", name="outer-process") as outer_span:
+    # outer_span is active
+
+    with langfuse.start_as_current_observation(as_type="generation", name="llm-step-1") as gen1:
+        # gen1 is active, child of outer_span
+        gen1.update(output="LLM 1 output")
+
+    with outer_span.start_as_current_observation(name="intermediate-step") as mid_span:
+        # mid_span is active, also a child of outer_span
+        # This demonstrates using the yielded span object to create children
+
+        with mid_span.start_as_current_observation(as_type="generation", name="llm-step-2") as gen2:
+            # gen2 is active, child of mid_span
+            gen2.update(output="LLM 2 output")
+
+        mid_span.update(output="Intermediate processing done")
+
+    outer_span.update(output="Outer process finished")
+```
+
+**수동 관찰 항목**
+
+[관찰 항목을 수동으로](#manual-observations) 생성하는 경우, 부모 [`LangfuseSpan`](https://python.reference.langfuse.com/langfuse#LangfuseSpan) 또는 [`LangfuseGeneration`](https://python.reference.langfuse.com/langfuse#LangfuseGeneration) 객체의 메서드를 사용하여 자식을 생성할 수 있습니다. 이러한 자식은 `_as_current_` 변형을 사용하지 않는 한 현재 컨텍스트가 _되지 않습니다_(참고: [컨텍스트 매니저](#context-manager)).
+
+```python
+from langfuse import get_client
+
+langfuse = get_client()
+
+parent = langfuse.start_observation(name="manual-parent")
+
+child_span = parent.start_observation(name="manual-child-span")
+# ... work ...
+child_span.end()
+
+child_gen = parent.start_observation(name="manual-child-generation", as_type="generation")
+# ... work ...
+child_gen.end()
+
+parent.end()
+```
+
+</Tab>
+<Tab title="JS/TS SDK">
+중첩은 OpenTelemetry 컨텍스트 전파를 통해 자동으로 이루어집니다. [`startActiveObservation`](https://langfuse-js-git-main-langfuse.vercel.app/functions/_langfuse_tracing.startActiveObservation.html)로 새 관찰 항목을 생성하면, 생성 시점에 활성 상태였던 것의 자식이 됩니다.
+
+```ts
+import { startActiveObservation } from "@langfuse/tracing";
+
+await startActiveObservation("outer-process", async () => {
+  await startActiveObservation("llm-step-1", async (span) => {
+    span.update({ output: "LLM 1 output" });
+  });
+
+  await startActiveObservation("intermediate-step", async (span) => {
+    await startActiveObservation("llm-step-2", async (child) => {
+      child.update({ output: "LLM 2 output" });
+    });
+
+    span.update({ output: "Intermediate processing done" });
+  });
+});
+```
+
+</Tab>
+</LangTabs>
+
+## 관찰 항목 업데이트 [#update-observations]
+
+코드가 실행되는 동안 새로운 정보로 관찰 항목을 업데이트할 수 있습니다.
+
+<LangTabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab title="Python SDK">
+
+- [컨텍스트 매니저](#context-manager)를 통해 생성되었거나 변수에 할당된 관찰 항목의 경우: 해당 객체의 [`.update()`](https://python.reference.langfuse.com/langfuse#LangfuseEvent.update) 메서드를 사용하세요.
+- 컨텍스트에서 _현재 활성 상태인_ 관찰 항목을 업데이트하려면(직접 참조가 없어도 됨): [`langfuse.update_current_span()`](https://python.reference.langfuse.com/langfuse#Langfuse.update_current_span) 또는 [`langfuse.update_current_generation()`](https://python.reference.langfuse.com/langfuse#Langfuse.update_current_generation)을 사용하세요.
+
+```python /update_current_span/ /update/
+from langfuse import get_client
+
+langfuse = get_client()
+
+with langfuse.start_as_current_observation(as_type="generation", name="llm-call", model="gpt-5-mini") as gen:
+    gen.update(input={"prompt": "Why is the sky blue?"})
+
+    # ... make LLM call ...
+    response_text = "Rayleigh scattering..."
+
+    gen.update(
+        output=response_text,
+        usage_details={"input_tokens": 5, "output_tokens": 50},
+        metadata={"confidence": 0.9}
+    )
+
+# Alternatively, update the current observation in context:
+with langfuse.start_as_current_observation(as_type="span", name="data-processing"):
+    # ... some processing ...
+    langfuse.update_current_span(metadata={"step1_complete": True})
+    # ... more processing ...
+    langfuse.update_current_span(output={"result": "final_data"})
+```
+
+</Tab>
+<Tab title="JS/TS SDK">
+[`observation.update()`](https://langfuse-js-git-main-langfuse.vercel.app/classes/_langfuse_tracing.LangfuseSpan.html#update)로 활성 관찰 항목을 업데이트합니다.
+
+```ts /update/
+import { startActiveObservation } from "@langfuse/tracing";
+
+await startActiveObservation("user-request", async (span) => {
+  span.update({
+    input: { path: "/api/process" },
+    output: { status: "success" },
+  });
+});
+```
+
+</Tab>
+</LangTabs>
+
+## 관찰 항목에 속성 추가 [#add-attributes]
+
+애플리케이션을 더 잘 이해하고 Langfuse에서 관찰 항목을 상호 연관 짓는 데 도움이 되도록 관찰 항목에 속성을 추가할 수 있습니다:
+
+- [`userId`](/docs/observability/features/users)
+- [`sessionId`](/docs/observability/features/sessions)
+- [`metadata`](/docs/observability/features/metadata)
+- [`version`](/docs/observability/features/releases-and-versioning)
+- [`tags`](/docs/observability/features/tags)
+- [`environment`](/docs/observability/features/environments) (Python SDK)
+- `traceName` (트레이스 이름)
+
+트레이스의 입력과 출력을 업데이트하려면 [트레이스 레벨 입력/출력](#trace-inputoutput-behavior)을 참고하세요.
+
+<LangTabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab title="Python SDK">
+
+관찰 항목에 속성을 추가하려면 [`propagate_attributes()`](https://python.reference.langfuse.com/langfuse#propagate_attributes)를 사용하세요.
+Python SDK에서 `environment`는 일급 Langfuse 환경(environment)이며 트레이스 메타데이터가 아니라 `langfuse.environment`에 매핑됩니다. 예를 들어 하나의 공유 프록시가 여러 배포 환경의 요청을 처리하는 경우처럼 환경이 요청 범위에 종속될 때 사용하세요.
+
+```python /propagate_attributes/
+from langfuse import get_client, propagate_attributes
+
+langfuse = get_client()
+
+with langfuse.start_as_current_observation(as_type="span", name="user-workflow"):
+    with propagate_attributes(
+        user_id="user_123",
+        session_id="session_abc",
+        metadata={"experiment": "variant_a"},
+        version="1.0",
+        environment="staging",
+        trace_name="user-workflow",
+    ):
+        with langfuse.start_as_current_observation(as_type="generation", name="llm-call"):
+            pass
+```
+
+`@observe()` 데코레이터를 사용하는 경우:
+
+```python /propagate_attributes/
+from langfuse import observe, propagate_attributes
+
+@observe()
+def my_llm_pipeline(user_id: str, session_id: str):
+    # Propagate early in the trace
+    with propagate_attributes(
+        user_id=user_id,
+        session_id=session_id,
+        metadata={"pipeline": "main"}
+    ):
+        # All nested @observe functions inherit these attributes
+        result = call_llm()
+        return result
+
+@observe()
+def call_llm():
+    # This automatically has user_id, session_id, metadata from parent
+    pass
+```
+
+</Tab>
+<Tab title="JS/TS SDK">
+
+관찰 항목에 속성을 추가하려면 [`propagateAttributes()`](https://langfuse-js-git-main-langfuse.vercel.app/functions/_langfuse_tracing.propagateAttributes.html)를 사용하세요.
+
+```ts /propagateAttributes/
+import { startActiveObservation, propagateAttributes, startObservation } from "@langfuse/tracing";
+
+await startActiveObservation("user-workflow", async () => {
+  await propagateAttributes(
+    {
+      userId: "user_123",
+      sessionId: "session_abc",
+      metadata: { experiment: "variant_a", env: "prod" },
+      version: "1.0",
+      traceName: "user-workflow",
+    },
+    async () => {
+      const generation = startObservation("llm-call", { model: "gpt-4" }, { asType: "generation" });
+      generation.end();
+    }
+  );
+});
+```
+
+</Tab>
+</LangTabs>
+
+<PropagationRestrictionsCallout attributes={[]} />
+
+### 서비스 간 전파
+
+여러 서비스에 걸친 분산 트레이싱의 경우, `as_baggage` 매개변수를 사용(자세한 내용은 [OpenTelemetry 문서](https://opentelemetry.io/docs/concepts/signals/baggage/) 참고)하여 HTTP 헤더를 통해 속성을 전파하세요.
+
+Python SDK에서는 `environment`도 이 방식으로 전파할 수 있습니다. 환경은 `langfuse_environment` baggage로 전송되며, 전파된 컨텍스트 내에서 생성된 스팬에 대해서는 다운스트림 서비스의 로컬 `LANGFUSE_TRACING_ENVIRONMENT` 또는 클라이언트 레벨 환경보다 우선합니다.
+
+<LangTabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab title="Python SDK">
+
+```python /as_baggage=True/
+from langfuse import get_client, propagate_attributes
+import requests
+
+langfuse = get_client()
+
+with langfuse.start_as_current_observation(as_type="span", name="api-request"):
+    with propagate_attributes(
+        user_id="user_123",
+        session_id="session_abc",
+        environment="staging",
+        as_baggage=True,
+    ):
+        requests.get("https://service-b.example.com/api")
+```
+
+</Tab>
+<Tab title="JS/TS SDK">
+
+```ts /asBaggage/
+import { propagateAttributes, startActiveObservation } from "@langfuse/tracing";
+
+await startActiveObservation("api-request", async () => {
+  await propagateAttributes(
+    {
+      userId: "user_123",
+      sessionId: "session_abc",
+      asBaggage: true,
+    },
+    async () => {
+      await fetch("https://service-b.example.com/api");
+    }
+  );
+});
+```
+
+</Tab>
+</LangTabs>
+
+<Callout type="warning">
+**보안 경고**: baggage 전파가 활성화되면 속성이 **모든** 아웃바운드 HTTP 헤더에 추가됩니다. 분산 트레이싱에 필요한 민감하지 않은 값에만 사용하세요.
+</Callout>
+
+## 트레이스 업데이트 [#trace-inputoutput-behavior]
+
+기본적으로 트레이스의 입력/출력은 **루트 관찰 항목**(트레이스의 첫 번째 관찰 항목)에 설정한 값을 그대로 반영합니다. LLM-as-a-Judge, A/B 테스트, UI 명확성을 위해 필요하다면 트레이스 레벨 정보를 커스터마이즈할 수 있습니다.
+
+<Callout type="info">
+Langfuse의 [LLM-as-a-Judge](/docs/evaluation/evaluation-methods/llm-as-a-judge) 워크플로는 트레이스 레벨 입력/출력에 의존할 수 있습니다. 평가 페이로드가 다르다면 루트 관찰 항목에 의존하지 말고 반드시 의도적으로 설정하세요.
+</Callout>
+
+<LangTabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab title="Python SDK">
+
+**기본 동작**
+
+```python
+from langfuse import get_client
+
+langfuse = get_client()
+
+# Using the context manager
+with langfuse.start_as_current_observation(
+    as_type="span",
+    name="user-request",
+    input={"query": "What is the capital of France?"}  # This becomes the trace input
+) as root_span:
+
+    with langfuse.start_as_current_observation(
+        as_type="generation",
+        name="llm-call",
+        model="gpt-4o",
+        input={"messages": [{"role": "user", "content": "What is the capital of France?"}]}
+    ) as gen:
+        response = "Paris is the capital of France."
+        gen.update(output=response)
+        # LLM generation input/output are separate from trace input/output
+
+    root_span.update(output={"answer": "Paris"})  # This becomes the trace output
+```
+
+**기본 동작 재정의**
+
+루트 관찰 항목과 다른 트레이스 입력/출력이 필요한 경우 [`observation.set_trace_io()`](https://python.reference.langfuse.com/langfuse#LangfuseEvent.set_trace_io) 또는 [`langfuse.set_current_trace_io()`](https://python.reference.langfuse.com/langfuse#Langfuse.set_current_trace_io)를 사용하세요:
+
+<Callout type="warning">
+`set_trace_io()`와 `set_current_trace_io()`는 트레이스 레벨 입력/출력에 의존하는 트레이스 레벨 LLM-as-a-judge 평가기와의 하위 호환성을 위해서만 존재하며 더 이상 사용이 권장되지 않습니다. 새 코드에서는 루트 관찰 항목에 직접 입력/출력을 설정하세요. [Python v3 → v4 마이그레이션 가이드](/docs/observability/sdk/upgrade-path/python-v3-to-v4)를 참고하세요.
+</Callout>
+
+```python /set_current_trace_io/ /set_trace_io/
+from langfuse import get_client
+
+langfuse = get_client()
+
+with langfuse.start_as_current_observation(as_type="span", name="complex-pipeline") as root_span:
+    # Root span has its own input/output
+    root_span.update(input="Step 1 data", output="Step 1 result")
+
+    # But trace should have different input/output (e.g., for LLM-as-a-judge)
+    root_span.set_trace_io(
+        input={"original_query": "User's actual question"},
+        output={"final_answer": "Complete response", "confidence": 0.95}
+    )
+
+    # Now trace input/output are independent of root span input/output
+
+# Using the observe decorator
+@observe()
+def process_user_query(user_question: str):
+    # LLM processing...
+    answer = call_llm(user_question)
+
+    # Explicitly set trace input/output for evaluation features
+    langfuse.set_current_trace_io(
+        input={"question": user_question},
+        output={"answer": answer}
+    )
+
+    return answer
+```
+
+</Tab>
+<Tab title="JS/TS SDK">
+상호 연관되는 트레이스 속성을 설정하려면 [`propagateAttributes`](https://langfuse-js-git-main-langfuse.vercel.app/functions/_langfuse_tracing.propagateAttributes.html)를, 트레이스 레벨 입력/출력에는 [`setTraceIO`](https://langfuse-js-git-main-langfuse.vercel.app/classes/_langfuse_tracing.LangfuseSpan.html#settraceio)를 사용하세요.
+
+<Callout type="warning">
+`.setTraceIO()`는 트레이스 레벨 LLM-as-a-judge 평가기와의 하위 호환성을 위해서만 존재하며 더 이상 사용이 권장되지 않습니다. [JS/TS v4 → v5 마이그레이션 가이드](/docs/observability/sdk/upgrade-path/js-v4-to-v5)를 참고하세요.
+</Callout>
+
+```ts /propagateAttributes/ /setTraceIO/
+import { propagateAttributes, startObservation } from "@langfuse/tracing";
+
+const userId = "user-123";
+const sessionId = "session-abc";
+
+propagateAttributes(
+  {
+    userId: userId,
+    sessionId: sessionId,
+    tags: ["authenticated-user"],
+    metadata: { plan: "premium" },
+  },
+  () => {
+    const rootSpan = startObservation("data-processing");
+
+    const generation = rootSpan.startObservation(
+      "llm-call",
+      {},
+      { asType: "generation" }
+    );
+
+    generation.end();
+
+    rootSpan.end();
+  }
+);
+```
+
+</Tab>
+</LangTabs>
+
+## 트레이스 및 관찰 항목 ID [#trace-ids]
+
+Langfuse는 [W3C Trace Context 표준](https://www.w3.org/TR/trace-context/)을 따릅니다:
+
+- 트레이스 ID는 32자리 소문자 16진수 문자열(16바이트)입니다
+- 관찰 항목 ID는 16자리 소문자 16진수 문자열(8바이트)입니다
+
+임의의 관찰 항목 ID를 설정할 수는 없지만, 외부 시스템과 상호 연관 짓기 위해 결정론적인 트레이스 ID를 생성할 수는 있습니다.
+
+서비스 간 트레이스를 상호 연관 짓는 방법에 대한 자세한 내용은 [트레이스 ID 및 분산 트레이싱](/docs/observability/features/trace-ids-and-distributed-tracing)을 참고하세요.
+
+<LangTabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab title="Python SDK">
+
+[`create_trace_id()`](https://python.reference.langfuse.com/langfuse#Langfuse.create_trace_id)를 사용하여 트레이스 ID를 생성하세요. `seed`가 제공되면 ID는 결정론적입니다. 동일한 시드를 사용하면 동일한 ID를 얻습니다. 이는 외부 ID를 Langfuse 트레이스와 상호 연관 짓는 데 유용합니다.
+
+```python /create_trace_id/
+from langfuse import get_client, Langfuse
+langfuse = get_client()
+
+external_request_id = "req_12345"
+deterministic_trace_id = langfuse.create_trace_id(seed=external_request_id)
+```
+
+현재 트레이스 ID를 얻으려면 [`get_current_trace_id()`](https://python.reference.langfuse.com/langfuse#Langfuse.get_current_trace_id)를, 현재 관찰 항목 ID를 얻으려면 [`get_current_observation_id`](https://python.reference.langfuse.com/langfuse#Langfuse.get_current_observation_id)를 사용하세요.
+
+`observation.trace_id`와 `observation.id`를 사용하여 LangfuseSpan 또는 LangfuseGeneration 객체에서 트레이스 및 관찰 항목 ID에 직접 접근할 수도 있습니다.
+
+```python /create_trace_id/ /get_current_trace_id/ /get_current_observation_id/
+from langfuse import get_client, Langfuse
+langfuse = get_client()
+
+with langfuse.start_as_current_observation(as_type="span", name="my-op") as current_op:
+    trace_id = langfuse.get_current_trace_id()
+    observation_id = langfuse.get_current_observation_id()
+    print(trace_id, observation_id)
+```
+
+</Tab>
+<Tab title="JS/TS SDK">
+[`createTraceId`](https://langfuse-js-git-main-langfuse.vercel.app/functions/_langfuse_tracing.createTraceId.html)를 사용하여 시드로부터 결정론적 트레이스 ID를 생성하세요.
+
+```ts /createTraceId/ /getActiveTraceId/
+import { createTraceId, startObservation } from "@langfuse/tracing";
+
+const externalId = "support-ticket-54321";
+
+const langfuseTraceId = await createTraceId(externalId);
+
+const rootSpan = startObservation(
+  "process-ticket",
+  {},
+  {
+    parentSpanContext: {
+      traceId: langfuseTraceId,
+      spanId: "0123456789abcdef",
+      traceFlags: 1,
+    },
+  }
+);
+```
+
+활성 트레이스 ID를 얻으려면 [`getActiveTraceId`](https://langfuse-js-git-main-langfuse.vercel.app/functions/_langfuse_tracing.getActiveTraceId.html)를, 현재 관찰 항목 ID를 얻으려면 [`getActiveSpanId`](https://langfuse-js-git-main-langfuse.vercel.app/functions/_langfuse_tracing.getActiveSpanId.html)를 사용하세요.
+
+```ts /getActiveTraceId/
+import { startObservation, getActiveTraceId } from "@langfuse/tracing";
+
+await startObservation("run", async (span) => {
+  const traceId = getActiveTraceId();
+  console.log(`Current trace ID: ${traceId}`);
+});
+```
+
+</Tab>
+</LangTabs>
+
+**기존 트레이스에 연결**
+
+이미 트레이스 ID를 가지고 있는 업스트림 서비스와 통합할 때는, Langfuse 스팬이 새 트리를 생성하는 대신 기존 트리에 합류하도록 W3C 트레이스 컨텍스트를 제공하세요.
+
+<LangTabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab title="Python SDK">
+
+커스텀 트레이스 컨텍스트 정보를 설정하려면 `trace_context` 매개변수를 사용하세요.
+
+```python {11-14}
+from langfuse import get_client
+
+langfuse = get_client()
+
+existing_trace_id = "abcdef1234567890abcdef1234567890"
+existing_parent_span_id = "fedcba0987654321"
+
+with langfuse.start_as_current_observation(
+    as_type="span",
+    name="process-downstream-task",
+    trace_context={
+        "trace_id": existing_trace_id,
+        "parent_span_id": existing_parent_span_id,
+    },
+):
+    pass
+```
+
+</Tab>
+<Tab title="JS/TS SDK">
+
+커스텀 트레이스 컨텍스트 정보를 설정하려면 `parentSpanContext` 매개변수를 사용하세요.
+
+```ts {7-11}
+import { startObservation } from "@langfuse/tracing";
+
+const span = startObservation(
+  "downstream-task",
+  {},
+  {
+    parentSpanContext: {
+      traceId: "abcdef1234567890abcdef1234567890",
+      spanId: "fedcba0987654321",
+      traceFlags: 1,
+    },
+  }
+);
+
+span.end();
+```
+
+</Tab>
+</LangTabs>
+
+## 클라이언트 생명주기 및 flush
+
+Langfuse SDK는 [비동기](/docs/observability/data-model#background-processing)로 동작하므로, 스팬을 백그라운드에서 버퍼링합니다. 데이터 손실을 방지하려면 짧게 실행되는 프로세스(스크립트, 서버리스 함수, 워커)에서는 항상 클라이언트를 [`flush()`](https://python.reference.langfuse.com/langfuse#Langfuse.flush) 또는 [`shutdown()`](https://python.reference.langfuse.com/langfuse#Langfuse.shutdown)하세요.
+
+<LangTabs items={["Python SDK", "JS/TS SDK"]}>
+<Tab title="Python SDK">
+
+**[`flush()`](https://python.reference.langfuse.com/langfuse#Langfuse.flush)**
+
+버퍼링된 모든 관찰 항목(스팬, 생성, 점수, 미디어 메타데이터)을 Langfuse API로 전송하도록 수동으로 트리거합니다. 짧게 실행되는 스크립트나 애플리케이션 종료 전에 모든 데이터가 저장되도록 보장할 때 유용합니다.
+
+```python
+from langfuse import get_client
+
+langfuse = get_client()
+# ... create traces and observations ...
+langfuse.flush() # Ensures all pending data is sent
+```
+
+`flush()` 메서드는 큐에 있는 데이터가 해당 백그라운드 스레드에서 처리될 때까지 블로킹됩니다.
+
+**[`shutdown()`](https://python.reference.langfuse.com/langfuse#Langfuse.shutdown)**
+
+Langfuse 클라이언트를 정상적으로 종료합니다. 여기에는 다음이 포함됩니다:
+
+1.  버퍼링된 모든 데이터를 flush(`flush()`와 유사)합니다.
+2.  백그라운드 스레드(데이터 수집 및 미디어 업로드용)가 현재 작업을 완료하고 종료될 때까지 대기합니다.
+
+애플리케이션 종료 전에 `shutdown()`을 호출하는 것은 데이터 손실을 방지하고 깔끔한 리소스 해제를 보장하는 데 매우 중요합니다. SDK는 정상적인 프로그램 종료 시 `shutdown()`을 호출하도록 자동으로 `atexit` 훅을 등록하지만, 다음과 같은 시나리오에서는 수동 호출을 권장합니다:
+
+- 장시간 실행되는 데몬이나 서비스가 종료 신호를 받았을 때.
+- `atexit`가 안정적으로 트리거되지 않을 수 있는 애플리케이션(예: 특정 서버리스 환경이나 강제 종료).
+
+```python
+from langfuse import get_client
+
+langfuse = get_client()
+# ... application logic ...
+
+# Before exiting:
+langfuse.shutdown()
+```
+
+</Tab>
+<Tab title="JS/TS SDK">
+
+<Tabs items={["Generic Serverless function", "Vercel Cloud Functions"]}>
+<Tab>
+{/* Generic serverless */}
+나중에 [`forceFlush()`](https://langfuse-js-git-main-langfuse.vercel.app/classes/_langfuse_otel.LangfuseSpanProcessor.html#forceflush)를 호출할 수 있도록 OTEL SDK 설정 파일에서 프로세서를 export하세요.
+
+```ts filename="instrumentation.ts" /langfuseSpanProcessor/ /forceFlush/ /exportMode: "immediate"/
+import { NodeSDK } from "@opentelemetry/sdk-node";
+import { LangfuseSpanProcessor } from "@langfuse/otel";
+
+// Export the processor to be able to flush it
+export const langfuseSpanProcessor = new LangfuseSpanProcessor({
+  exportMode: "immediate" // optional: configure immediate span export in serverless environments
+});
+
+const sdk = new NodeSDK({
+  spanProcessors: [langfuseSpanProcessor],
+});
+
+sdk.start();
+```
+
+서버리스 함수 핸들러에서, 함수가 종료되기 전에 [`LangfuseSpanProcessor`](https://langfuse-js-git-main-langfuse.vercel.app/classes/_langfuse_otel.LangfuseSpanProcessor.html)의 [`forceFlush()`](https://langfuse-js-git-main-langfuse.vercel.app/classes/_langfuse_otel.LangfuseSpanProcessor.html#forceflush)를 호출하세요.
+
+```ts filename="handler.ts" /forceFlush/
+import { langfuseSpanProcessor } from "./instrumentation";
+
+export async function handler(event, context) {
+  // ... your application logic ...
+
+  // Flush before exiting
+  await langfuseSpanProcessor.forceFlush();
+}
+```
+
+</Tab>
+
+<Tab>
+{/* Vercel Cloud Functions */}
+
+나중에 flush할 수 있도록 `instrumentation.ts` 파일에서 프로세서를 export하세요.
+
+```ts filename="instrumentation.ts" /langfuseSpanProcessor/ /forceFlush/ /exportMode: "immediate"/
+import { NodeSDK } from "@opentelemetry/sdk-node";
+import { LangfuseSpanProcessor } from "@langfuse/otel";
+
+// Export the processor to be able to flush it
+export const langfuseSpanProcessor = new LangfuseSpanProcessor();
+
+const sdk = new NodeSDK({
+  spanProcessors: [langfuseSpanProcessor],
+});
+
+sdk.start();
+```
+
+Vercel Cloud Functions에서는 요청이 완료된 후 flush를 예약하기 위해 `after` 유틸리티를 사용하세요.
+
+```ts filename="route.ts" /after/ /forceFlush/
+import { after } from "next/server";
+
+import { langfuseSpanProcessor } from "./instrumentation.ts";
+
+export async function POST() {
+  // ... existing request logic ...
+
+  // Schedule flush after request has completed
+  after(async () => {
+    await langfuseSpanProcessor.forceFlush();
+  });
+
+  // ... send response ...
+}
+```
+
+</Tab>
+</Tabs>
+
+</Tab>
+</LangTabs>

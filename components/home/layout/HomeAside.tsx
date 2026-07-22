@@ -8,6 +8,7 @@ import { Text } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
 import { useAISearchContext } from "@/components/inkeep/search";
 import { RightSidebarHiringAndCommunity } from "@/components/home/layout/RightSidebarHiringAndCommunity";
+import { isKoreanPath, KO_HOME_PATH } from "@/lib/i18n/koPaths";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -58,6 +59,49 @@ const HOME_SECTIONS: TocItem[] = [
   { id: "faq", title: "FAQ", depth: 2, url: "#faq" },
 ];
 
+const HOME_SECTIONS_KO: TocItem[] = [
+  { id: "overview", title: "개요", depth: 2, url: "#overview" },
+  {
+    id: "llm-engineering-loop",
+    title: "LLM 엔지니어링 루프",
+    depth: 2,
+    url: "#llm-engineering-loop",
+  },
+  {
+    id: "platform-features",
+    title: "플랫폼 기능",
+    depth: 2,
+    url: "#platform-features",
+  },
+  { id: "integrations", title: "인테그레이션", depth: 2, url: "#integrations" },
+  {
+    id: "open-source",
+    title: "오픈 플랫폼. 오픈 소스.",
+    depth: 2,
+    url: "#open-source",
+  },
+  {
+    id: "developers-agents",
+    title: "개발자 & 에이전트",
+    depth: 2,
+    url: "#developers-agents",
+  },
+  {
+    id: "scale-and-security",
+    title: "확장성 & 보안",
+    depth: 2,
+    url: "#scale-and-security",
+  },
+  {
+    id: "why-langfuse",
+    title: "왜 Langfuse인가?",
+    depth: 2,
+    url: "#why-langfuse",
+  },
+  { id: "get-started", title: "시작하기", depth: 2, url: "#get-started" },
+  { id: "faq", title: "자주 묻는 질문", depth: 2, url: "#faq" },
+];
+
 // ─── Scan DOM for h2/h3 headings (non-homepage pages) ────────────────────────
 
 function useDOMHeadings(): TocItem[] {
@@ -84,7 +128,7 @@ function useDOMHeadings(): TocItem[] {
 
 // ─── "On this page" TOC ───────────────────────────────────────────────────────
 
-function TocOnThisPage({ items }: { items: TocItem[] }) {
+function TocOnThisPage({ items, ko }: { items: TocItem[]; ko: boolean }) {
   const active = useActiveAnchors();
   const activeId = active[0] ?? null;
   const listRef = useRef<HTMLDivElement>(null);
@@ -110,7 +154,7 @@ function TocOnThisPage({ items }: { items: TocItem[] }) {
         size="s"
         className="block text-left font-[580] text-text-primary mb-3 -ml-1.5"
       >
-        On this page
+        {ko ? "목차" : "On this page"}
       </Text>
 
       <div className="relative flex flex-col overflow-auto [scrollbar-width:none]">
@@ -173,7 +217,9 @@ function TocOnThisPage({ items }: { items: TocItem[] }) {
 export function HomeAside() {
   const pathname = usePathname();
   const domItems = useDOMHeadings();
-  const items = pathname === "/" ? HOME_SECTIONS : domItems;
+  const isHome = pathname === "/" || pathname === KO_HOME_PATH;
+  const ko = isKoreanPath(pathname);
+  const items = isHome ? (ko ? HOME_SECTIONS_KO : HOME_SECTIONS) : domItems;
   const { open: aiOpen } = useAISearchContext();
 
   return (
@@ -190,7 +236,7 @@ export function HomeAside() {
         <div className="flex flex-col flex-1 pb-px bg-line-structure">
           <div className="flex flex-col flex-1 rounded-sm bg-surface-1">
             <AnchorProvider toc={items} single key={pathname}>
-              <TocOnThisPage items={items} />
+              <TocOnThisPage items={items} ko={ko} />
             </AnchorProvider>
           </div>
         </div>

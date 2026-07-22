@@ -1,0 +1,97 @@
+---
+title: Braintrust Data 대안? 최고의 LLMOps 플랫폼은?
+description: 이 글은 LLM 관측성, 분석, 평가, 엔지니어링 워크플로우 측면에서 Langfuse와 Braintrust를 비교합니다.
+tags: [comparison]
+sourceRevision: f4e5e1edb9fa4c33680b0a37ca039a86a341cde0
+translationStatus: machine
+---
+
+# Langfuse vs. Braintrust
+
+이 가이드는 엔지니어링 팀이 적합한 LLM 관측성 플랫폼을 선택할 수 있도록 **[Langfuse](/)**와 **[Braintrust](https://www.braintrust.dev/docs)**의 주요 차이점을 정리합니다.
+
+**요약:**
+
+- 오픈소스이며 벤더 종속이 없는 플랫폼을 우선시하고, 완전한 셀프 호스팅과 예측 가능한 단위 기반 가격 정책, OpenTelemetry 표준과의 깊은 통합을 원한다면 **Langfuse를 선택**하세요.
+- 평가 루프에 집중하는 통합 프록시와 빠른 프롬프트 반복을 위한 전문 도구를 제공하는, "모든 기능이 내장된" 독점 SaaS 플랫폼을 선호한다면 **Braintrust를 선택**하세요.
+
+## 오픈소스와 배포 방식
+
+가장 근본적인 차이는 배포 모델에 있습니다. Langfuse는 오픈소스(MIT)로, 투명성을 보장하며 벤더 종속이 없습니다. Braintrust는 핵심 엔진과 데이터베이스를 자체적으로 관리하는 독점적이고 폐쇄된 소스 플랫폼입니다.
+
+| 기능                 | Langfuse                                                                                                                                                                                  | Braintrust                                                                                                                                                                  |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **모델**             | **[오픈소스](https://github.com/langfuse/langfuse)** (MIT 라이선스)                                                                                                                       | **독점 SaaS** (폐쇄 소스 핵심 엔진)                                                                                                                                         |
+| **GitHub 스타 수**   | [![Langfuse GitHub stars](https://img.shields.io/github/stars/langfuse/langfuse?style=for-the-badge&label=%20&labelColor=black&color=orange)](https://github.com/langfuse/langfuse)       | 해당 없음                                                                                                                                                                   |
+| **PyPI 다운로드 수** | [![Langfuse pypi downloads](https://img.shields.io/pypi/dm/langfuse?style=for-the-badge&label=%20&labelColor=black&color=orange)](https://pypi.org/project/langfuse/)                     | [![Braintrust pypi downloads](https://img.shields.io/pypi/dm/braintrust?style=for-the-badge&label=%20&labelColor=black&color=grey)](https://pypi.org/project/braintrust)    |
+| **npm 다운로드 수**  | [![Langfuse npm downloads](https://img.shields.io/npm/dm/langfuse?style=for-the-badge&label=%20&labelColor=black&color=orange)](https://www.npmjs.com/package/langfuse)                   | [![Braintrust npm downloads](https://img.shields.io/npm/dm/braintrust?style=for-the-badge&label=%20&labelColor=black&color=grey)](https://www.npmjs.com/package/braintrust) |
+| **Docker 다운로드**  | [![Langfuse Docker Pulls](https://img.shields.io/docker/pulls/langfuse/langfuse?style=for-the-badge&label=%20&labelColor=black&color=orange)](https://hub.docker.com/r/langfuse/langfuse) | 해당 없음                                                                                                                                                                   |
+| **셀프 호스팅**      | **일급 시민(First-Class Citizen)**: 클라우드와 동일한 기능을 완전히 지원하며, 오프라인 또는 에어갭 환경에서도 실행 가능합니다.                                                            | **제한적**: 하이브리드 모델은 [엔터프라이즈 티어](https://www.braintrust.dev/docs/admin)에서만 제공됩니다 (데이터 플레인은 VPC에, 컨트롤 플레인은 관리형).                  |
+
+## 확장성 및 성능
+
+두 플랫폼 모두 고성능 분석 데이터베이스를 사용하지만, 아키텍처 철학은 다릅니다. Langfuse는 오픈소스 기반의 ClickHouse의 성능에 의존하는 반면, Braintrust는 자체 구축한 독점 엔진에 의존합니다.
+
+| 기능       | Langfuse                                                                                                                          | Braintrust                                                                    |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| **백엔드** | **[ClickHouse](https://clickhouse.com/)**: 수십억 건의 이벤트에서도 1초 미만의 쿼리 성능을 위해 v3부터 ClickHouse로 전환했습니다. | **Brainstore**: 스트리밍 Rust와 오브젝트 스토리지를 사용하는 독점 엔진입니다. |
+
+## 통합
+
+Langfuse는 OpenTelemetry와 비동기 수집을 통한 "표준 우선" 전략을 채택한 반면, Braintrust는 자체 독점 프록시 계층에 집중합니다.
+
+| 기능           | Langfuse                                                                                                                                           | Braintrust                                                                                                         |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **표준**       | **[OpenTelemetry 네이티브 SDK](/integrations/native/opentelemetry)**: OTLP를 통해 Java, Go, Rust 등 기존 엔터프라이즈 스택과 상호 운용 가능합니다. | `wrapOpenAI` SDK와 독점 [AI 프록시 게이트웨이](https://www.braintrust.dev/docs/deploy/ai-proxy)에 초점을 맞춥니다. |
+| **프레임워크** | **100개 이상의 통합**: LangChain, LlamaIndex, CrewAI, AutoGen 등을 네이티브로 지원합니다.                                                          | [인기 있는 프레임워크와 모델 제공업체](https://www.braintrust.dev/docs/integrations) 다수를 지원합니다.            |
+
+## 가격 정책
+
+Langfuse는 예측 가능한 단위 기반 모델을 제공합니다. Braintrust는 데이터 용량, 점수, 보존 기간에 따라 과금하는 다차원 모델을 사용합니다.
+
+| 기능               | Langfuse                                                                                  | Braintrust                                                                 |
+| ------------------ | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| **무료 티어**      | **클라우드**: 월 5만 유닛. **셀프 호스팅**: 무제한 무료 사용.                             | **무료**: 트레이스 스팬 100만 건, 처리 데이터 1GB, 점수 1만 건, 14일 보존. |
+| **유료 시작 단계** | **Core**: **월 29달러**부터 시작 (10만 유닛 포함).                                        | **Pro**: **월 249달러**부터 시작 (데이터 5GB, 점수 5만 건 포함).           |
+| **과금 모델**      | **단위 기반**: 단순한 "청구 가능 단위"(트레이스, observation, 점수)를 기준으로 가격 산정. | **다차원**: 처리 데이터(GB) + 점수 + 데이터 보존 기간에 따라 과금.         |
+| **초과 사용 비용** | 10만 유닛당 약 8.00달러(사용량이 늘어날수록 감소).                                        | 처리 데이터 1GB당 3달러; 점수 1천 건당 1.50달러.                           |
+
+## 개방형 플랫폼과 확장성
+
+Langfuse는 API 우선으로 설계되어 엔지니어가 손쉽게 데이터를 내보내거나 커스텀 도구를 구축할 수 있습니다. Braintrust는 SQL을 통한 강력한 플랫폼 내 쿼리 기능에 집중합니다.
+
+| 기능              | Langfuse                                                                                                              | Braintrust                                                                                           |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| **API 접근**      | **완전한 CRUD**: 모든 트레이스, 프롬프트, 플랫폼 기능에 대한 API 우선 아키텍처.                                       | [API 제공](https://www.braintrust.dev/docs/guides/api)되며, UI 워크플로우에 중점을 둡니다.           |
+| **쿼리**          | 트레이스, observation, 점수를 조회하는 API; 집계 분석을 위한 [퍼블릭 메트릭 API](/docs/metrics/features/metrics-api). | **BTQL 및 SQL**: [플랫폼 내 분석](https://www.braintrust.dev/docs/guides/api)을 위한 독점 쿼리 언어. |
+| **데이터 이식성** | CSV/JSON 내보내기; S3 스토리지로의 [예약 내보내기](/docs/api-and-data-platform/features/export-to-blob-storage).      | [UI 또는 SDK](https://www.braintrust.dev/docs/guides/api)를 통한 JSON/CSV 내보내기.                  |
+
+## 엔터프라이즈 보안
+
+두 플랫폼 모두 엔터프라이즈 보안 요구사항을 지원합니다. Langfuse는 SOC 2 Type II, ISO 27001, GDPR 준수, HIPAA 준비 리전, 그리고 완전한 셀프 호스팅을 통한 더 엄격한 데이터 거주 옵션을 제공합니다.
+
+| 기능         | Langfuse                                             | Braintrust                                                                                                        |
+| ------------ | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| **인증**     | **SOC 2 Type II, ISO 27001**, GDPR, HIPAA 준비 리전. | **SOC 2 Type II**, HIPAA.                                                                                         |
+| **배포**     | 클라우드 또는 셀프 호스팅: 에어갭 환경 지원 가능     | **제한적**: 하이브리드 모델은 엔터프라이즈 티어에서만 제공됩니다 (데이터 플레인은 VPC에, 컨트롤 플레인은 관리형). |
+| **거버넌스** | SSO, RBAC, 감사 로그 제공.                           | SSO, RBAC, 감사 로그 제공.                                                                                        |
+
+## 주요 기능
+
+**Langfuse:**
+
+- **핵심 관측성:** 높은 처리량을 위한 "큐 기반 트레이스 수집(Queued Trace Ingestion)"을 활용한 심층 트레이싱.
+- **에이전트 디버깅:** 복잡한 다단계 에이전트 추론을 위해 특별히 설계된 계층적 트레이스.
+- **프롬프트 관리:** Model Context Protocol(MCP) 서버를 갖춘 범용 프롬프트 관리.
+- **커스텀 평가기:** API를 통한 유연한 "LLM-as-a-Judge" 및 원격 커스텀 평가기.
+
+**Braintrust:**
+
+- **실험:** 프롬프트를 나란히 비교하는 뷰를 제공하는 "평가 우선" 철학.
+- **프록시:** 100개 이상의 모델에 대한 캐싱과 장애 조치를 지원하는 통합 게이트웨이.
+- **플레이그라운드:** 로그에서 파생된 "골든 데이터셋"으로 빠르게 반복 작업을 할 수 있는 통합 환경.
+- **데이터셋 관리:** 테스트 데이터셋을 큐레이션하고 버전 관리하기 위한 전문 도구.
+
+<Callout type="info">
+  이 비교 내용이 최신 정보가 아닌가요? 최신 정보로 [풀 리퀘스트를 제출해](https://github.com/langfuse/langfuse-docs/tree/main/content/resources/engineering) 주세요.
+</Callout>

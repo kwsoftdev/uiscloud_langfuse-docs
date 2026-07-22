@@ -1,0 +1,90 @@
+---
+title: "Langfuse와 Ragas로 배우는 RAG 평가 입문 가이드"
+description: "Langfuse와 Ragas를 사용하여 RAG 애플리케이션을 평가하는 방법에 대한 Tom Yeh 교수의 웨비나."
+ogImage: /images/videos/beginners-guide-to-rag-evaluation.jpg
+sourceRevision: 9c0d419484845ffbd56805fd068677856e5d764c
+translationStatus: machine
+---
+
+# Langfuse와 Ragas로 배우는 RAG 평가 입문 가이드
+
+<Callout type="info">
+
+검색 증강 생성(Retrieval Augmented Generation, RAG) 애플리케이션 평가에 관한 Tom Yeh 교수의 이 웨비나를
+추천합니다. RAG에 대한 훌륭한 입문 내용을 제공하며, 특히 [Ragas](https://docs.ragas.io) 메트릭과
+결합했을 때 Langfuse가 RAG 시스템의 디버깅과 평가에 어떻게 도움이 되는지 설명합니다.
+
+- 발표자: Tom Yeh, 콜로라도 대학교 볼더 캠퍼스 부교수
+- 자료: Tom의 블로그에 있는 [웨비나 슬라이드](https://aibyhand.substack.com/p/beginners-guide-to-rag-evaluation)
+
+</Callout>
+
+<iframe
+  width="100%"
+  className="aspect-video rounded mt-10"
+  src="https://www.youtube-nocookie.com/embed/2fqs8Nlh5UI?si=A6CYkwA0iGs-7uak&amp;start=537"
+  title="YouTube video player"
+  frameborder="0"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+  referrerpolicy="strict-origin-when-cross-origin"
+  allowFullScreen
+></iframe>
+
+## 우리의 노트
+
+### 1. RAG 개요
+
+- 사용자가 질문을 입력합니다.
+- 대규모 언어 모델(LLM)에 직접 질의하는 대신, 데이터베이스에서 검색된 컨텍스트로 입력을 증강합니다.
+- 증강된 쿼리는 응답을 생성하기 위해 생성기(generator)로 전달됩니다.
+
+### 2. RAG의 구성 요소
+
+- 리트리버(Retriever): 데이터베이스에서 관련 컨텍스트를 가져옵니다.
+- 증강(Augmentation): 사용자 쿼리와 검색된 컨텍스트를 결합합니다.
+- 생성기(Generator): 증강된 쿼리를 기반으로 답변을 생성합니다.
+
+### 3. RAG 시스템 평가
+
+- 트레이스 분석:
+  - 사용자 입력부터 최종 출력까지의 단계를 트레이싱하여 시스템 성능을 파악합니다.
+  - 검색, 증강, 생성과 같은 각 단계를 로깅하는 작업을 포함합니다.
+- 메트릭:
+  - 간결성(Conciseness): 답변이 얼마나 간결한지를 측정합니다.
+  - 유용성(Helpfulness): 답변의 유용성을 평가합니다.
+- 도구:
+  - [Langfuse](/): RAG 작업의 트레이싱과 로깅에 사용됩니다.
+  - [RAGAS](https://docs.ragas.io) (RAG Assessment): RAG 시스템 평가를 위한 상세한 메트릭을 제공합니다.
+
+### 4. Langfuse
+
+- [기능](/docs):
+  - RAG 프로세스의 각 단계를 로깅합니다.
+  - 작업에 대한 타임라인 뷰를 제공합니다.
+  - 서로 다른 상호작용을 비교할 수 있습니다.
+  - 프롬프트 관리, 비용 분석, 벤치마킹 등 다양한 추가 LLM Ops 기능을 제공합니다.
+- 데모:
+  - 상호작용의 트레이싱과 로깅에 Langfuse를 사용하는 챗봇 애플리케이션을 시연했습니다. 공개 링크: [langfuse.com/demo](https://langfuse.com/docs/demo)
+  - Langfuse 메트릭을 사용해 RAG 시스템의 성능을 분석하는 방법을 보여주었습니다.
+
+### 5. RAGAS
+
+- [메트릭](https://docs.ragas.io/en/stable/concepts/metrics/index.html):
+  - 충실도(Faithfulness): 검색된 컨텍스트를 기반으로 한 생성된 답변의 정확성.
+  - 환각(Hallucination): 모델이 생성한 잘못된 정보.
+  - 답변 관련성(Answer Relevancy): 생성된 답변이 원래 질문과 얼마나 관련이 있는지.
+  - 컨텍스트 재현율(Context Recall): 관련 정보를 모두 검색해 낼 수 있는 능력.
+  - 컨텍스트 정밀도(Context Precision): 검색된 컨텍스트의 정확성.
+- 구현:
+  - 충실도와 관련성을 평가하기 위해 프롬프트를 사용합니다.
+  - 검색 관련 메트릭을 평가하기 위해 정답 데이터(ground truth)를 사용합니다.
+
+### 6. 비용 고려 사항
+
+- 생성 및 평가에 대규모 언어 모델을 사용할 때 발생하는 비용을 평가합니다.
+- 작업별로 고비용 모델과 저비용 모델 사이의 균형을 맞출 필요성을 강조했습니다.
+
+### 7. 추가 메트릭
+
+- 컨텍스트 활용도(context utilization), 컨텍스트 엔티티 재현율(context entity recall), 노이즈 민감도(noise sensitivity) 등의 다른 메트릭을 언급했습니다.
+- 구체적인 필요에 따라 적절한 메트릭을 선택하고 이를 이해관계자에게 설명하는 것의 중요성을 강조했습니다.
