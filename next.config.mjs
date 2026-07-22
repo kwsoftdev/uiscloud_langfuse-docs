@@ -39,13 +39,6 @@ const cspHeader =
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Enable static export when STATIC_EXPORT env var is set
-  ...(process.env.STATIC_EXPORT === "true" && {
-    output: "export",
-    trailingSlash: true,
-    // Disable server-side features for static export
-    distDir: "out",
-  }),
   experimental: {
     scrollRestoration: true,
     // Reduce peak memory during production build (helps avoid OOM on Vercel)
@@ -119,8 +112,6 @@ const nextConfig = {
   },
 
   images: {
-    // Disable image optimization for static export
-    ...(process.env.STATIC_EXPORT === "true" && { unoptimized: true }),
     remotePatterns: [
       {
         protocol: "https",

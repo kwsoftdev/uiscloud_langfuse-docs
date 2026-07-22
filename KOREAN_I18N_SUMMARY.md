@@ -12,16 +12,16 @@ title: Langfuse Docs — Korean i18n & Nav Cleanup
 
 ## 아키텍처 결정
 
-| 결정                 | 내용                                                                                                                                         | 이유                                                                                                                                                            |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| URL 세그먼트         | `/kr` (예: `/docs/kr`, `/guides/kr`, 홈은 `/kr`)                                                                                             | 기존에 예약되어 있던 `/kr` 마케팅 랜딩 컨벤션과 일치                                                                                                            |
-| 내부 언어 코드       | `ko` (BCP47)                                                                                                                                 | `/kr`은 URL 세그먼트일 뿐, `hreflang`/`<DocsBody lang>`/문자열 사전 키는 실제 언어 코드인 `ko`를 사용                                                           |
-| 라우팅 방식          | 섹션별 별도 Fumadocs 컬렉션 + 별도 `app/` 라우트 (Next.js 내장 i18n 미들웨어 **미사용**)                                                     | 사이트가 Cloudflare Pages용 정적 export(`STATIC_EXPORT=true`)로 배포되어 서버가 없음 → 미들웨어 기반 리다이렉트 불가능. 기존 `academy/japan` 패턴을 그대로 확장 |
-| 언어 감지/리다이렉트 | `localStorage`(`langfuse-lang-pref`) + `useEffect` 기반 클라이언트 사이드 리다이렉트 (`LocalePreferenceRedirect`, `app/layout.tsx`에 마운트) | 정적 export라 서버가 없어 미들웨어 불가 → 유일한 대안. (알려진 트레이드오프: JS를 실행하지 않는 크롤러는 리다이렉트를 따라가지 않음)                            |
-| 언어 전환 UI         | `LanguagePreferenceToggle` — 상대 언어 이름만 보여주는 단일 버튼, `Navbar`/`NavbarDocs`의 유연한 가운데 컬럼에 배치                          | 처음 시도한 2버튼(한국어/EN) 디자인이 `NavbarExtraContent`의 고정폭(`lg:max-w-[240px]`) 오른쪽 컬럼에서 잘려 보이는 문제 발생 → 되돌리고 재설계                 |
-| 공용 라우트 팩토리   | `lib/i18n/localizedSection.tsx`의 `createLocalizedDocRoute()`                                                                                | 섹션마다 Page/generateMetadata/generateStaticParams를 손으로 반복하지 않고, hreflang·언어 스위처 링크를 일관되게 생성                                           |
-| 경로 판별 유틸       | `lib/i18n/koPaths.ts` — `KO_SECTION_PREFIXES`, `isKoreanPath()`, `toKoreanPath()`, `toEnglishPath()`                                         | 어떤 URL 접두사가 한국어 섹션인지에 대한 단일 진실 소스. 클라이언트 컴포넌트들은 `usePathname()` + 이 유틸로 스스로 언어를 감지 (prop drilling 회피)            |
-| 번역 드리프트 추적   | `translationStatus`/`sourceRevision`/`translator` frontmatter 필드를 `source.config.ts`의 `baseFrontmatterSchema`에 전역 추가                | 원문이 바뀌었을 때 번역이 뒤처졌는지 추적할 수 있는 토대 마련 (현재는 필드만 존재, 자동화된 검사는 아직 없음)                                                   |
+| 결정                 | 내용                                                                                                                                         | 이유                                                                                                                                                                                                                                                                                  |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| URL 세그먼트         | `/kr` (예: `/docs/kr`, `/guides/kr`, 홈은 `/kr`)                                                                                             | 기존에 예약되어 있던 `/kr` 마케팅 랜딩 컨벤션과 일치                                                                                                                                                                                                                                  |
+| 내부 언어 코드       | `ko` (BCP47)                                                                                                                                 | `/kr`은 URL 세그먼트일 뿐, `hreflang`/`<DocsBody lang>`/문자열 사전 키는 실제 언어 코드인 `ko`를 사용                                                                                                                                                                                 |
+| 라우팅 방식          | 섹션별 별도 Fumadocs 컬렉션 + 별도 `app/` 라우트 (Next.js 내장 i18n 미들웨어 **미사용**)                                                     | 도입 당시 사이트가 Cloudflare Pages용 정적 export(`STATIC_EXPORT=true`)로 배포되어 서버가 없어 미들웨어 기반 리다이렉트가 불가능했음. 기존 `academy/japan` 패턴을 그대로 확장. (Cloudflare Pages 지원은 이후 제거되었지만 — 아래 "인프라 변경 이력" 참고 — 라우팅 구조는 그대로 유지) |
+| 언어 감지/리다이렉트 | `localStorage`(`langfuse-lang-pref`) + `useEffect` 기반 클라이언트 사이드 리다이렉트 (`LocalePreferenceRedirect`, `app/layout.tsx`에 마운트) | 정적 export라 서버가 없어 미들웨어 불가 → 유일한 대안이었음. (알려진 트레이드오프: JS를 실행하지 않는 크롤러는 리다이렉트를 따라가지 않음). Cloudflare Pages 지원 제거 후에는 Vercel의 미들웨어를 대신 쓸 수도 있지만, 별도 요청이 없어 현재 구현은 그대로 유지                       |
+| 언어 전환 UI         | `LanguagePreferenceToggle` — 상대 언어 이름만 보여주는 단일 버튼, `Navbar`/`NavbarDocs`의 유연한 가운데 컬럼에 배치                          | 처음 시도한 2버튼(한국어/EN) 디자인이 `NavbarExtraContent`의 고정폭(`lg:max-w-[240px]`) 오른쪽 컬럼에서 잘려 보이는 문제 발생 → 되돌리고 재설계                                                                                                                                       |
+| 공용 라우트 팩토리   | `lib/i18n/localizedSection.tsx`의 `createLocalizedDocRoute()`                                                                                | 섹션마다 Page/generateMetadata/generateStaticParams를 손으로 반복하지 않고, hreflang·언어 스위처 링크를 일관되게 생성                                                                                                                                                                 |
+| 경로 판별 유틸       | `lib/i18n/koPaths.ts` — `KO_SECTION_PREFIXES`, `isKoreanPath()`, `toKoreanPath()`, `toEnglishPath()`                                         | 어떤 URL 접두사가 한국어 섹션인지에 대한 단일 진실 소스. 클라이언트 컴포넌트들은 `usePathname()` + 이 유틸로 스스로 언어를 감지 (prop drilling 회피)                                                                                                                                  |
+| 번역 드리프트 추적   | `translationStatus`/`sourceRevision`/`translator` frontmatter 필드를 `source.config.ts`의 `baseFrontmatterSchema`에 전역 추가                | 원문이 바뀌었을 때 번역이 뒤처졌는지 추적할 수 있는 토대 마련 (현재는 필드만 존재, 자동화된 검사는 아직 없음)                                                                                                                                                                         |
 
 ## 번역된 섹션 (총 9개 + 홈페이지)
 
@@ -86,12 +86,23 @@ title: Langfuse Docs — Korean i18n & Nav Cleanup
 
 ## 커밋 현황
 
-| 커밋       | 내용                                                                                                                         |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `7b9be2cc` | feat(i18n): Korean 로컬라이제이션 인프라 + 8개 섹션 + 홈페이지 번역 (490 files)                                              |
-| `47c9e31c` | refactor(nav): 상단바/Footer/HomeAside 단순화                                                                                |
-| `50cdb428` | refactor(docs): Support 항목 제거, TOC footer 단순화                                                                         |
-| _(미커밋)_ | Integrations 섹션 한국어 번역 — 136개 파일 신규 (`content/integrations/kr/`, `app/integrations/kr/`) + 인프라 수정 11개 파일 |
+| 커밋       | 내용                                                                            |
+| ---------- | ------------------------------------------------------------------------------- |
+| `7b9be2cc` | feat(i18n): Korean 로컬라이제이션 인프라 + 8개 섹션 + 홈페이지 번역 (490 files) |
+| `47c9e31c` | refactor(nav): 상단바/Footer/HomeAside 단순화                                   |
+| `50cdb428` | refactor(docs): Support 항목 제거, TOC footer 단순화                            |
+| `88de6d9c` | docs: 이 요약 문서 추가                                                         |
+| `1f208b6d` | feat(i18n): Integrations 섹션 한국어 번역 — 144개 파일 신규/수정                |
+
+## 인프라 변경 이력
+
+- **Cloudflare Pages 정적 export 지원 제거** — 실제 배포 대상이 Vercel(`vercel.json` 존재)로 확인되어, 더 이상 쓰이지 않던 `STATIC_EXPORT` 정적 export 경로를 제거함:
+  - `next.config.mjs` — `output: "export"` / `images.unoptimized` 조건부 블록 제거
+  - `next-sitemap.config.js` — `/api/*` 정적 export 제외 조건 제거
+  - `package.json` — `build:static`, `postbuild:static` 스크립트 제거
+  - `scripts/generate-cloudflare-redirects.js`, `lib/_headers` 삭제
+  - 잔재였던 `out/_headers`(git에 추적되어 있던 빌드 산출물) 및 빈 `out/` 디렉토리 제거
+  - 위 "라우팅 방식"/"언어 감지" 결정의 원래 제약(서버 없음 → 미들웨어 불가)은 더 이상 유효하지 않지만, 클라이언트 사이드 리다이렉트 구현 자체는 요청이 없어 그대로 유지함
 
 ## 주요 파일 참조
 
