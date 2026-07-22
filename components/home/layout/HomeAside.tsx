@@ -7,7 +7,6 @@ import { Link } from "@/components/ui/link";
 import { Text } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
 import { useAISearchContext } from "@/components/inkeep/search";
-import { RightSidebarHiringAndCommunity } from "@/components/home/layout/RightSidebarHiringAndCommunity";
 import { isKoreanPath, KO_HOME_PATH } from "@/lib/i18n/koPaths";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -240,7 +239,6 @@ export function HomeAside() {
             </AnchorProvider>
           </div>
         </div>
-        <RightSidebarHiringAndCommunity />
       </nav>
     </aside>
   );

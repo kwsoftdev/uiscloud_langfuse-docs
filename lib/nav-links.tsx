@@ -11,7 +11,6 @@ import {
   MessageSquare,
   Newspaper,
   Presentation,
-  ScrollText,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -20,6 +19,12 @@ export type NavPanelLink = {
   name: string;
   href: string;
   icon: LucideIcon;
+};
+
+type SimpleLink = {
+  name: string;
+  href: string;
+  tabletHidden?: boolean;
 };
 
 export const productLinks: NavPanelLink[] = [
@@ -42,7 +47,6 @@ export const resourcesLinks: NavPanelLink[] = [
   { name: "Academy", href: "/academy", icon: BookOpen },
   { name: "Workshop", href: "/workshop", icon: Presentation },
   { name: "Blog", href: "/blog", icon: Newspaper },
-  { name: "Changelog", href: "/changelog", icon: ScrollText },
   { name: "Roadmap", href: "/docs/roadmap", icon: Map },
   { name: "Users", href: "/users", icon: Users },
   { name: "Example Project", href: "/docs/demo", icon: Bookmark },
@@ -50,11 +54,7 @@ export const resourcesLinks: NavPanelLink[] = [
   { name: "Support", href: "/support", icon: HelpCircle },
 ];
 
-export const simpleLinks = [
-  { name: "Docs", href: "/docs" },
-  { name: "Changelog", href: "/changelog", tabletHidden: true },
-  { name: "Pricing", href: "/pricing" },
-];
+export const simpleLinks: SimpleLink[] = [{ name: "Docs", href: "/docs" }];
 
 // ---------------------------------------------------------------------------
 // Korean counterparts — rendered instead of the above when the current path is
@@ -85,7 +85,6 @@ export const resourcesLinksKo: NavPanelLink[] = [
   { name: "아카데미", href: "/academy/kr", icon: BookOpen },
   { name: "워크숍", href: "/workshop", icon: Presentation },
   { name: "블로그", href: "/blog", icon: Newspaper },
-  { name: "체인지로그", href: "/changelog", icon: ScrollText },
   { name: "로드맵", href: "/docs/kr/roadmap", icon: Map },
   { name: "고객 사례", href: "/users", icon: Users },
   { name: "예제 프로젝트", href: "/docs/kr/demo", icon: Bookmark },
@@ -93,8 +92,4 @@ export const resourcesLinksKo: NavPanelLink[] = [
   { name: "지원", href: "/support", icon: HelpCircle },
 ];
 
-export const simpleLinksKo = [
-  { name: "문서", href: "/docs/kr" },
-  { name: "체인지로그", href: "/changelog", tabletHidden: true },
-  { name: "가격", href: "/pricing" },
-];
+export const simpleLinksKo: SimpleLink[] = [{ name: "문서", href: "/docs/kr" }];

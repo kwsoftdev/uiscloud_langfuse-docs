@@ -1,6 +1,5 @@
 import { Logo } from "@/components/Logo";
 import { NavbarExtraContent } from "@/components/NavbarExtraContent";
-import { HiringBadge } from "@/components/HiringBadge";
 import InkeepSearchBar from "@/components/inkeep/InkeepSearchBar";
 import { LanguagePreferenceToggle } from "@/components/LanguagePreferenceToggle";
 import Link from "next/link";
@@ -49,7 +48,6 @@ export function NavbarDocs({
             }}
           />
           <div className="flex flex-1 gap-2 px-2.5 py-3 lg:rounded-sm items-center justify-between bg-surface-1">
-            <HiringBadge className="hidden lg:block" />
             <InkeepSearchBar className="hidden lg:block" />
             <LanguagePreferenceToggle />
           </div>
