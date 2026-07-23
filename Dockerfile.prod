@@ -1,0 +1,109 @@
+# Production image for langfuse-docs (Next.js standalone server build).
+#
+# Built and pushed to Docker Hub by the Jenkins pipeline (see Jenkinsfile).
+# Actual deployment — running this image on the target host/cluster — is
+# handled outside this repo/pipeline.
+#
+# IMPORTANT — two things that will fail the build without a git history /
+# a GitHub token, discovered by actually running this build end to end:
+#  1. fumadocs-mdx's lastModified() plugin shells out to `git log` per
+#     content file to compute each page's last-modified date. This requires
+#     the build context to include the repo's full `.git` history (not a
+#     shallow clone) — see the Jenkinsfile checkout step.
+#  2. The prebuild step's GitHub API calls (stars/contributors/workshop
+#     sync) hit the unauthenticated rate limit almost immediately, and
+#     scripts/sync-workshop.mjs fails the whole build when that happens —
+#     always pass --build-arg GITHUB_ACCESS_TOKEN=<a GitHub PAT>.
+
+FROM node:22-slim AS base
+RUN corepack enable && corepack prepare pnpm@9.5.0 --activate
+
+# ---- builder: run the full prebuild pipeline + next build -------------------
+FROM base AS builder
+WORKDIR /app
+
+# git: needed by fumadocs-mdx's lastModified() plugin (git log per content
+#   file) and by scripts/authors/generate-contributors.js.
+# zip: needed by scripts/generate_brand_assets_zip.js (prebuild step).
+RUN apt-get update && apt-get install -y --no-install-recommends git zip \
+    && rm -rf /var/lib/apt/lists/* \
+    && git config --global --add safe.directory /app
+
+# postinstall.sh (agent shim sync) needs the rest of the repo, so copy
+# everything before installing rather than layer-caching on the lockfile
+# alone (same tradeoff as the local-dev Dockerfile).
+COPY . .
+RUN pnpm install --frozen-lockfile
+
+# GITHUB_ACCESS_TOKEN is effectively REQUIRED, not just recommended: the
+# prebuild step's GitHub API calls (stars/contributors/workshop sync) blow
+# through the unauthenticated rate limit almost immediately and
+# scripts/sync-workshop.mjs fails the whole build (non-graceful) when that
+# happens. Pass a PAT with public_repo read access.
+#
+# The NEXT_PUBLIC_* vars below are inlined into the client bundle at build
+# time, so (unlike server-only secrets) they must be supplied here rather
+# than at `docker run` time. Most are optional — those integrations degrade
+# gracefully when their key is absent. The four *_LANGFUSE_BASE_URL vars are
+# the exception: src/instrumentation.ts constructs a LangfuseSpanProcessor
+# per region at module load, and an empty baseUrl fails to parse as a URL
+# during `next build`'s page-data collection for /api/image-generator,
+# failing the entire build — hence the real public Cloud region URLs as
+# defaults below (see lib/cloud-regions.ts). Override with real keys/URLs as
+# needed; add more ARGs here if new NEXT_PUBLIC_* vars are introduced (keep
+# in sync with .env.template).
+ARG GITHUB_ACCESS_TOKEN
+ARG NEXT_PUBLIC_POSTHOG_HOST
+ARG NEXT_PUBLIC_POSTHOG_KEY
+ARG NEXT_PUBLIC_PLAIN_APP_ID
+ARG NEXT_PUBLIC_INKEEP_API_KEY
+ARG NEXT_PUBLIC_EU_LANGFUSE_BASE_URL=https://cloud.langfuse.com
+ARG NEXT_PUBLIC_EU_LANGFUSE_PUBLIC_KEY
+ARG NEXT_PUBLIC_US_LANGFUSE_BASE_URL=https://us.cloud.langfuse.com
+ARG NEXT_PUBLIC_US_LANGFUSE_PUBLIC_KEY
+ARG NEXT_PUBLIC_JP_LANGFUSE_BASE_URL=https://jp.cloud.langfuse.com
+ARG NEXT_PUBLIC_JP_LANGFUSE_PUBLIC_KEY
+ARG NEXT_PUBLIC_INTERNAL_LANGFUSE_BASE_URL=https://cloud.langfuse.com
+ARG NEXT_PUBLIC_INTERNAL_LANGFUSE_PUBLIC_KEY
+
+ENV NEXT_TELEMETRY_DISABLED=1 \
+    GITHUB_ACCESS_TOKEN=$GITHUB_ACCESS_TOKEN \
+    NEXT_PUBLIC_POSTHOG_HOST=$NEXT_PUBLIC_POSTHOG_HOST \
+    NEXT_PUBLIC_POSTHOG_KEY=$NEXT_PUBLIC_POSTHOG_KEY \
+    NEXT_PUBLIC_PLAIN_APP_ID=$NEXT_PUBLIC_PLAIN_APP_ID \
+    NEXT_PUBLIC_INKEEP_API_KEY=$NEXT_PUBLIC_INKEEP_API_KEY \
+    NEXT_PUBLIC_EU_LANGFUSE_BASE_URL=$NEXT_PUBLIC_EU_LANGFUSE_BASE_URL \
+    NEXT_PUBLIC_EU_LANGFUSE_PUBLIC_KEY=$NEXT_PUBLIC_EU_LANGFUSE_PUBLIC_KEY \
+    NEXT_PUBLIC_US_LANGFUSE_BASE_URL=$NEXT_PUBLIC_US_LANGFUSE_BASE_URL \
+    NEXT_PUBLIC_US_LANGFUSE_PUBLIC_KEY=$NEXT_PUBLIC_US_LANGFUSE_PUBLIC_KEY \
+    NEXT_PUBLIC_JP_LANGFUSE_BASE_URL=$NEXT_PUBLIC_JP_LANGFUSE_BASE_URL \
+    NEXT_PUBLIC_JP_LANGFUSE_PUBLIC_KEY=$NEXT_PUBLIC_JP_LANGFUSE_PUBLIC_KEY \
+    NEXT_PUBLIC_INTERNAL_LANGFUSE_BASE_URL=$NEXT_PUBLIC_INTERNAL_LANGFUSE_BASE_URL \
+    NEXT_PUBLIC_INTERNAL_LANGFUSE_PUBLIC_KEY=$NEXT_PUBLIC_INTERNAL_LANGFUSE_PUBLIC_KEY
+
+RUN pnpm run build
+
+# ---- runner: minimal image with just the standalone server -----------------
+FROM node:22-slim AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    PORT=3333 \
+    HOSTNAME=0.0.0.0
+
+RUN groupadd --system --gid 1001 nodejs \
+    && useradd --system --uid 1001 --gid nodejs nextjs
+
+COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+USER nextjs
+EXPOSE 3333
+
+# Server-only secrets (Slack/Loops/SMTP/Inkeep backend/Supabase/OpenAI/*_LANGFUSE_SECRET_KEY,
+# etc. — see .env.template) are read from process.env at runtime and must be
+# supplied when this image is run (docker run -e / --env-file / compose
+# env_file), not baked in here.
+CMD ["node", "server.js"]

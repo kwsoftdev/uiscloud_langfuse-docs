@@ -39,9 +39,12 @@ const cspHeader =
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Self-contained server bundle (server.js + only the node_modules it needs)
+  // for the production Docker image built by the Jenkins pipeline.
+  output: "standalone",
   experimental: {
     scrollRestoration: true,
-    // Reduce peak memory during production build (helps avoid OOM on Vercel)
+    // Reduce peak memory during production build
     webpackMemoryOptimizations: true,
     serverSourceMaps: false,
   },
