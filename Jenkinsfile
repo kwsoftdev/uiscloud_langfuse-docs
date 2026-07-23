@@ -10,9 +10,7 @@
 //     images directly — no Docker-in-Docker is configured here).
 //   - A "Username with password" credential for Docker Hub, ID matching
 //     DOCKERHUB_CREDENTIALS_ID below (username + access token, not your
-//     account password).
-//   - IMAGE_NAME below must be set to your actual Docker Hub repo
-//     (e.g. "your-org/langfuse-docs").
+//     account password). Pushes to knowwheresoft/langfuse-docs on Docker Hub.
 //   - STRONGLY RECOMMENDED, in practice required: a "Secret text" credential
 //     named "github-access-token" holding a GitHub PAT (public_repo read
 //     access is enough). Verified by actually running this build: without
@@ -41,8 +39,7 @@ pipeline {
   }
 
   environment {
-    // TODO: set this to your actual Docker Hub repo, e.g. "your-org/langfuse-docs".
-    IMAGE_NAME = "your-org/langfuse-docs"
+    IMAGE_NAME = "knowwheresoft/langfuse-docs"
     IMAGE_TAG = "${env.GIT_COMMIT ? env.GIT_COMMIT.take(7) : 'dev'}"
     DOCKERHUB_CREDENTIALS_ID = "dockerhub-credentials"
   }
