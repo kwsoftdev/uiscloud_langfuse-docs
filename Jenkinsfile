@@ -16,20 +16,24 @@
 //     /svc/app/langfusedocs.uiscloud.net) did not exist yet on DEPLOY_HOST
 //     as of writing; the Deploy stage creates it and has never been proven
 //     end-to-end against a real server — verify the first real run closely.
-//   - A "Username with password" credential for Docker Hub, ID matching
-//     DOCKERHUB_CREDENTIALS_ID below (username + access token, not your
-//     account password). Pushes to knowwheresoft/langfuse-docs on Docker Hub.
-//   - An "SSH Username with private key" credential named "deploy-server-ssh"
-//     (the same one hypermakinarag-pipeline uses) with access to DEPLOY_HOST.
-//   - STRONGLY RECOMMENDED, in practice required: a "Secret text" credential
-//     named "github-access-token" holding a GitHub PAT (public_repo read
-//     access is enough). Verified by actually running this build: without
-//     it, the prebuild step's GitHub API calls (stars/contributors/workshop
-//     sync) blow through the unauthenticated rate limit almost immediately
-//     and scripts/sync-workshop.mjs fails the whole build. The pipeline
-//     below tolerates the credential being absent (falls back to an empty
-//     token) but the build will then likely fail at the "Docker Build"
-//     stage — configure this credential before relying on this pipeline.
+//   - Credentials below all already exist on this Jenkins instance (shared
+//     with hypermakinarag-pipeline) — nothing new to create as of writing:
+//       - "dockerhub-credentials" (Username/password, knowwheresoft) — Docker
+//         Hub login, pushes to knowwheresoft/langfuse-docs.
+//       - "deploy-server-ssh" (SSH private key, hypermakina@192.168.0.151) —
+//         used for the Deploy stage's ssh/scp calls.
+//       - "github-pat" (Username/password, a GitHub PAT originally created
+//         for rockgis/hypermakinarag) — reused here purely to raise the
+//         GitHub API rate limit for this repo's prebuild step
+//         (stars/contributors/workshop sync); GitHub's rate limit is per
+//         authenticated token, not per-repo permission, so this works for
+//         any public repo. STRONGLY RECOMMENDED, in practice required —
+//         verified by actually running this build: without it, those API
+//         calls blow through the unauthenticated rate limit almost
+//         immediately and scripts/sync-workshop.mjs fails the whole build.
+//         The pipeline tolerates the credential being absent (falls back to
+//         an empty token) but the build will then likely fail at the
+//         "Docker Build" stage.
 //   - Optional: additional credentials for the other NEXT_PUBLIC_* build
 //     args if you want real analytics/product keys baked into the image —
 //     those integrations degrade gracefully when their key is absent, so
@@ -98,14 +102,19 @@ pipeline {
         script {
           // In practice required (see setup notes above) — the build will
           // likely fail without it, but don't hard-fail the pipeline here
-          // so the real error surfaces from the build step itself.
+          // so the real error surfaces from the build step itself. Reuses
+          // this Jenkins instance's existing "github-pat" credential (a
+          // Username/password-type GitHub PAT already used by
+          // hypermakinarag-pipeline) rather than requiring a new one —
+          // GitHub's API rate limit is raised for any authenticated call
+          // regardless of which repo the token was originally created for.
           def githubToken = ""
           try {
-            withCredentials([string(credentialsId: "github-access-token", variable: "GHTOKEN")]) {
+            withCredentials([usernamePassword(credentialsId: "github-pat", usernameVariable: "GH_USER", passwordVariable: "GHTOKEN")]) {
               githubToken = env.GHTOKEN
             }
           } catch (err) {
-            echo "WARNING: no 'github-access-token' credential configured — the build will likely fail due to GitHub API rate-limiting. See setup notes at the top of this file."
+            echo "WARNING: no 'github-pat' credential configured — the build will likely fail due to GitHub API rate-limiting. See setup notes at the top of this file."
           }
 
           dockerImage = docker.build(
