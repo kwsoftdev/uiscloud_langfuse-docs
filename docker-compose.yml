@@ -1,0 +1,18 @@
+# Production deployment for langfuse-docs, run on the deploy server
+# (DEPLOY_HOST/DEPLOY_DIR) by the Jenkins pipeline's "Deploy" stage.
+#
+# The image is built and pushed by Dockerfile.prod / Jenkinsfile — this file
+# is only responsible for running it. Server-only secrets (see
+# .env.template) are supplied via a .env file placed in the same directory
+# on the deploy server, if present; every integration degrades gracefully
+# when its key is absent, so a .env file is not required for a working
+# deployment.
+services:
+  langfuse-docs:
+    image: knowwheresoft/langfuse-docs:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    ports:
+      - "3333:3333"
+    env_file:
+      - path: ./.env
+        required: false
