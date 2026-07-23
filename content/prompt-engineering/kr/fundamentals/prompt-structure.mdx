@@ -1,0 +1,58 @@
+---
+title: "프롬프트 구조화하기"
+sidebarTitle: 프롬프트 구조
+description: "system message와 user message의 차이, 구분자(delimiter), 그리고 모델로부터 안정적으로 구조화된 출력을 받는 방법."
+---
+
+# 프롬프트 구조화하기
+
+단어 선택을 넘어, 프롬프트를 물리적으로 어떻게 구조화하는지 — 어느 부분이 지침이고 어느 부분이 입력 데이터인지, 그리고 이들을 어떻게 구분하는지 — 는 신뢰성에 큰 영향을 미칩니다.
+
+## System message와 User message [#system-vs-user]
+
+대부분의 채팅 기반 모델 API는 대화를 여러 역할(role)로 나눕니다. 프롬프트 엔지니어링에서 중요한 것은 다음 두 가지입니다:
+
+- **System message** — 대화 전체에 걸쳐 모델의 역할, 제약 조건, 동작 방식을 설명하는 지침입니다. 한 번 설정되며 일반적으로 요청마다 바뀌지 않습니다.
+- **User message** — 해당 턴에서의 실제 작업이나 질문으로, 모델이 처리해야 할 데이터를 포함하는 경우가 많습니다.
+
+흔한 실수는 역할, 제약 조건, 구체적인 요청까지 모든 것을 하나의 user message에 담는 것입니다. 이들을 분리하면 두 가지 실질적인 이점이 있습니다:
+
+1. **재사용성.** system message는 모든 요청에서 공유되는 안정적이고 버전 관리가 가능한 결과물([프롬프트 버전 관리](/prompt-engineering/kr/evaluation/testing-and-versioning-with-langfuse) 참고)이 되는 반면, user message는 호출마다 달라집니다.
+2. **우선순위.** 모델은 일반적으로 대화 내용보다 system 지침에 더 높은 가중치를 두도록 학습되므로, 안전 및 형식 규칙은 긴 user 프롬프트 속에 묻히지 않고 system message에 위치해야 합니다.
+
+```text
+System: You are a support ticket triager. Classify each ticket into exactly one
+category: billing, bug, feature-request, or other. Respond with only the
+category name, lowercase.
+
+User: "I was charged twice for my subscription this month."
+```
+
+## 구분자(Delimiters) [#delimiters]
+
+프롬프트에 지침과 모델이 처리해야 할 데이터(요약할 문서, 사용자의 원문 메시지, 검색된 결과 등)가 섞여 있으면 모델이 이 둘을 혼동하기 쉽습니다 — 특히 데이터 자체에 지침처럼 보이는 내용이 포함되어 있을 때 더욱 그렇습니다. 둘을 명확히 구분하면 이러한 모호함을 줄일 수 있습니다:
+
+````text
+Summarize the text between the triple backticks in one sentence.
+
+​```
+{{document_text}}
+​```
+````
+
+삼중 백틱, XML 스타일 태그(`<document>...</document>`), 또는 명확한 헤딩(`### Input:`) 모두 사용할 수 있습니다 — 중요한 것은 하나의 규칙을 정해 일관되게 사용하는 것으로, 그래야 모델(그리고 이후 프롬프트를 수정하는 사람)이 지침과 데이터를 한눈에 구분할 수 있습니다.
+
+## 구조화된 출력(Structured output) [#structured-output]
+
+다운스트림 코드에서 모델의 응답을 파싱해야 한다면, 모델이 알아서 적절한 구조를 추론하기를 바라기보다 구체적인 구조를 명시적으로 요청하세요:
+
+```text
+Return your answer as JSON matching this shape, with no other text:
+{"category": string, "confidence": number between 0 and 1}
+```
+
+많은 제공업체는 API 레벨에서 전용 structured-output 또는 JSON-schema 모드를 지원하며, 이는 모델이 작성된 지침을 따르는 데 의존하는 대신 생성 결과가 스키마와 일치하도록 제약합니다. 가능하다면 이 방식을 우선적으로 사용하세요 — 모델에게 일반 텍스트로 "JSON을 반환하라"고 지시하는 것보다 훨씬 더 신뢰할 수 있는데, 형식이 잘못된 출력이 다운스트림에서 조용히 실패하는 대신 즉시 잡아낼 수 있는 파싱 오류가 되기 때문입니다.
+
+## 형식 지침은 사용되는 위치 가까이에 두기 [#keep-formatting-close]
+
+긴 프롬프트의 경우, 모델이 답변할 것으로 예상되는 지점 바로 앞, 즉 프롬프트 끝부분에서 중요한 형식 제약 조건을 다시 한 번 반복하는 것이 도움이 됩니다 — 모델은 가장 최근의 지침에 더 높은 가중치를 두므로, 2,000토큰짜리 프롬프트 맨 위에서 한 번만 언급된 형식 규칙은 끝부분에 이르면 "잊혀지기" 쉽습니다.

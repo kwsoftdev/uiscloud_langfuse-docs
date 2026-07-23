@@ -1,0 +1,39 @@
+---
+title: "Why prompts need evaluation"
+sidebarTitle: Why evaluate prompts
+description: "Why a prompt that looks correct when you read it isn't the same as a prompt that's actually correct, and what changes without warning."
+---
+
+# Why prompts need evaluation
+
+Most prompt engineering guides stop at "here's how to write a good prompt." That's necessary but not sufficient — a prompt that looks correct when you read it is not the same thing as a prompt that reliably produces correct output, and the gap between those two only becomes visible once you measure it.
+
+## "It looks right" isn't a test [#it-looks-right-isnt-a-test]
+
+Reading a model's output and thinking "yeah, that's what I wanted" is the natural first check, and it's also a biased one: you tend to test the cases you thought of while writing the prompt, which are disproportionately the cases the prompt already handles well. The inputs that actually break a prompt are, by definition, the ones you didn't think to try.
+
+This matters more than it sounds like it should, because the failure mode is silent. A prompt that's wrong 15% of the time on real traffic doesn't announce itself — it just quietly produces bad output for one in seven users, indistinguishable from success unless you're specifically measuring accuracy on a representative sample.
+
+## What changes without you touching the prompt [#what-changes]
+
+Even a prompt you never edit again can stop performing the way it did when you wrote it:
+
+- **Model updates.** Providers periodically update models behind the same API name, or deprecate a model version outright. A prompt tuned against one model's specific quirks can behave differently — better, worse, or just different — after an update you didn't initiate.
+- **Input distribution drift.** The kinds of requests real users send tend to change over time as a product evolves, gets promoted differently, or reaches a different audience. A prompt tuned against last quarter's traffic may not be tuned against this quarter's.
+- **Upstream changes.** If a prompt depends on retrieved context, tool output, or data from another system, changes to any of those can change the prompt's effective behavior even though the prompt text itself is untouched.
+
+None of these show up by re-reading the prompt. They only show up by re-running it against real or representative data and checking the results.
+
+## What evaluation actually buys you [#what-it-buys-you]
+
+- **A number instead of a feeling** when comparing two versions of a prompt — "this feels better" is not a decision criterion you can act on with confidence, especially when a change that improves some cases can regress others.
+- **A regression safety net.** Running an evaluation before shipping a prompt change catches cases where an edit meant to fix one problem quietly breaks something else, before it reaches production.
+- **A way to notice drift** you'd otherwise only discover from user complaints, by periodically re-running evaluation against fresh data rather than trusting that a prompt which worked at launch still works.
+
+## What this looks like in practice [#in-practice]
+
+Turning this from a principle into a habit means three concrete things, covered in the rest of this section:
+
+1. A **dataset** of representative inputs — ideally with known-good expected outputs, or at least a reliable way to judge quality — that you can run any prompt version against. See [testing and versioning prompts with Langfuse](/prompt-engineering/evaluation/testing-and-versioning-with-langfuse).
+2. A **scoring method** for cases where there's no single correct answer to match against, which usually means either a human review process or [using a model to judge another model's output](/prompt-engineering/evaluation/llm-as-a-judge).
+3. **Version control for prompts**, so "before" and "after" are concrete, comparable artifacts rather than something you have to reconstruct from memory or a chat log.

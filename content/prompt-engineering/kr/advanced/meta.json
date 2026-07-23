@@ -1,0 +1,8 @@
+{
+  "title": "고급 패턴",
+  "pages": [
+    "prompt-chaining",
+    "agentic-prompting",
+    "long-context-and-optimization"
+  ]
+}

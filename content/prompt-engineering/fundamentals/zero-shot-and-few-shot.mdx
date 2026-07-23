@@ -1,0 +1,64 @@
+---
+title: "Zero-shot and few-shot prompting"
+sidebarTitle: Zero-shot & few-shot
+description: "The difference between asking a model to do a task cold versus showing it examples first, and when each approach works best."
+---
+
+# Zero-shot and few-shot prompting
+
+The first decision in almost any prompt is whether to show the model examples of the task, or just describe it and let the model figure out the format on its own.
+
+## Zero-shot prompting [#zero-shot]
+
+A **zero-shot** prompt gives the model instructions and no worked examples. It relies entirely on what the model already learned during training.
+
+```text
+Classify the sentiment of the following review as positive, negative, or neutral.
+
+Review: "The battery life is incredible, but the app crashes constantly."
+Sentiment:
+```
+
+Zero-shot prompts are the right default when:
+
+- The task is common enough that the model has almost certainly seen similar instructions before (sentiment classification, summarization, translation).
+- You want a short prompt to keep latency and token cost down.
+- You don't have a small set of representative examples on hand yet.
+
+They tend to break down when the output format is unusual, when "correct" depends on domain-specific conventions, or when the task requires a judgment call that's easier to demonstrate than to describe.
+
+## Few-shot prompting [#few-shot]
+
+A **few-shot** prompt includes a small number of input/output examples before the real request, so the model can infer the pattern rather than relying only on the instruction text.
+
+```text
+Classify the sentiment of the review as positive, negative, or neutral.
+
+Review: "Fast shipping and great packaging."
+Sentiment: positive
+
+Review: "Item arrived broken and support never replied."
+Sentiment: negative
+
+Review: "The battery life is incredible, but the app crashes constantly."
+Sentiment:
+```
+
+Few-shot examples are doing more work than they look like they're doing — they implicitly communicate:
+
+- **The exact output format** (a single word, JSON, a specific label set) without needing a paragraph of instructions to describe it.
+- **Edge case handling** — a mixed review like the one above shows the model what to do when a review isn't purely positive or negative.
+- **Tone and level of detail**, when the task is generative rather than classificatory.
+
+## Choosing examples [#choosing-examples]
+
+Few-shot prompting is sensitive to which examples you pick and in what order:
+
+- Cover the range of the task, including at least one ambiguous or edge case, not just the easy cases.
+- Keep the label/category distribution close to what you expect in production — a few-shot set that's 90% "positive" will bias the model toward predicting positive.
+- 3–5 examples is a reasonable starting point for classification-style tasks; more complex generative tasks (writing in a specific style, following a multi-step format) often need more, and it's worth testing where returns diminish for your specific case.
+- Keep example order consistent across requests — reordering the same examples can measurably shift outputs on some models.
+
+## Moving past hand-picked examples [#moving-past-hand-picked-examples]
+
+Hand-picking a handful of examples works well for a prototype, but production prompts benefit from treating example selection the same way you'd treat any other input: something to test against a dataset rather than eyeball once and forget. See [evaluating prompts with Langfuse](/prompt-engineering/evaluation/why-evaluate-prompts) for how to move from "this looks right" to a measured before/after comparison when you change the examples in a prompt.

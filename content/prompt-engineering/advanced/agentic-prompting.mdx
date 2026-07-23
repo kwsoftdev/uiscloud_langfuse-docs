@@ -1,0 +1,43 @@
+---
+title: "Agentic prompting"
+sidebarTitle: Agentic prompting
+description: "Prompting considerations specific to agents that plan, use tools, and take multiple actions toward a goal with limited supervision."
+---
+
+# Agentic prompting
+
+An agent extends the [ReAct pattern](/prompt-engineering/techniques/react) of reasoning-plus-tool-use into something that runs with less direct supervision: given a goal, it plans a sequence of actions, executes them, observes the results, and adjusts — often across many more steps than a single reasoning-and-lookup task requires. Prompting an agent well means addressing failure modes that don't come up in single-turn prompting at all.
+
+## Define the goal, not the steps [#define-the-goal]
+
+Where a chained prompt (see [prompt chaining](/prompt-engineering/advanced/prompt-chaining)) specifies a fixed sequence of steps you've already worked out, an agent prompt typically specifies the goal and the tools available, and leaves the planning to the model:
+
+```text
+Goal: Resolve the customer's billing dispute described below. You have
+access to: look_up_invoice(id), issue_refund(id, amount), send_email(to, body).
+
+Plan and execute the steps needed to resolve this, explaining your reasoning
+before each tool call. Stop and ask a human before issuing any refund over $100.
+```
+
+The tradeoff is real: a fixed chain is predictable and easy to evaluate step by step, while an agent is more flexible but less predictable — the same goal can produce different action sequences on different runs, which makes evaluation and debugging meaningfully harder. Reach for an agent when the space of possible situations is too large to enumerate as a fixed chain, not by default.
+
+## Bound the action space [#bound-the-action-space]
+
+The single most effective way to make an agent's behavior more predictable is to give it fewer, more specific tools rather than a few broad, powerful ones. A `search_orders(customer_id, status)` tool constrains what the model can do and produces more consistent behavior than a generic `run_database_query(sql)` tool that theoretically covers the same ground but gives the model far more room to go wrong.
+
+## Give the agent a way to stop [#give-it-a-way-to-stop]
+
+Agent prompts need explicit conditions for when to stop, not just what to do:
+
+- **Success conditions** — what does "done" look like, stated concretely enough that the model can recognize it.
+- **Step or iteration limits** — a hard cap so a stuck agent (retrying a failing action, or looping between two states) fails loudly instead of consuming resources indefinitely.
+- **Escalation conditions** — what should trigger asking a human for input rather than the agent making the call itself. State these as concretely as the refund threshold in the example above, not as a vague "use your judgment."
+
+## Irreversible actions need a higher bar [#irreversible-actions]
+
+Reading data and writing data are not the same risk category. An agent that reads the wrong record and has to retry is a minor inefficiency; an agent that sends an email, issues a refund, or deletes a record based on a flawed plan has done something that can't be quietly undone. Be explicit in the prompt (and, more robustly, in the tool implementation itself) about which actions require confirmation before executing, rather than assuming the model will apply the same caution a human would by default.
+
+## Evaluating agents is harder, not optional [#evaluating-agents]
+
+A single-turn prompt has one output to check. An agent has a sequence of decisions, any of which could be wrong even if the final outcome happens to look fine — or right, even if the final outcome looks wrong for unrelated reasons. That makes [tracing the full sequence of thoughts, tool calls, and observations](/docs/observability/overview) essential rather than a nice-to-have: without it, "the agent failed" tells you nothing about which of potentially a dozen steps actually went wrong. See [evaluation](/prompt-engineering/evaluation/why-evaluate-prompts) for how to build that discipline into an agentic workflow specifically.

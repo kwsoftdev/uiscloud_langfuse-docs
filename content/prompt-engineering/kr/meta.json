@@ -1,0 +1,11 @@
+{
+  "title": "프롬프트 엔지니어링",
+  "pages": [
+    "index",
+    "fundamentals",
+    "techniques",
+    "advanced",
+    "evaluation",
+    "pitfalls-and-further-reading"
+  ]
+}

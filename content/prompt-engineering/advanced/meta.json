@@ -1,0 +1,8 @@
+{
+  "title": "Advanced patterns",
+  "pages": [
+    "prompt-chaining",
+    "agentic-prompting",
+    "long-context-and-optimization"
+  ]
+}

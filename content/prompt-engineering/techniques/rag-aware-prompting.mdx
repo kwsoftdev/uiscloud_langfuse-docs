@@ -1,0 +1,55 @@
+---
+title: "RAG-aware prompting"
+sidebarTitle: RAG-aware prompting
+description: "Prompting patterns specific to retrieval-augmented generation, where the model has to reason about retrieved context it didn't generate."
+---
+
+# RAG-aware prompting
+
+Retrieval-augmented generation (RAG) inserts retrieved documents into a prompt so a model can answer using information beyond what it learned during training. This changes what the prompt needs to do: it's no longer just instructing the model, it's also telling the model how to treat a block of text it didn't write and has no inherent reason to trust.
+
+## Tell the model what the retrieved context is [#label-the-context]
+
+Retrieved passages should be clearly delimited and labeled as reference material, not blended into the instructions:
+
+````text
+Answer the question using only the information in the context below. If the
+context doesn't contain the answer, say "I don't have enough information to
+answer that" rather than guessing.
+
+Context:
+​```
+{{retrieved_passages}}
+​```
+
+Question: {{user_question}}
+````
+
+Without an explicit instruction to stick to the provided context, models will often fall back on their training data when retrieval comes up short or irrelevant — which defeats the purpose of retrieving in the first place and can produce confident-sounding answers that aren't actually grounded in your documents.
+
+## Handle irrelevant or empty retrieval explicitly [#handle-empty-retrieval]
+
+Retrieval is a search problem, and search doesn't always return something useful. A RAG prompt needs an explicit instruction for what to do when the retrieved context doesn't actually answer the question — otherwise the model will improvise, and improvised answers presented alongside real citations are one of the more damaging categories of error for RAG applications specifically, since a user reading a well-formatted answer with a citation has no easy way to tell it apart from a genuinely grounded one.
+
+## Ask for citations, and make them checkable [#citations]
+
+If you want the model to cite which passage supported which claim, be specific about the mechanism rather than leaving it open-ended:
+
+```text
+When you make a claim based on the context, cite the source using [1], [2],
+etc. matching the numbered sources below.
+
+[1] {{source_1}}
+[2] {{source_2}}
+```
+
+Numbered or ID-based citations are easier to programmatically verify against the actual retrieved set than asking the model to quote or paraphrase a source name, which it can get wrong even when the underlying answer is correct.
+
+## Order and quantity of retrieved passages matter [#order-and-quantity]
+
+- Passages placed earlier and later in a long context tend to get more attention than passages buried in the middle — if your retrieval ranks results by relevance, consider whether the most relevant passage should go first, last, or both, rather than assuming position is neutral.
+- More retrieved context isn't automatically better. Irrelevant passages mixed in with relevant ones can distract the model and increase the odds of a mixed or ungrounded answer, so it's worth testing whether a smaller, higher-precision retrieval set outperforms a larger, noisier one on your actual data.
+
+## RAG failures are often retrieval failures, not prompting failures [#retrieval-vs-prompting]
+
+When a RAG answer is wrong, it's worth separating two very different causes before rewriting the prompt: did the retrieval step fail to surface the right passage at all, or did the model have the right passage and still answer incorrectly? [Tracing the full pipeline](/docs/observability/overview) — what was retrieved, in what order, and what the model did with it — is what makes that distinction possible instead of guessing which half of the system to fix.

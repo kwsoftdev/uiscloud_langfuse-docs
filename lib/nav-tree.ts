@@ -10,6 +10,7 @@ export const sectionNavData: SectionNavData[] = [
   { name: "Integrations", href: "/integrations" },
   { name: "FAQ", href: "/faq" },
   { name: "Handbook", href: "/handbook" },
+  { name: "Prompt Engineering", href: "/prompt-engineering" },
   { name: "Library", href: "/library" },
   { name: "Security & Compliance", href: "/security" },
 ];
@@ -24,6 +25,7 @@ export const sectionNavDataKo: SectionNavData[] = [
   { name: "인테그레이션", href: "/integrations/kr" },
   { name: "자주 묻는 질문", href: "/faq/kr" },
   { name: "핸드북", href: "/handbook/kr" },
+  { name: "프롬프트 엔지니어링", href: "/prompt-engineering/kr" },
   { name: "라이브러리", href: "/library" },
   { name: "보안 및 컴플라이언스", href: "/security/kr" },
 ];

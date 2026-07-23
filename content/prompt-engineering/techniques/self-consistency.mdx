@@ -1,0 +1,39 @@
+---
+title: "Self-consistency"
+sidebarTitle: Self-consistency
+description: "Generating multiple reasoning paths and taking a majority vote to reduce the impact of any single unlucky generation."
+---
+
+# Self-consistency
+
+[Chain-of-thought prompting](/prompt-engineering/techniques/chain-of-thought) improves reasoning, but any single generation can still land on a wrong answer through a flawed reasoning path. Self-consistency addresses this by sampling several independent reasoning attempts for the same question and taking the most common final answer, rather than trusting the first one produced.
+
+## The pattern [#the-pattern]
+
+1. Send the same chain-of-thought prompt multiple times (typically 3–10) with a non-zero sampling temperature, so each generation reasons independently rather than repeating an identical deterministic path.
+2. Extract the final answer from each generation.
+3. Take the majority answer (or, for numeric answers, the mode) as the result.
+
+```text
+# Run this prompt N times with temperature > 0, then vote on the answers.
+
+A train travels 60 mph for 2 hours, then 40 mph for 1.5 hours. What is the
+total distance traveled?
+
+Think step by step, then give the final answer on its own line prefixed
+with "Answer:".
+```
+
+If 7 out of 10 runs answer "180 miles" and 3 land on other numbers due to arithmetic slips, taking the majority answer is more reliable than trusting any single run — including the first one.
+
+## The tradeoff [#the-tradeoff]
+
+Self-consistency directly trades cost and latency for accuracy: running a prompt N times costs roughly N times as much and takes as long as the slowest of the N calls (or N times as long if run sequentially). It's worth using when:
+
+- The task has a single, well-defined correct answer that can be reliably extracted and compared across generations (a number, a classification label, a short phrase) — free-form generative text doesn't have an obvious way to "vote."
+- Getting the answer wrong is costly enough to justify the extra calls — this is not a technique to reach for on low-stakes, high-volume requests.
+- You've confirmed via [evaluation](/prompt-engineering/evaluation/why-evaluate-prompts) that the accuracy gain over a single call is real for your specific task, rather than assuming it.
+
+## A cheaper middle ground [#cheaper-middle-ground]
+
+If running N full generations is too expensive, a lighter alternative is to ask the model to solve the problem using two different approaches within a single generation and cross-check its own answers before committing to a final one. This doesn't offer the same statistical guarantees as independent sampling, but it can catch some categories of error at a fraction of the cost.

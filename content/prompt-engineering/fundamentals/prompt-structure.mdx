@@ -1,0 +1,58 @@
+---
+title: "Structuring a prompt"
+sidebarTitle: Prompt structure
+description: "System vs. user messages, delimiters, and how to get reliably structured output back from a model."
+---
+
+# Structuring a prompt
+
+Beyond word choice, how you physically structure a prompt — which parts are instructions, which parts are input data, and how they're separated — has a large effect on reliability.
+
+## System vs. user messages [#system-vs-user]
+
+Most chat-based model APIs split a conversation into roles. Two matter for prompt engineering:
+
+- **System message** — instructions that describe the model's role, constraints, and behavior for the entire conversation. It's set once and typically doesn't change per request.
+- **User message** — the actual task or question for this specific turn, often including the data the model should act on.
+
+A common mistake is putting everything — role, constraints, and the specific request — into a single user message. Splitting them has two practical benefits:
+
+1. **Reuse.** The system message becomes a stable, versionable artifact (see [prompt versioning](/prompt-engineering/evaluation/testing-and-versioning-with-langfuse)) that's shared across every request, while the user message varies per call.
+2. **Precedence.** Models are generally trained to weight system instructions more heavily than conversational content, so safety and formatting rules belong in the system message, not buried in a long user prompt.
+
+```text
+System: You are a support ticket triager. Classify each ticket into exactly one
+category: billing, bug, feature-request, or other. Respond with only the
+category name, lowercase.
+
+User: "I was charged twice for my subscription this month."
+```
+
+## Delimiters [#delimiters]
+
+When a prompt mixes instructions with data the model should act on (a document to summarize, a user's raw message, retrieved search results), it's easy for the model to confuse the two — especially if the data itself contains something that looks like an instruction. Clearly delimiting the two reduces that ambiguity:
+
+````text
+Summarize the text between the triple backticks in one sentence.
+
+​```
+{{document_text}}
+​```
+````
+
+Triple backticks, XML-style tags (`<document>...</document>`), or a clear heading (`### Input:`) all work — what matters is picking one convention and using it consistently, so the model (and the next person editing the prompt) can tell instructions and data apart at a glance.
+
+## Structured output [#structured-output]
+
+If downstream code needs to parse the model's response, ask for a specific structure and be explicit about it rather than hoping the model infers a sensible one:
+
+```text
+Return your answer as JSON matching this shape, with no other text:
+{"category": string, "confidence": number between 0 and 1}
+```
+
+Many providers also support a dedicated structured-output or JSON-schema mode at the API level, which constrains generation to match a schema instead of relying on the model to follow written instructions. Prefer that mechanism when it's available — it's strictly more reliable than instructing the model to "return JSON" in plain text, since malformed output becomes a parsing error you can catch immediately rather than a silent failure downstream.
+
+## Keep formatting instructions close to where they're used [#keep-formatting-close]
+
+For long prompts, it helps to repeat critical formatting constraints near the end of the prompt, right before the model is expected to answer — models weight the most recent instructions more heavily, and a formatting rule stated once at the top of a 2,000-token prompt is easy to "forget" by the end.

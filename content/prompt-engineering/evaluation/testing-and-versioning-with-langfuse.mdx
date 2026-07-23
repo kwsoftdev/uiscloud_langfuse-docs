@@ -1,0 +1,43 @@
+---
+title: "Testing and versioning prompts with Langfuse"
+sidebarTitle: Testing & versioning
+description: "How to turn 'why prompts need evaluation' into a concrete workflow using Langfuse's prompt management and experiment tooling."
+---
+
+# Testing and versioning prompts with Langfuse
+
+[The previous page](/prompt-engineering/evaluation/why-evaluate-prompts) covers why prompts need evaluation. This page covers what that looks like concretely, using Langfuse's prompt management and evaluation features.
+
+## Treat prompts as versioned artifacts, not string literals [#versioned-artifacts]
+
+The first prerequisite for evaluation is having something stable to evaluate: a prompt with a specific version, not a string that only exists inline in application code and changes whenever someone edits it. [Langfuse Prompt Management](/docs/prompt-management/overview) stores prompts outside your codebase with automatic versioning, so every deploy, edit, and rollback is a distinct, comparable version rather than an untracked change.
+
+This matters for evaluation specifically because "did this change help or hurt" is only answerable if "this change" refers to something concrete — version 12 versus version 13 — rather than a vague memory of what the prompt used to say. See [prompt version control](/docs/prompt-management/features/prompt-version-control) for how versioning works, and [getting started with prompt management](/docs/prompt-management/get-started) to set it up.
+
+## Build a dataset from real traffic [#build-a-dataset]
+
+A representative evaluation dataset is more valuable than a cleverly written one, and the most representative source is usually your own production traffic rather than hypothetical test cases. [Langfuse Datasets](/docs/evaluation/experiments/datasets) let you curate real traced inputs — including the edge cases and failures that showed up in production, not just the happy path you imagined while writing the prompt — into a reusable set you can run any prompt version against.
+
+A practical starting point:
+
+1. Trace your application's real requests (see [observability](/docs/observability/overview)).
+2. Review traces for interesting cases: failures, edge cases, and a representative sample of "normal" requests.
+3. Add those specific inputs to a dataset, along with expected output or a description of what a correct response looks like where you have one.
+
+## Run experiments to compare prompt versions [#run-experiments]
+
+With a dataset and a versioned prompt in place, [Langfuse Experiments](/docs/evaluation/experiments/experiments-via-ui) run a given prompt version against the full dataset and score the results, so comparing "prompt v12" against "prompt v13" produces an actual side-by-side result on the same inputs rather than a handful of manually spot-checked examples.
+
+This is the concrete mechanism behind the "number instead of a feeling" evaluation loop: instead of eyeballing a few outputs and deciding a change feels like an improvement, you get a measured score across the whole dataset for each version, and can see exactly which specific inputs regressed if the score goes down.
+
+## A/B test in production, not just offline [#ab-test-in-production]
+
+Offline evaluation against a dataset catches a lot, but it can't fully substitute for how a prompt performs against live, unpredictable production traffic. [Prompt A/B testing](/docs/prompt-management/features/a-b-testing) lets you route a portion of real traffic to a new prompt version while measuring outcomes, so you can validate a change against real usage before fully committing to it — and roll back quickly to a known-good version if it underperforms.
+
+## Put this in your normal workflow, not a separate audit [#normal-workflow]
+
+The evaluation loop described here is most valuable when it's routine rather than occasional:
+
+- Run the relevant dataset against a prompt change **before** shipping it, the same way you'd run tests before merging code.
+- Periodically re-run evaluation against **fresh** production data, not just the dataset you built once at launch, since input patterns and model behavior can both drift over time (see [why prompts need evaluation](/prompt-engineering/evaluation/why-evaluate-prompts)).
+- Treat a prompt regression the same way you'd treat a code regression — something to catch before it reaches users, not something to discover from a support ticket.

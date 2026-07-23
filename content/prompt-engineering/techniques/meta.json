@@ -1,0 +1,10 @@
+{
+  "title": "Techniques",
+  "pages": [
+    "chain-of-thought",
+    "self-consistency",
+    "react",
+    "role-prompting",
+    "rag-aware-prompting"
+  ]
+}

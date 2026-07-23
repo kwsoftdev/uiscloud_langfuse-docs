@@ -1,0 +1,54 @@
+---
+title: "ReAct: reasoning and acting"
+sidebarTitle: ReAct
+description: "Interleaving reasoning with tool calls so a model can gather information mid-task instead of guessing from what it already knows."
+---
+
+# ReAct: reasoning and acting
+
+ReAct (reasoning + acting) is a prompting pattern where a model alternates between reasoning about what it needs to do next and taking an action — usually calling a tool or function — to get information it doesn't already have, rather than trying to answer entirely from what it learned during training.
+
+## Why plain chain-of-thought isn't enough [#why-cot-falls-short]
+
+[Chain-of-thought](/prompt-engineering/techniques/chain-of-thought) improves reasoning over information already in the prompt or the model's training data, but it can't retrieve current facts, query a database, or take an action in the world. A model reasoning step by step about "what's the current weather in Seoul" is still just as likely to guess as one that jumps straight to an answer — reasoning harder doesn't substitute for looking something up.
+
+## The pattern [#the-pattern]
+
+At each step, the model produces a short reasoning statement (what it's trying to figure out), an action (a tool call with arguments), and then receives an observation (the tool's result) before continuing:
+
+```text
+Question: What's the population of the capital city of the country that won
+the most recent World Cup?
+
+Thought: I need to find which country most recently won the World Cup.
+Action: search("most recent World Cup winner")
+Observation: Argentina won the 2022 World Cup.
+Thought: Now I need the capital of Argentina.
+Action: search("capital of Argentina")
+Observation: Buenos Aires.
+Thought: Now I need the population of Buenos Aires.
+Action: search("population of Buenos Aires")
+Observation: approximately 3.1 million (city proper).
+Thought: I have enough information to answer.
+Answer: approximately 3.1 million.
+```
+
+This loop continues until the model decides it has enough information to answer, or hits a step limit.
+
+## Tool calling vs. hand-written ReAct [#tool-calling-vs-hand-written]
+
+Most current model APIs support native function/tool calling, where you describe available tools with a schema and the model emits structured calls rather than a specific "Thought/Action/Observation" text format. In practice, native tool calling has mostly replaced hand-written ReAct-style prompts for production use — it's more reliable to parse and doesn't depend on the model reproducing an exact text pattern. The underlying idea is the same either way: give the model a reason to reach for information instead of guessing, and structure the exchange as reasoning interleaved with tool results rather than a single unbroken generation.
+
+## What makes tool descriptions effective [#tool-descriptions]
+
+Whether you're using native tool calling or a text-based pattern, the model's decisions about _when_ and _how_ to call a tool depend heavily on how the tool is described:
+
+- State clearly what the tool does and, just as importantly, what it doesn't do — a search tool that only covers internal documentation should say so, or the model may call it expecting general web results.
+- Describe parameters precisely, including expected formats (a date parameter should specify the expected format, not just be named "date").
+- If a tool can fail or return no results, mention that in the description so the model has a documented path for handling it, rather than treating an empty result as an error.
+
+## Guardrails worth adding [#guardrails]
+
+- **Step limits.** Cap the number of reasoning/action cycles so a model that gets stuck in a loop (repeatedly searching for the same thing) fails predictably instead of running indefinitely.
+- **Action allowlists.** Only expose tools the model actually needs for the task at hand — an overly broad toolset increases the chance of an incorrect or unnecessary tool call.
+- **Observability into the trace.** Because ReAct produces a multi-step trace rather than a single request/response, tracing every thought/action/observation is what makes it possible to debug _why_ a model reached a wrong conclusion — see [why prompts need evaluation](/prompt-engineering/evaluation/why-evaluate-prompts) for how this connects to testing agentic prompts specifically.

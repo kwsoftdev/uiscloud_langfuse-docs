@@ -1,0 +1,36 @@
+---
+title: "Long context and prompt optimization"
+sidebarTitle: Long context & optimization
+description: "Working with very large prompts, and using a model to iteratively improve a prompt rather than hand-tuning it forever."
+---
+
+# Long context and prompt optimization
+
+Two practical concerns come up once a prompt grows large or has been through many manual revisions: how to work reliably within a large context window, and when to stop hand-editing and use a more systematic approach to improving the prompt.
+
+## Working with long context windows [#long-context]
+
+Modern models support context windows large enough to include entire documents, long conversation histories, or many few-shot examples. That capacity doesn't mean everything placed in context gets used equally:
+
+- **Position matters.** As mentioned in [RAG-aware prompting](/prompt-engineering/techniques/rag-aware-prompting), content near the beginning and end of a long prompt tends to receive more attention than content buried in the middle. If a specific instruction or fact is critical, don't assume its position in the prompt is irrelevant — test whether moving it changes the output.
+- **More context isn't automatically better.** Padding a prompt with marginally relevant information dilutes the signal from the genuinely relevant parts and can measurably hurt accuracy, not just cost and latency. Filling a context window because you can is different from filling it because the model needs everything you put there.
+- **Summarize or compress when history grows unbounded.** In multi-turn conversations or long-running agent loops, raw conversation history grows without limit. Summarizing older turns, or dropping ones that are no longer relevant to the current task, keeps the prompt focused and avoids both cost blowup and the position effects above.
+- **Test at realistic scale.** A prompt that performs well with a 2-example few-shot set or a short test document may behave differently once real inputs are much larger — validate at the input sizes you'll actually see in production, not just small development examples.
+
+## When to stop hand-tuning [#when-to-stop-hand-tuning]
+
+Manually rewriting a prompt word by word based on individual failures you notice works, but it doesn't scale well: it's slow, it's easy to fix one case while quietly breaking another you didn't check, and it depends entirely on which failures happened to catch your attention.
+
+A more systematic approach — sometimes called meta-prompting or automated prompt optimization — uses a model (or a dedicated optimization process) to propose and test prompt variations against a fixed evaluation set, rather than relying on manual intuition alone:
+
+1. Establish a dataset of representative inputs with known-good expected outputs or a scoring method — see [testing and versioning prompts with Langfuse](/prompt-engineering/evaluation/testing-and-versioning-with-langfuse).
+2. Run the current prompt against the dataset to get a baseline score.
+3. Generate candidate prompt variations (by hand, or by asking a model to propose edits based on the failure cases from step 2).
+4. Score each candidate against the same dataset.
+5. Keep the variation that improves the score, and repeat.
+
+This is meaningfully more work to set up than editing a prompt by hand, and it's not worth it for a prompt you're only going to use a handful of times. It earns its cost for prompts that run in production at volume, where a small accuracy improvement compounds across many requests, and where you need confidence that a change that fixed one case didn't quietly regress ten others.
+
+## The dataset is the actual bottleneck [#the-dataset-is-the-bottleneck]
+
+Whether you're hand-tuning or running systematic optimization, both approaches are only as good as the set of examples you're testing against. A prompt "optimized" against five easy examples will look great and still fail in production on the cases you didn't think to include. Building a representative evaluation dataset is the less glamorous but more important half of the work — see [why prompts need evaluation](/prompt-engineering/evaluation/why-evaluate-prompts) for how to approach that.

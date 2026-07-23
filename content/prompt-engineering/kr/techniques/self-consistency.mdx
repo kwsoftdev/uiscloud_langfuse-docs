@@ -1,0 +1,39 @@
+---
+title: "Self-consistency"
+sidebarTitle: Self-consistency
+description: "여러 추론 경로를 생성한 뒤 다수결을 취해, 단 한 번의 운 나쁜 생성이 미치는 영향을 줄이는 방법."
+---
+
+# Self-consistency
+
+[Chain-of-thought 프롬프팅](/prompt-engineering/kr/techniques/chain-of-thought)은 추론 능력을 향상시키지만, 단 한 번의 생성만으로는 결함 있는 추론 경로를 거쳐 여전히 잘못된 답에 도달할 수 있습니다. Self-consistency는 같은 질문에 대해 여러 번 독립적인 추론을 시도한 뒤, 가장 먼저 나온 답을 그대로 신뢰하는 대신 가장 흔하게 나온 최종 답을 취함으로써 이 문제를 해결합니다.
+
+## 패턴 [#the-pattern]
+
+1. 0이 아닌 샘플링 온도(temperature)로 동일한 chain-of-thought 프롬프트를 여러 번(보통 3~10회) 전송해, 각 생성이 동일한 결정론적 경로를 반복하지 않고 독립적으로 추론하도록 합니다.
+2. 각 생성에서 최종 답을 추출합니다.
+3. 다수의 답(숫자 답의 경우 최빈값)을 결과로 취합니다.
+
+```text
+# Run this prompt N times with temperature > 0, then vote on the answers.
+
+A train travels 60 mph for 2 hours, then 40 mph for 1.5 hours. What is the
+total distance traveled?
+
+Think step by step, then give the final answer on its own line prefixed
+with "Answer:".
+```
+
+10회 중 7회가 "180 miles"로 답하고 3회는 산술 실수로 다른 숫자에 도달했다면, 다수의 답을 취하는 것이 첫 번째 실행 결과를 포함해 어느 한 번의 실행 결과를 신뢰하는 것보다 더 신뢰할 수 있습니다.
+
+## 트레이드오프 [#the-tradeoff]
+
+Self-consistency는 비용과 지연 시간을 정확도와 직접 맞바꿉니다. 프롬프트를 N번 실행하면 비용은 대략 N배가 들고, 소요 시간은 N번의 호출 중 가장 느린 것만큼(순차적으로 실행한다면 N배만큼) 걸립니다. 다음과 같은 경우에 사용할 가치가 있습니다.
+
+- 생성 결과 간에 신뢰성 있게 추출하고 비교할 수 있는, 단일하고 명확하게 정의된 정답이 있는 작업(숫자, 분류 라벨, 짧은 문구)인 경우 — 자유 형식의 생성 텍스트는 "투표"할 명확한 방법이 없습니다.
+- 답을 틀렸을 때의 비용이 추가 호출을 정당화할 만큼 큰 경우 — 이는 위험 부담이 낮고 대량으로 처리되는 요청에 사용할 기법이 아닙니다.
+- 단일 호출 대비 정확도 향상이 여러분의 특정 작업에서 실제로 존재한다는 것을 가정이 아니라 [평가](/prompt-engineering/kr/evaluation/why-evaluate-prompts)를 통해 확인한 경우.
+
+## 더 저렴한 절충안 [#cheaper-middle-ground]
+
+N번의 전체 생성을 실행하는 것이 너무 비싸다면, 더 가벼운 대안으로 단일 생성 안에서 모델에게 두 가지 다른 접근법으로 문제를 풀도록 하고 최종 답을 확정하기 전에 스스로 답을 교차 검증하도록 요청하는 방법이 있습니다. 이 방식은 독립적인 샘플링과 같은 통계적 보장을 제공하지는 않지만, 훨씬 적은 비용으로 일부 유형의 오류를 잡아낼 수 있습니다.

@@ -205,6 +205,17 @@ export const securityKr = defineDocs({
   docs: { schema: sidebarFrontmatterSchema },
 });
 
+export const promptEngineering = defineDocs({
+  dir: "content/prompt-engineering",
+  docs: { schema: sidebarFrontmatterSchema, files: ["**/*.mdx", "!kr/**"] },
+  meta: { files: ["**/*.json", "!kr/**"] },
+});
+
+export const promptEngineeringKr = defineDocs({
+  dir: "content/prompt-engineering/kr",
+  docs: { schema: sidebarFrontmatterSchema },
+});
+
 export const library = defineDocs({
   dir: "content/library",
   docs: { schema: sidebarFrontmatterSchema },

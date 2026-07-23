@@ -1,0 +1,41 @@
+---
+title: "Role prompting"
+sidebarTitle: Role prompting
+description: "Assigning a model a persona or professional role, what it actually changes about the output, and where it doesn't help."
+---
+
+# Role prompting
+
+Role prompting asks a model to respond as if it were a particular persona — "You are a senior security engineer reviewing this code" — rather than giving instructions with no framing. It's one of the oldest and most overused prompting tricks, and it's worth understanding what it genuinely changes versus what's folklore.
+
+## What it reliably changes [#what-it-changes]
+
+- **Vocabulary and register.** "You are a patient elementary school teacher" versus "You are a terse senior engineer" produces noticeably different word choice, sentence length, and level of explanation — this is the most consistent effect of role prompting.
+- **Scope of consideration.** "You are a security auditor reviewing this pull request" nudges the model toward looking for a specific category of issue (vulnerabilities) rather than general code quality, simply by narrowing what the model treats as relevant.
+- **Format conventions.** A role tied to a real profession often comes with implicit format expectations (a "legal reviewer" role tends to produce more hedged, qualification-heavy language) that can save you from spelling out formatting rules explicitly.
+
+## What it doesn't reliably change [#what-it-doesnt-change]
+
+- **Underlying capability.** Telling a model "you are a world-class mathematician" does not make it better at arithmetic it would otherwise get wrong — a role is framing, not a capability upgrade, and testing this claim on your own tasks will reliably disappoint you if you're counting on it for accuracy gains.
+- **Guaranteed accuracy in the claimed domain.** A role can shift tone and framing without improving factual correctness — treat any accuracy improvement from a role prompt as something to verify, not assume.
+
+## A more useful framing: describe the job, not the character [#describe-the-job]
+
+Instead of reaching for a persona as a shortcut, it's often more effective to be explicit about what you actually want the persona to imply:
+
+```text
+# Less useful — vague persona, unclear what it's meant to change
+You are an expert customer support agent.
+
+# More useful — states the actual constraints the persona was standing in for
+Respond in a warm, concise tone. Never apologize more than once per response.
+Offer a concrete next step in every reply. Do not use exclamation points.
+```
+
+The second version is longer, but it's also testable and debuggable in a way "be an expert" isn't — if the output doesn't match, you know exactly which instruction to revise.
+
+## Where role prompting is genuinely useful [#where-its-useful]
+
+- **Multi-agent or multi-perspective setups**, where different roles are deliberately given different information or objectives (a "proposer" and a "critic" reviewing the same output) — here the role is doing real structural work, not just flavor text.
+- **Shorthand for an audience**, when you want output written _for_ a particular reader ("explain this as if the reader is a first-year CS student") rather than _as_ a particular character.
+- **Consistency across a long system prompt**, where restating "as a support agent, you should..." throughout keeps the model anchored to a consistent frame rather than drifting mid-conversation.

@@ -1,0 +1,64 @@
+---
+title: "Zero-shot과 Few-shot 프롬프팅"
+sidebarTitle: Zero-shot과 Few-shot
+description: "모델에게 사전 예시 없이 작업을 요청하는 것과 예시를 먼저 보여주는 것의 차이, 그리고 각 방식이 가장 효과적인 상황."
+---
+
+# Zero-shot과 Few-shot 프롬프팅
+
+거의 모든 프롬프트에서 가장 먼저 내려야 할 결정은 모델에게 작업 예시를 보여줄 것인지, 아니면 작업을 설명만 하고 형식을 모델이 스스로 파악하게 할 것인지입니다.
+
+## Zero-shot 프롬프팅 [#zero-shot]
+
+**zero-shot** 프롬프트는 모델에게 지침만 제공하고 예시는 제공하지 않습니다. 이는 모델이 학습 과정에서 이미 습득한 지식에 전적으로 의존합니다.
+
+```text
+Classify the sentiment of the following review as positive, negative, or neutral.
+
+Review: "The battery life is incredible, but the app crashes constantly."
+Sentiment:
+```
+
+다음과 같은 경우 zero-shot 프롬프트가 적합한 기본 선택입니다:
+
+- 해당 작업이 충분히 흔해서 모델이 이전에 유사한 지침을 거의 확실히 접해봤을 경우(감성 분류, 요약, 번역 등).
+- 지연 시간과 토큰 비용을 낮게 유지하기 위해 짧은 프롬프트를 원하는 경우.
+- 아직 손에 쥐고 있는 대표적인 예시 집합이 없는 경우.
+
+출력 형식이 특이하거나, "정답"이 도메인 특화 관습에 따라 달라지거나, 작업이 설명하기보다 직접 보여주는 것이 더 쉬운 판단을 요구할 때는 zero-shot 프롬프트가 잘 작동하지 않는 경향이 있습니다.
+
+## Few-shot 프롬프팅 [#few-shot]
+
+**few-shot** 프롬프트는 실제 요청 전에 소수의 입력/출력 예시를 포함하여, 모델이 지침 텍스트에만 의존하지 않고 패턴을 추론할 수 있도록 합니다.
+
+```text
+Classify the sentiment of the review as positive, negative, or neutral.
+
+Review: "Fast shipping and great packaging."
+Sentiment: positive
+
+Review: "Item arrived broken and support never replied."
+Sentiment: negative
+
+Review: "The battery life is incredible, but the app crashes constantly."
+Sentiment:
+```
+
+few-shot 예시는 겉보기보다 훨씬 더 많은 역할을 합니다 — 다음과 같은 내용을 암묵적으로 전달합니다:
+
+- **정확한 출력 형식**(단어 하나, JSON, 특정 레이블 집합)을 설명하기 위한 긴 지침 문단이 필요 없게 해줍니다.
+- **엣지 케이스 처리** — 위와 같은 혼합된 리뷰는 리뷰가 순수하게 긍정적이거나 부정적이지 않을 때 모델이 어떻게 해야 하는지를 보여줍니다.
+- 작업이 분류가 아니라 생성적인 경우 **어조와 세부 수준**을 전달합니다.
+
+## 예시 선택하기 [#choosing-examples]
+
+Few-shot 프롬프팅은 어떤 예시를 선택하고 어떤 순서로 배치하느냐에 민감합니다:
+
+- 쉬운 사례만이 아니라 최소한 하나의 모호하거나 엣지 케이스에 해당하는 예시를 포함하여 작업의 범위를 폭넓게 다루세요.
+- 레이블/카테고리 분포를 프로덕션에서 예상되는 분포에 가깝게 유지하세요 — 90%가 "positive"인 few-shot 세트는 모델이 positive를 예측하는 쪽으로 편향되게 만듭니다.
+- 분류 유형의 작업에는 3–5개의 예시가 합리적인 출발점입니다. 더 복잡한 생성 작업(특정 스타일로 글쓰기, 다단계 형식 따르기)은 더 많은 예시가 필요한 경우가 많으므로, 자신의 사례에서 예시를 추가해도 효과가 줄어드는 지점을 직접 테스트해볼 가치가 있습니다.
+- 요청 전반에 걸쳐 예시 순서를 일관되게 유지하세요 — 동일한 예시라도 순서를 바꾸면 일부 모델에서는 출력이 눈에 띄게 달라질 수 있습니다.
+
+## 수작업으로 고른 예시를 넘어서기 [#moving-past-hand-picked-examples]
+
+몇 가지 예시를 수작업으로 골라내는 것은 프로토타입 단계에서는 잘 작동하지만, 프로덕션 프롬프트에서는 예시 선택을 다른 입력값과 마찬가지로 다루는 것이 좋습니다: 한 번 훑어보고 잊어버리는 것이 아니라 데이터셋을 기준으로 테스트해야 할 대상으로 취급하는 것입니다. 프롬프트의 예시를 변경할 때 "괜찮아 보인다"에서 측정된 전/후 비교로 나아가는 방법은 [Langfuse로 프롬프트 평가하기](/prompt-engineering/kr/evaluation/why-evaluate-prompts)를 참고하세요.

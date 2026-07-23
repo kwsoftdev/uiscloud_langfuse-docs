@@ -1,0 +1,54 @@
+---
+title: "Chain-of-thought 프롬프팅"
+sidebarTitle: Chain-of-thought
+description: "모델에게 답을 내놓기 전에 단계별로 추론하도록 요청하는 방법과, 추가 토큰을 쓸 만한 가치가 있는 경우."
+---
+
+# Chain-of-thought 프롬프팅
+
+Chain-of-thought(CoT, 사고의 연쇄) 프롬프팅은 모델이 곧바로 결론으로 건너뛰는 대신, 문제를 단계별로 풀어나간 뒤 최종 답을 내놓도록 요청하는 방식입니다. 산술 연산, 다단계 논리, 또는 여러 정보를 조합해야 하는 작업에서는 답을 직접 요청하는 것보다 이 방식이 꾸준히 정확도를 높여줍니다.
+
+## 기본 패턴 [#basic-pattern]
+
+```text
+A store had 120 items. They sold 35% on Monday and 20% of the remainder on
+Tuesday. How many items are left?
+
+Think through this step by step, then give the final answer on its own line
+prefixed with "Answer:".
+```
+
+"단계별로 생각해보라(think through this step by step)"는 지시(또는 이와 비슷한 문구)만으로도 직접 풀이 예시를 작성하지 않고도 충분히 유능한 모델에서 추론 동작을 유도할 수 있는 경우가 많습니다.
+
+## Few-shot chain-of-thought [#few-shot-cot]
+
+더 어렵거나 특이한 추론 작업의 경우, CoT를 [few-shot 예시](/prompt-engineering/kr/fundamentals/zero-shot-and-few-shot)와 결합하는 방식 — 예시 자체가 최종 답뿐 아니라 추론 과정을 보여주는 방식 — 이 두 기법을 각각 단독으로 쓰는 것보다 더 좋은 성능을 내는 경향이 있습니다.
+
+```text
+Q: A cafe has 3 baristas. Each can make 15 drinks per hour. The cafe is open
+   6 hours. How many drinks can the cafe make in a day?
+A: Each barista makes 15 drinks/hour. With 3 baristas, that's 15 * 3 = 45
+   drinks/hour. Over 6 hours: 45 * 6 = 270 drinks.
+   Answer: 270
+
+Q: {{new_question}}
+A:
+```
+
+## 언제 사용해야 할까 [#when-to-reach-for-it]
+
+CoT는 다음과 같은 특성을 가진 작업에서 가장 큰 도움이 됩니다.
+
+- **여러 단계가 서로 의존하는 경우** — 2단계의 답이 1단계의 답에 의존하는 경우.
+- **산술 또는 기호 조작** — 모델은 중간 계산을 "머릿속에서" 처리하기보다 겉으로 드러낼 때 더 신뢰할 수 있습니다.
+- **모호한 문제** — 추론 과정을 써 내려가면 모델이 모호한 질문을 어떻게 해석했는지가 드러나며, 이는 최종 답이 바뀌지 않더라도 디버깅에 유용합니다.
+
+단순 조회, 명확한 범주로 분류하는 작업, 짧은 사실 확인 질문에는 대체로 불필요하며, 아무 이득 없이 지연 시간과 토큰 비용만 늘어납니다.
+
+## 추론 모델은 셈법을 바꾼다 [#reasoning-models]
+
+일부 최신 모델 계열은 명시적인 "단계별로 생각하라"는 지시 없이도 응답을 생성하는 과정의 일부로 확장된 내부 추론을 자동으로 수행합니다. 이런 모델에서는 수동으로 CoT 지시를 추가하는 것이 대체로 불필요하며, 프롬프트 엔지니어링의 초점은 추론 과정을 지시하는 것에서 문제와 제약 조건을 명확히 명시하는 쪽으로 옮겨갑니다. 특정 모델에 이것이 해당하는지는 짐작하지 말고 해당 모델의 문서를 확인해볼 가치가 있으며, 실제로 테스트해볼 가치도 있습니다. CoT 문구로 인한 개선 여부(또는 그 부재)는 모델과 작업에 따라 달라지며 잘못 짐작하기 쉽기 때문입니다.
+
+## 추론 과정을 신뢰하지 말고, 답을 검증하라 [#verify-the-answer]
+
+눈에 보이는 추론 과정은 실제보다 더 신뢰할 만한 것처럼 읽히는 경향이 있습니다. 모델은 그럴듯해 보이는 추론 과정을 만들어내고도 여전히 틀린 최종 답에 도달할 수 있고, (드물지만) 중간 단계가 잘못되었음에도 올바른 답에 도달할 수도 있습니다. 추론 과정은 디버깅과 few-shot 예시에는 유용하지만, 정확성의 증거로 취급해서는 안 됩니다. 정확성이 중요하다면 추론 과정의 그럴듯함이 아니라 [정답으로 알려진 데이터에 대해 최종 답을 평가](/prompt-engineering/kr/evaluation/why-evaluate-prompts)해야 합니다.

@@ -14,6 +14,7 @@ export const KO_SECTION_PREFIXES = [
   "/resources/kr",
   "/self-hosting/kr",
   "/integrations/kr",
+  "/prompt-engineering/kr",
 ] as const;
 
 /** The Korean homepage — a single page (like /japan), not a section with sub-pages. */

@@ -1,6 +1,13 @@
 "use client";
 
-import { Menu, X, ChevronRight, GraduationCap, Unplug } from "lucide-react";
+import {
+  Menu,
+  X,
+  ChevronRight,
+  GraduationCap,
+  Unplug,
+  Sparkles,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -18,6 +25,11 @@ const SECTIONS = [
   { title: "Self Hosting", path: "/self-hosting", Icon: IconDesktopTower },
   { title: "Guides", path: "/guides", Icon: IconCompass },
   { title: "Academy", path: "/academy", Icon: GraduationCap },
+  {
+    title: "Prompt Engineering",
+    path: "/prompt-engineering",
+    Icon: Sparkles,
+  },
   { title: "AI Engineering Library", path: "/library", Icon: IconBookBookmark },
 ] as const;
 
@@ -30,6 +42,11 @@ const SECTIONS_KO = [
   { title: "셀프 호스팅", path: "/self-hosting/kr", Icon: IconDesktopTower },
   { title: "가이드", path: "/guides/kr", Icon: IconCompass },
   { title: "아카데미", path: "/academy/kr", Icon: GraduationCap },
+  {
+    title: "프롬프트 엔지니어링",
+    path: "/prompt-engineering/kr",
+    Icon: Sparkles,
+  },
   {
     title: "AI 엔지니어링 라이브러리",
     path: "/library",

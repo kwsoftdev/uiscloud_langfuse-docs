@@ -1,0 +1,37 @@
+---
+title: "Overview"
+sidebarTitle: Overview
+description: "A practical guide to prompt engineering for teams building LLM applications, from fundamentals through evaluation and iteration."
+---
+
+# Overview
+
+Prompt engineering is the practice of designing the instructions, context, and examples you give a language model so that it reliably produces the output you want. It sits between "the model" and "the product" — the same underlying model can feel unreliable or exceptional depending entirely on how it's prompted.
+
+This guide covers prompt engineering from first principles through to the techniques used in production LLM applications, and — unlike most guides on the topic — treats **evaluation** as a first-class part of the discipline. Writing a good prompt is easy. Knowing that it's still good after your tenth revision, or after the underlying model changes, is the hard part. That's where [Langfuse](/) comes in: everything in this guide is written with an eye toward how you'd actually test, version, and monitor a prompt once it's live.
+
+## Who this is for [#who-this-is-for]
+
+- Developers building an LLM feature for the first time who want a mental model beyond "just ask nicely."
+- Teams with a prompt that mostly works who want to make it more reliable, or need to prove it still works after a change.
+- Anyone comparing prompting techniques (chain-of-thought, few-shot, ReAct, and so on) and wondering which one actually applies to their problem.
+
+## How this guide is organized [#how-this-guide-is-organized]
+
+- **[Fundamentals](/prompt-engineering/fundamentals/zero-shot-and-few-shot)** — the building blocks: instructions, examples, and how a prompt is structured.
+- **Techniques** — named patterns ([chain-of-thought](/prompt-engineering/techniques/chain-of-thought), [self-consistency](/prompt-engineering/techniques/self-consistency), [ReAct](/prompt-engineering/techniques/react), [role prompting](/prompt-engineering/techniques/role-prompting), [RAG-aware prompting](/prompt-engineering/techniques/rag-aware-prompting)) for specific classes of problem.
+- **Advanced patterns** — what changes when a single prompt becomes a pipeline: [prompt chaining](/prompt-engineering/advanced/prompt-chaining), [agentic prompting](/prompt-engineering/advanced/agentic-prompting), and [managing long context](/prompt-engineering/advanced/long-context-and-optimization).
+- **Evaluation** — [why prompts need testing at all](/prompt-engineering/evaluation/why-evaluate-prompts), how to [version and test them with Langfuse](/prompt-engineering/evaluation/testing-and-versioning-with-langfuse), and [using a model to judge model output](/prompt-engineering/evaluation/llm-as-a-judge).
+- **[Common pitfalls & further reading](/prompt-engineering/pitfalls-and-further-reading)** — mistakes that show up repeatedly in production prompts, plus other resources worth reading.
+
+## The core loop [#the-core-loop]
+
+Prompt engineering in production isn't a one-time writing exercise — it's a loop:
+
+1. **Write** a prompt based on the task and a few examples.
+2. **Trace** real requests to see what the model actually does with it, not just what you expected.
+3. **Evaluate** outputs against a dataset or a judge to get a number, not a vibe.
+4. **Version** the prompt so you can compare "before" and "after" and roll back if a change regresses quality.
+5. Repeat, ideally as part of your normal development and CI process rather than an occasional audit.
+
+Steps 1–2 are what most prompting guides focus on. Steps 3–5 are what actually determines whether a prompt survives contact with real users and a changing model landscape — and they're where Langfuse's [prompt management](/docs/prompt-management/overview) and [evaluation](/docs/evaluation/overview) tooling fits in.

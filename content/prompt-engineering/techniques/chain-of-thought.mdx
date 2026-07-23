@@ -1,0 +1,54 @@
+---
+title: "Chain-of-thought prompting"
+sidebarTitle: Chain-of-thought
+description: "Asking a model to reason step by step before answering, and when the extra tokens are worth it."
+---
+
+# Chain-of-thought prompting
+
+Chain-of-thought (CoT) prompting asks a model to work through a problem step by step before giving a final answer, instead of jumping straight to a conclusion. For tasks that involve arithmetic, multi-step logic, or combining several pieces of information, this consistently improves accuracy over asking for the answer directly.
+
+## The basic pattern [#basic-pattern]
+
+```text
+A store had 120 items. They sold 35% on Monday and 20% of the remainder on
+Tuesday. How many items are left?
+
+Think through this step by step, then give the final answer on its own line
+prefixed with "Answer:".
+```
+
+The instruction "think through this step by step" (or similar phrasing) is often enough to trigger reasoning behavior in capable models, without needing to write out worked examples yourself.
+
+## Few-shot chain-of-thought [#few-shot-cot]
+
+For harder or more idiosyncratic reasoning tasks, combining CoT with [few-shot examples](/prompt-engineering/fundamentals/zero-shot-and-few-shot) — where the examples themselves show the reasoning trace, not just the final answer — tends to outperform either technique alone:
+
+```text
+Q: A cafe has 3 baristas. Each can make 15 drinks per hour. The cafe is open
+   6 hours. How many drinks can the cafe make in a day?
+A: Each barista makes 15 drinks/hour. With 3 baristas, that's 15 * 3 = 45
+   drinks/hour. Over 6 hours: 45 * 6 = 270 drinks.
+   Answer: 270
+
+Q: {{new_question}}
+A:
+```
+
+## When to reach for it [#when-to-reach-for-it]
+
+CoT helps most on tasks with:
+
+- **Multiple dependent steps** — the answer to step 2 depends on the answer to step 1.
+- **Arithmetic or symbolic manipulation** — models are more reliable when they externalize intermediate calculations rather than computing them "in their head."
+- **Ambiguous problems** — writing out reasoning surfaces which interpretation of an ambiguous question the model chose, which is useful for debugging even when it doesn't change the final answer.
+
+It's usually unnecessary — and adds latency and token cost for no benefit — on simple lookups, classification with clear categories, or short factual questions.
+
+## Reasoning models change the calculus [#reasoning-models]
+
+Some current model families perform extended internal reasoning automatically as part of generating a response, without needing an explicit "think step by step" instruction. For these models, adding manual CoT instructions is often redundant, and prompt engineering shifts toward clearly specifying the problem and constraints rather than dictating a reasoning process. Whether that's true for a given model is worth checking against its documentation rather than assuming — and worth actually testing, since the improvement (or lack of one) from CoT phrasing varies by model and task in ways that are easy to guess wrong about.
+
+## Don't trust the reasoning, verify the answer [#verify-the-answer]
+
+A visible chain of reasoning reads as more trustworthy than it necessarily is — a model can produce a plausible-looking reasoning trace and still land on an incorrect final answer, or (less often) reach the correct answer despite a flawed intermediate step. Treat the reasoning trace as useful for debugging and few-shot examples, not as proof of correctness. If accuracy matters, [evaluate the final answers against known-correct data](/prompt-engineering/evaluation/why-evaluate-prompts), not the plausibility of the reasoning.

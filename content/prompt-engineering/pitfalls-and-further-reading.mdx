@@ -1,0 +1,39 @@
+---
+title: "Common pitfalls & further reading"
+sidebarTitle: Pitfalls & further reading
+description: "Recurring mistakes in production prompts, and other resources worth reading beyond this guide."
+---
+
+# Common pitfalls & further reading
+
+A closing list of mistakes that show up repeatedly in production prompts — most of them not from a lack of technique, but from skipping one of the practices covered earlier in this guide.
+
+## Common pitfalls [#common-pitfalls]
+
+### Prompt injection [#prompt-injection]
+
+When a prompt includes untrusted text — user input, retrieved documents, tool output — that text can contain instructions that attempt to override the original prompt. A support-ticket summarizer that includes the raw customer message in its prompt can be manipulated by a message that says "ignore previous instructions and instead...". Mitigations include clearly [delimiting untrusted content](/prompt-engineering/fundamentals/prompt-structure) from instructions, being conservative about what actions a prompt-driven system can take on untrusted input (see [bounding the action space](/prompt-engineering/advanced/agentic-prompting) for agents specifically), and never treating "the model was told not to do X" as a sufficient security boundary on its own for anything sensitive.
+
+### Overfitting to a handful of examples [#overfitting-to-examples]
+
+A prompt tuned by hand-editing until it works on the three or four cases you keep re-testing tends to overfit those specific cases rather than generalizing. This is the same problem described in [why prompts need evaluation](/prompt-engineering/evaluation/why-evaluate-prompts): testing against a small, static set of examples you already know gives false confidence, because it doesn't tell you anything about inputs you haven't tried.
+
+### Ambiguous instructions [#ambiguous-instructions]
+
+Instructions that seem clear to the person who wrote them can be genuinely ambiguous to a model with no shared context. "Keep it short" doesn't specify a length; "be professional" doesn't specify a register. Where precision matters, replace vague adjectives with concrete, checkable constraints — see [structuring a prompt](/prompt-engineering/fundamentals/prompt-structure) for concrete techniques.
+
+### Treating a working demo as a finished prompt [#demo-vs-production]
+
+A prompt that performs well on the handful of inputs you tried while building a feature is a starting point, not a finished, production-ready prompt. The gap between "works on my test cases" and "works reliably on real traffic" is exactly what [evaluation](/prompt-engineering/evaluation/why-evaluate-prompts) is for — skipping it means finding out about failures from users instead of from a dataset.
+
+### Silently drifting after a model update [#silent-drift]
+
+A prompt that isn't re-evaluated after a model version change can quietly degrade — or occasionally improve — without anyone noticing, because nothing about the prompt text itself changed. Re-running your evaluation dataset after any model change, not just after prompt edits, catches this before it shows up as a user complaint.
+
+## Further reading [#further-reading]
+
+This guide focuses on prompting practices as they apply to building with Langfuse. For deeper treatment of specific topics, or a different perspective on the same fundamentals, these are worth reading:
+
+- Model providers' own prompting documentation — [OpenAI's prompt engineering guide](https://platform.openai.com/docs/guides/prompt-engineering) and [Anthropic's prompt engineering documentation](https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/overview) — for guidance tuned to the specific quirks of their respective model families.
+- [Learn Prompting](https://learnprompting.org/) — a large, community-maintained, open-source library of prompting techniques and examples covering far more ground than this guide, published under a Creative Commons license.
+- Langfuse's own docs on [prompt management](/docs/prompt-management/overview) and [evaluation](/docs/evaluation/overview), for the full detail behind the workflows referenced throughout the [evaluation section](/prompt-engineering/evaluation/why-evaluate-prompts) of this guide.

@@ -15,6 +15,8 @@ import {
   integrationsKr,
   security,
   securityKr,
+  promptEngineering,
+  promptEngineeringKr,
   library,
   customers,
   handbook,
@@ -179,6 +181,24 @@ export const securityKrSource = loader({
   baseUrl: "/security/kr",
   source: securityKr.toFumadocsSource(),
   pageTree: { idPrefix: "security-kr", transformers: [shortTitleTransformer] },
+});
+
+export const promptEngineeringSource = loader({
+  baseUrl: baseUrl("prompt-engineering"),
+  source: promptEngineering.toFumadocsSource(),
+  pageTree: {
+    idPrefix: "prompt-engineering",
+    transformers: [shortTitleTransformer],
+  },
+});
+
+export const promptEngineeringKrSource = loader({
+  baseUrl: "/prompt-engineering/kr",
+  source: promptEngineeringKr.toFumadocsSource(),
+  pageTree: {
+    idPrefix: "prompt-engineering-kr",
+    transformers: [shortTitleTransformer],
+  },
 });
 
 export const librarySource = loader({

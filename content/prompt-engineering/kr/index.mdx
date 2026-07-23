@@ -1,0 +1,37 @@
+---
+title: "개요"
+sidebarTitle: 개요
+description: "기초부터 평가와 반복(iteration)까지, LLM 애플리케이션을 구축하는 팀을 위한 실용적인 프롬프트 엔지니어링 가이드입니다."
+---
+
+# 개요
+
+프롬프트 엔지니어링(prompt engineering)은 언어 모델이 원하는 결과물을 안정적으로 만들어내도록 지침, 맥락, 예시를 설계하는 작업입니다. 이는 "모델"과 "제품" 사이에 위치합니다 — 동일한 기반 모델이라도 어떻게 프롬프트를 작성하느냐에 따라 신뢰할 수 없게 느껴질 수도, 탁월하게 느껴질 수도 있습니다.
+
+이 가이드는 프롬프트 엔지니어링을 기본 원리부터 프로덕션 LLM 애플리케이션에서 사용되는 기법까지 다루며, 이 주제를 다루는 대부분의 가이드와 달리 **평가(evaluation)**를 이 분야의 핵심 요소로 다룹니다. 좋은 프롬프트를 작성하는 것은 쉽습니다. 어려운 부분은 열 번째 수정 이후에도, 혹은 기반 모델이 변경된 이후에도 그 프롬프트가 여전히 좋은지 아는 것입니다. 바로 이 지점에서 [Langfuse](/)가 필요합니다: 이 가이드의 모든 내용은 프롬프트가 실제 서비스에 배포된 이후 어떻게 테스트하고, 버전을 관리하고, 모니터링할 것인지를 염두에 두고 작성되었습니다.
+
+## 이 가이드가 필요한 대상 [#who-this-is-for]
+
+- 처음으로 LLM 기능을 구축하면서 "그냥 정중하게 물어보기"를 넘어서는 사고 모델을 원하는 개발자.
+- 대체로 잘 작동하는 프롬프트를 가지고 있지만 더 안정적으로 만들고 싶거나, 변경 이후에도 여전히 잘 작동한다는 것을 입증해야 하는 팀.
+- chain-of-thought, few-shot, ReAct 등 다양한 프롬프팅 기법을 비교하며 자신의 문제에 실제로 어떤 기법이 적용되는지 고민하는 사람.
+
+## 이 가이드의 구성 [#how-this-guide-is-organized]
+
+- **[기초(Fundamentals)](/prompt-engineering/kr/fundamentals/zero-shot-and-few-shot)** — 지침, 예시, 프롬프트 구조화 방식과 같은 기본 구성 요소.
+- **기법(Techniques)** — 특정 유형의 문제에 대한 명명된 패턴([chain-of-thought](/prompt-engineering/kr/techniques/chain-of-thought), [self-consistency](/prompt-engineering/kr/techniques/self-consistency), [ReAct](/prompt-engineering/kr/techniques/react), [role prompting](/prompt-engineering/kr/techniques/role-prompting), [RAG-aware prompting](/prompt-engineering/kr/techniques/rag-aware-prompting)).
+- **고급 패턴(Advanced patterns)** — 단일 프롬프트가 파이프라인으로 확장될 때 달라지는 점: [prompt chaining](/prompt-engineering/kr/advanced/prompt-chaining), [agentic prompting](/prompt-engineering/kr/advanced/agentic-prompting), [긴 컨텍스트 관리](/prompt-engineering/kr/advanced/long-context-and-optimization).
+- **평가(Evaluation)** — [프롬프트에 테스트가 필요한 이유](/prompt-engineering/kr/evaluation/why-evaluate-prompts), Langfuse로 [버전을 관리하고 테스트하는 방법](/prompt-engineering/kr/evaluation/testing-and-versioning-with-langfuse), [모델을 활용해 모델 출력을 평가하는 방법](/prompt-engineering/kr/evaluation/llm-as-a-judge).
+- **[흔한 함정과 추가 자료](/prompt-engineering/kr/pitfalls-and-further-reading)** — 프로덕션 프롬프트에서 반복적으로 나타나는 실수와 함께 읽어볼 만한 다른 자료.
+
+## 핵심 반복 과정(core loop) [#the-core-loop]
+
+프로덕션 환경에서의 프롬프트 엔지니어링은 한 번 작성하고 끝나는 작업이 아니라 반복되는 과정(loop)입니다:
+
+1. **작성(Write)** — 작업 내용과 몇 가지 예시를 바탕으로 프롬프트를 작성합니다.
+2. **추적(Trace)** — 실제 요청을 추적하여 모델이 예상대로가 아니라 실제로 어떻게 동작하는지 확인합니다.
+3. **평가(Evaluate)** — 데이터셋이나 judge를 기준으로 출력을 평가하여 막연한 느낌이 아닌 수치를 얻습니다.
+4. **버전 관리(Version)** — 프롬프트의 버전을 관리하여 "이전"과 "이후"를 비교하고, 변경으로 인해 품질이 저하되면 롤백할 수 있도록 합니다.
+5. 이 과정을 반복하되, 가끔 하는 점검이 아니라 이상적으로는 일반적인 개발 및 CI 프로세스의 일부로 수행합니다.
+
+대부분의 프롬프팅 가이드는 1~2단계에 초점을 맞춥니다. 하지만 프롬프트가 실제 사용자와 만나고 계속 변화하는 모델 환경 속에서도 살아남을 수 있는지를 실제로 결정하는 것은 3~5단계이며, 바로 이 지점에서 Langfuse의 [프롬프트 관리(prompt management)](/docs/prompt-management/overview)와 [평가(evaluation)](/docs/evaluation/overview) 도구가 활용됩니다.

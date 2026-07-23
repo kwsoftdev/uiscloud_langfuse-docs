@@ -1,0 +1,48 @@
+---
+title: "Prompt chaining"
+sidebarTitle: Prompt chaining
+description: "Splitting a complex task into a sequence of smaller prompts, and when that's a better tradeoff than one large prompt."
+---
+
+# Prompt chaining
+
+Prompt chaining breaks a complex task into a sequence of smaller prompts, where the output of one step becomes the input to the next, rather than trying to accomplish everything in a single call.
+
+## Why split a task at all [#why-split]
+
+A single large prompt asking a model to "read this contract, extract the key terms, flag anything unusual, and draft a summary email" is asking the model to do four distinct jobs at once, with no opportunity to check its work between them. Splitting into separate steps — extract, flag, draft — has concrete advantages:
+
+- **Each step can be evaluated independently.** It's much easier to measure "did extraction get the right terms" as its own question than to untangle a bad extraction from a bad summary in a single combined output.
+- **Each step can use a different model.** A cheaper, faster model might be sufficient for extraction, while the more nuanced flagging step benefits from a stronger model — a single monolithic prompt forces the same model to do all of it.
+- **Intermediate output is inspectable.** When something goes wrong, you can see exactly which step produced the bad output instead of reverse-engineering it from a single final answer.
+- **Steps can be retried or cached independently.** If step 3 fails, you don't need to rerun steps 1 and 2.
+
+## The pattern [#the-pattern]
+
+```text
+Step 1 — Extract:
+"Extract the party names, effective date, and termination clause from this
+contract. Return as JSON."
+
+Step 2 — Flag (takes step 1's output as input):
+"Given these extracted terms: {{step_1_output}}, flag any term that deviates
+from standard commercial terms. Explain why for each flag."
+
+Step 3 — Draft (takes both prior outputs as input):
+"Write a two-paragraph summary email covering the extracted terms and flags
+below, addressed to a non-lawyer: {{step_1_output}} {{step_2_output}}"
+```
+
+## When chaining is worth the added complexity [#when-its-worth-it]
+
+Chaining adds latency (multiple round trips) and engineering complexity (passing state between steps, handling partial failures) compared to a single prompt. It's worth that cost when:
+
+- The task genuinely has distinct sub-problems with different failure modes, rather than being artificially split.
+- You need to inspect or validate an intermediate result before proceeding (for example, asking a user to confirm extracted data before generating something based on it).
+- Different steps have meaningfully different accuracy or cost requirements that justify using different models.
+
+For simpler tasks, a single well-structured prompt is usually faster to build, cheaper to run, and easier to reason about — chaining is a tool for genuine complexity, not a default.
+
+## Chains need the same evaluation discipline as single prompts [#evaluation]
+
+A chain is only as reliable as its weakest step, and a small accuracy drop at an early step compounds through the rest of the chain. Treat each step's prompt with the same rigor you'd apply to a standalone prompt — see [why prompts need evaluation](/prompt-engineering/evaluation/why-evaluate-prompts) — and [trace the full chain](/docs/observability/overview) so a bad final answer can be traced back to the specific step that introduced the error, rather than treated as one opaque failure.

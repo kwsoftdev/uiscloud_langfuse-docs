@@ -1,0 +1,44 @@
+---
+title: "LLM-as-a-judge"
+sidebarTitle: LLM-as-a-judge
+description: "Using a model to score another model's output when there's no single correct answer to match against, and how to keep the judge itself honest."
+---
+
+# LLM-as-a-judge
+
+Some tasks have a single correct answer you can check programmatically — a classification label, a structured field, a number. Many don't: a customer support reply, a generated summary, or a piece of creative writing can be good or bad in ways that don't reduce to an exact string match. LLM-as-a-judge uses a separate model call to score output against defined criteria, turning an otherwise subjective "is this good" into a repeatable measurement.
+
+## The pattern [#the-pattern]
+
+A judge prompt takes the original input, the output being evaluated, and (where relevant) the expected answer or grading criteria, and returns a score:
+
+```text
+You are evaluating a customer support response for helpfulness and tone.
+
+Customer message: {{input}}
+Response being evaluated: {{output}}
+
+Score the response from 1-5 on:
+- Helpfulness: does it address the customer's actual question?
+- Tone: is it professional and appropriately empathetic?
+
+Return JSON: {"helpfulness": number, "tone": number, "reasoning": string}
+```
+
+Requiring a short `reasoning` field alongside the score is worth the extra tokens — a bare number gives you no way to sanity-check whether the judge's scoring logic actually matches your intent, while a reasoning trace lets you spot-check judgments and catch a miscalibrated judge before it silently biases every score it produces.
+
+## The judge needs the same rigor as the thing it's judging [#judge-needs-rigor]
+
+It's tempting to treat the judge prompt as an afterthought since it's "just for evaluation," but a badly specified judge produces evaluation results you can't trust — which defeats the entire purpose. Apply the same care here as to a production prompt:
+
+- **Be specific about criteria**, the same way you'd be specific about output format in any other prompt (see [prompt structure](/prompt-engineering/fundamentals/prompt-structure)). "Rate this response's quality" is too vague to produce consistent scores; "rate this response's factual accuracy against the provided source, ignoring style" is not.
+- **Calibrate the judge against known cases.** Before trusting a judge's scores at scale, run it against a small set of examples you've manually scored yourself, and check whether the judge agrees with your judgment. If it doesn't, the judge prompt needs work before you trust its output on cases you haven't manually checked.
+- **Watch for a judge's own biases.** Judge models can favor longer responses regardless of quality, or be inconsistent when scoring outputs from the same model that's judging them versus a different one. These are worth specifically checking for in your calibration step rather than assuming a judge is neutral by default.
+
+## When to use a judge versus exact matching [#judge-vs-exact-matching]
+
+Reach for LLM-as-a-judge specifically when the task doesn't have a single correct string to compare against — open-ended generation, tone, adherence to nuanced instructions, or relevance judgments. When output does have an exact expected value (a classification label, a structured field, a numeric answer), programmatic comparison is cheaper, faster, and produces a more trustworthy score than a judge model, since it removes an entire additional model call — and its own potential for error — from the evaluation itself.
+
+## This is still one input in a larger evaluation setup [#one-input-among-others]
+
+A judge is a scoring mechanism, not a replacement for the rest of the evaluation workflow: it still needs a [representative dataset](/prompt-engineering/evaluation/testing-and-versioning-with-langfuse) to run against, and its scores are only useful if you're actually comparing them across prompt versions and reacting to regressions rather than generating scores nobody looks at.
