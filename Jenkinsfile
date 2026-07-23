@@ -84,6 +84,11 @@ pipeline {
         docker {
           image "node:22-slim"
           reuseNode true
+          // Jenkins' Docker Pipeline plugin maps this container to the
+          // host Jenkins user's UID by default, which can't write the
+          // corepack shim symlink into the image's root-owned
+          // /usr/local/bin — verified by actually running this stage.
+          args "-u root"
         }
       }
       steps {
