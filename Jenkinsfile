@@ -97,6 +97,11 @@ pipeline {
           corepack prepare pnpm@9.5.0 --activate
           pnpm install --frozen-lockfile
           pnpm run format:check
+          # fumadocs-mdx generates the virtual .source/ collections that
+          # app/lib code imports types from (e.g. "fumadocs-mdx:collections/
+          # server") — tsc fails to resolve them on a fresh checkout
+          # otherwise. Verified by actually running this stage.
+          node_modules/.bin/fumadocs-mdx
           npx tsc --noEmit
         """
       }
